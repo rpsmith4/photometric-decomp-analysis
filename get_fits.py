@@ -14,6 +14,15 @@ import argparse
 import sys
 import os
 
+'''
+Need to:
+ - Get image names
+ - Get coordinates from the catalogue
+ - Get R26 from the catalogue
+ - Get a fits cutout of the region from legacy_survey (need to use iman)
+ - Download the output to somewhere reasonable (ideally keeping thins in the same folder stucture)
+'''
+
 def get_image_names(path):
     files = os.listdir(path)
     names = list()
