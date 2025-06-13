@@ -2,17 +2,15 @@ from astropy.io import fits
 import numpy as np
 from astropy.table import Table
 import astropy
-import matplotlib.pyplot as plt
-from astropy.nddata import CCDData
-import astropy.units as u
-from astropy.coordinates import SkyCoord
-from astropy.nddata import Cutout2D
-import astropy.visualization as viz
 import pandas as pd
-import matplotlib.patches as mpatches
 import argparse
 import sys
 import os
+
+iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
+
+sys.path.append(os.path.join(iman_dir, 'misc_funcs/'))
+import download_legacy_fits
 
 '''
 Need to:
@@ -24,11 +22,15 @@ Need to:
 '''
 
 def get_image_names(path):
-    files = os.listdir(path)
+    try:
+        files = os.listdir(path)
+    except:
+        files = [path.split("/")[-1]]
     names = list()
     for i in files:
         if os.path.isdir(path + "/" + i):
-            names.extend(get_image_names(path + "/" + i))
+            if args.r == True:
+                names.extend(get_image_names(path + "/" + i))
         else:
             names.append(i.split(".")[0])
 
@@ -36,15 +38,25 @@ def get_image_names(path):
 
 def main(args):
     all_data = fits.open(args.c + "SGA-2020.fits")
-    print(all_data)
-    print(get_image_names(args.p))
+    data = all_data[1].data # Select the right data
+    names = get_image_names(args.p)
+    if not(args.o == None):
+        os.chdir(args.o)
+    for name in names:
+        RA = data[data["GALAXY"] == name]["RA"]
+        DEC = data[data["GALAXY"] == name]["DEC"]
+        R26 = data[data["GALAXY"] == name]["D26"]/2 # arcmin
+        download_legacy_fits.main([name], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Hello")
-    parser.add_argument("-p", help="Path to folder containing galaxy samples", default="./")
+    parser.add_argument("-p", help="Path to file/folder containing galaxy samples", default="./")
     parser.add_argument("-c", help="Catalogue of galaxy data (fits)", default="./")
     parser.add_argument("-r", help="Recursively go into subfolders", action="store_true")
-    parser.add_argument("-o", help="Output directory")
+    parser.add_argument("-o", help="Output directory", default="./")
+    parser.add_argument("--dr", help="Data Release (ds9 or ds10)", default="ds10")
+    parser.add_argument("--factor", help="Factor by which to multiply the R26 isphote radius by", default=3)
+    parser.add_argument("--bands", help="Bands to download", default="griz")
 
     args = parser.parse_args()
     main(args)
