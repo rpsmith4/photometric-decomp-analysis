@@ -11,6 +11,7 @@ iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
 
 sys.path.append(os.path.join(iman_dir, 'misc_funcs/'))
 import download_legacy_fits
+import get_mask
 
 '''
 Need to:
@@ -48,15 +49,20 @@ def main(args):
         R26 = data[data["GALAXY"] == name]["D26"]/2 # arcmin
         download_legacy_fits.main([name], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
 
+        if args.mask:
+            image_dat = fits.open(name + ".fits")
+            print(image_dat.info)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Hello")
     parser.add_argument("-p", help="Path to file/folder containing galaxy samples", default="./")
     parser.add_argument("-c", help="Catalogue of galaxy data (fits)", default="./")
     parser.add_argument("-r", help="Recursively go into subfolders", action="store_true")
     parser.add_argument("-o", help="Output directory", default="./")
-    parser.add_argument("--dr", help="Data Release (ds9 or ds10)", default="ds10")
+    parser.add_argument("--dr", help="Data Release (dr9 or dr10)", default="dr10")
     parser.add_argument("--factor", help="Factor by which to multiply the R26 isphote radius by", default=3)
     parser.add_argument("--bands", help="Bands to download", default="griz")
+    parser.add_argument("--mask", help="Estimates and creates a mask", action="store_true")
 
     args = parser.parse_args()
     main(args)
