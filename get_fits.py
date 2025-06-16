@@ -58,8 +58,11 @@ def main(args):
                 total_mask = np.zeros_like(images_dat[0].data[0])
                 for i, image_dat in enumerate(images_dat[0].data):
                     band = images_dat[0].header["BAND" + str(i)]
-                    image, mask, theta, sma, smb = get_mask.prepare_rotated(image_dat, subtract=False, rotate_ok=False)
-                    total_mask += mask
+                    try:
+                        image, mask, theta, sma, smb = get_mask.prepare_rotated(image_dat, subtract=False, rotate_ok=False)
+                        total_mask += mask
+                    except:
+                        continue 
 
                 total_mask[total_mask >= 1] = 1
                 file_name = name + "_mask.fits"
