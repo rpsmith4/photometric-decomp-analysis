@@ -55,11 +55,15 @@ def main(args):
             images_dat = fits.open(name + ".fits")
             print(images_dat.info())
 
+            total_mask = np.zeros_like(images_dat[0].data[0])
             for i, image_dat in enumerate(images_dat[0].data):
                 band = images_dat[0].header["BAND" + str(i)]
                 image, mask, theta, sma, smb = get_mask.prepare_rotated(image_dat, subtract=False, rotate_ok=False)
-                file_name = name + "_" + band + "_mask.fits"
-                fits.PrimaryHDU(mask).writeto(file_name, overwrite=args.overwrite)
+                total_mask += mask
+
+            total_mask[total_mask >= 1] = 1
+            file_name = name + "_mask.fits"
+            fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
 
 
 if __name__ == '__main__':
