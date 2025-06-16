@@ -12,6 +12,7 @@ iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
 sys.path.append(os.path.join(iman_dir, 'misc_funcs/'))
 import download_legacy_fits
 import get_mask
+# import convert_npy_to_fits
 
 '''
 Need to:
@@ -47,11 +48,19 @@ def main(args):
         RA = data[data["GALAXY"] == name]["RA"]
         DEC = data[data["GALAXY"] == name]["DEC"]
         R26 = data[data["GALAXY"] == name]["D26"]/2 # arcmin
-        download_legacy_fits.main([name], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
+        if not(os.path.isfile(name + ".fits")) or (os.path.isfile(name + ".fits") and args.overwrite):
+            download_legacy_fits.main([name], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
 
         if args.mask:
-            image_dat = fits.open(name + ".fits")
-            print(image_dat.info)
+            images_dat = fits.open(name + ".fits")
+            print(images_dat.info())
+
+            for i, image_dat in enumerate(images_dat[0].data):
+                band = images_dat[0].header["BAND" + str(i)]
+                image, mask, theta, sma, smb = get_mask.prepare_rotated(image_dat, subtract=False, rotate_ok=False)
+                file_name = name + "_" + band + "_mask.fits"
+                fits.PrimaryHDU(mask).writeto(file_name, overwrite=args.overwrite)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Hello")
@@ -63,6 +72,7 @@ if __name__ == '__main__':
     parser.add_argument("--factor", help="Factor by which to multiply the R26 isphote radius by", default=3)
     parser.add_argument("--bands", help="Bands to download", default="griz")
     parser.add_argument("--mask", help="Estimates and creates a mask", action="store_true")
+    parser.add_argument("--overwrite", help="Overwrite existing fits files", action="store_true")
 
     args = parser.parse_args()
     main(args)
