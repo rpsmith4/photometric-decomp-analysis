@@ -12,6 +12,7 @@ iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
 sys.path.append(os.path.join(iman_dir, 'misc_funcs/'))
 import download_legacy_fits
 import get_mask
+import download_legacy_PSF
 # import convert_npy_to_fits
 
 '''
@@ -30,7 +31,6 @@ def get_image_names(path):
     except:
         file = path.split("/")[-1]
         file = file.split(".")[0]
-        print(file)
         path = "/".join(path.split("/")[:-1])
         names = {path : [file]}
         return names
@@ -45,11 +45,15 @@ def get_image_names(path):
     return names
 
 def get_fits(name, data):
+    """
+    Retreive FITS with correct parameters, calculate and make mask, as well as get weight map and PSF for each band
+    """
     RA = data[data["GALAXY"] == name]["RA"]
     DEC = data[data["GALAXY"] == name]["DEC"]
     R26 = data[data["GALAXY"] == name]["D26"]/2 # arcmin
     if not(os.path.isfile(name + ".fits")) or (os.path.isfile(name + ".fits") and args.overwrite):
         download_legacy_fits.main([name], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
+        download_legacy_PSF.main([name + "_psf"], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
 
         if args.mask:
             images_dat = fits.open(name + ".fits")
@@ -68,12 +72,10 @@ def get_fits(name, data):
             fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
 
 def make_filestructure_and_download(names, data):
-    print(names)
     for name in names.keys():
         files = names[name]
         for file in files:
             if type(file) == str:
-                print(file)
                 get_fits(file, data)
             elif type(file) == dict:
                 folder = list(file)[0].split("/")
@@ -85,6 +87,7 @@ def make_filestructure_and_download(names, data):
                 finally:
                     os.chdir(folder)
                     make_filestructure_and_download(file, data)
+                    os.chdir("../")
 
 def main(args):
     all_data = fits.open(args.c + "SGA-2020.fits")
