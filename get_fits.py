@@ -26,48 +26,75 @@ Need to:
 def get_image_names(path):
     try:
         files = os.listdir(path)
+        names = {path: list()}
     except:
-        files = [path.split("/")[-1]]
-    names = list()
+        file = path.split("/")[-1]
+        file = file.split(".")[0]
+        print(file)
+        path = "/".join(path.split("/")[:-1])
+        names = {path : [file]}
+        return names
+
     for i in files:
-        if os.path.isdir(path + "/" + i):
+        if os.path.isdir(path + i + "/"):
             if args.r == True:
-                names.extend(get_image_names(path + "/" + i))
+                names[path].append(get_image_names(path + i + "/"))
         else:
-            names.append(i.split(".")[0])
+            names[path].append(".".join(i.split(".")[:-1])) # Some files have "." in them that have nothing to do with the file extension
 
     return names
+
+def get_fits(name, data):
+    RA = data[data["GALAXY"] == name]["RA"]
+    DEC = data[data["GALAXY"] == name]["DEC"]
+    R26 = data[data["GALAXY"] == name]["D26"]/2 # arcmin
+    if not(os.path.isfile(name + ".fits")) or (os.path.isfile(name + ".fits") and args.overwrite):
+        download_legacy_fits.main([name], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
+
+        if args.mask:
+            images_dat = fits.open(name + ".fits")
+
+            total_mask = np.zeros_like(images_dat[0].data[0])
+            for i, image_dat in enumerate(images_dat[0].data):
+                band = images_dat[0].header["BAND" + str(i)]
+                try:
+                    image, mask, theta, sma, smb = get_mask.prepare_rotated(image_dat, subtract=False, rotate_ok=False)
+                    total_mask += mask
+                except:
+                    continue 
+
+            total_mask[total_mask >= 1] = 1
+            file_name = name + "_mask.fits"
+            fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
+
+def make_filestructure_and_download(names, data):
+    print(names)
+    for name in names.keys():
+        files = names[name]
+        for file in files:
+            if type(file) == str:
+                print(file)
+                get_fits(file, data)
+            elif type(file) == dict:
+                folder = list(file)[0].split("/")
+                folder = folder[-2]
+                try:
+                    os.mkdir(folder)
+                except FileExistsError:
+                    continue
+                finally:
+                    os.chdir(folder)
+                    make_filestructure_and_download(file, data)
 
 def main(args):
     all_data = fits.open(args.c + "SGA-2020.fits")
     data = all_data[1].data # Select the right data
+
     names = get_image_names(args.p)
     if not(args.o == None):
         os.chdir(args.o)
-    for name in names:
-        RA = data[data["GALAXY"] == name]["RA"]
-        DEC = data[data["GALAXY"] == name]["DEC"]
-        R26 = data[data["GALAXY"] == name]["D26"]/2 # arcmin
-        if not(os.path.isfile(name + ".fits")) or (os.path.isfile(name + ".fits") and args.overwrite):
-            download_legacy_fits.main([name], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
-
-            if args.mask:
-                images_dat = fits.open(name + ".fits")
-                print(images_dat.info())
-
-                total_mask = np.zeros_like(images_dat[0].data[0])
-                for i, image_dat in enumerate(images_dat[0].data):
-                    band = images_dat[0].header["BAND" + str(i)]
-                    try:
-                        image, mask, theta, sma, smb = get_mask.prepare_rotated(image_dat, subtract=False, rotate_ok=False)
-                        total_mask += mask
-                    except:
-                        continue 
-
-                total_mask[total_mask >= 1] = 1
-                file_name = name + "_mask.fits"
-                fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
-
+    
+    make_filestructure_and_download(names, data)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Hello")
