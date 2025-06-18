@@ -14,6 +14,9 @@ import download_legacy_fits
 import get_mask
 import download_legacy_PSF
 # import convert_npy_to_fits
+sys.path.append(os.path.join(iman_dir, 'imp/psf/'))
+
+import create_extended_PSF_DESI
 
 '''
 Need to:
@@ -53,7 +56,14 @@ def get_fits(name, data):
     R26 = data[data["GALAXY"] == name]["D26"]/2 # arcmin
     if not(os.path.isfile(name + ".fits")) or (os.path.isfile(name + ".fits") and args.overwrite):
         download_legacy_fits.main([name], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
-        download_legacy_PSF.main([name + "_psf"], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
+        if args.psf:
+            download_legacy_PSF.main([name + "_psf"], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
+            images_dat_psf = fits.open(name + "_psf.fits")
+
+            for i, image_dat_psf in enumerate(images_dat_psf):
+                band = images_dat_psf[0].header["BAND" + str(i)]
+                create_extended_PSF_DESI.main(name + "_psf.fits", name + "_psf_ex_" + band + ".fits", band=band)
+                # TODO: Recombine the bands of the PSF into one file so its less of a mess
 
         if args.mask:
             images_dat = fits.open(name + ".fits")
@@ -109,6 +119,7 @@ if __name__ == '__main__':
     parser.add_argument("--factor", help="Factor by which to multiply the R26 isphote radius by", default=3)
     parser.add_argument("--bands", help="Bands to download", default="griz")
     parser.add_argument("--mask", help="Estimates and creates a mask", action="store_true")
+    parser.add_argument("--psf", help="Downloads the core PSF and estimates and extended PSF", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing fits files", action="store_true")
 
     args = parser.parse_args()
