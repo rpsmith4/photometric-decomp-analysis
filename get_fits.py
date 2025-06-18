@@ -13,6 +13,7 @@ sys.path.append(os.path.join(iman_dir, 'misc_funcs/'))
 import download_legacy_fits
 import get_mask
 import download_legacy_PSF
+import download_legacy_WM
 # import convert_npy_to_fits
 sys.path.append(os.path.join(iman_dir, 'imp/psf/'))
 
@@ -47,13 +48,17 @@ def get_image_names(path):
 
     return names
 
-def get_fits(name, data):
+# TODO: Might want this to just take in paramters like RA, DEC, and R26 (as well as name) so that I can put things not in the catalogue into this
+def get_fits(name, data=None, RA=None, DEC=None, R26=None):
     """
     Retreive FITS with correct parameters, calculate and make mask, as well as get weight map and PSF for each band
     """
-    RA = data[data["GALAXY"] == name]["RA"]
-    DEC = data[data["GALAXY"] == name]["DEC"]
-    R26 = data[data["GALAXY"] == name]["D26"]/2 # arcmin
+    # TODO: Still need to find a way to get the weight map
+    if not(data == None): # Allows to override needing to use the catalogue
+        RA = data[data["GALAXY"] == name]["RA"]
+        DEC = data[data["GALAXY"] == name]["DEC"]
+        R26 = data[data["GALAXY"] == name]["D26"]/2 # arcmin
+    
     if not(os.path.isfile(name + ".fits")) or (os.path.isfile(name + ".fits") and args.overwrite):
         download_legacy_fits.main([name], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
         if args.psf:
@@ -80,6 +85,9 @@ def get_fits(name, data):
             total_mask[total_mask >= 1] = 1
             file_name = name + "_mask.fits"
             fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
+        
+        if args.wm:
+            download_legacy_WM.main([name + "_wm"], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
 
 def make_filestructure_and_download(names, data):
     for name in names.keys():
@@ -120,6 +128,7 @@ if __name__ == '__main__':
     parser.add_argument("--bands", help="Bands to download", default="griz")
     parser.add_argument("--mask", help="Estimates and creates a mask", action="store_true")
     parser.add_argument("--psf", help="Downloads the core PSF and estimates and extended PSF", action="store_true")
+    parser.add_argument("--wm", help="Downloads the inverse varianve map (weight map)", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing fits files", action="store_true")
 
     args = parser.parse_args()
