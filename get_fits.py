@@ -34,7 +34,7 @@ def get_image_names(path):
         names = {path: list()}
     except:
         file = path.split("/")[-1]
-        file = file.split(".")[0]
+        file = file.split(".")[0] # This might break if there are multiple ".G"
         path = "/".join(path.split("/")[:-1])
         names = {path : [file]}
         return names
@@ -49,7 +49,7 @@ def get_image_names(path):
     return names
 
 # TODO: Might want this to just take in paramters like RA, DEC, and R26 (as well as name) so that I can put things not in the catalogue into this
-def get_fits(name, data=None, RA=None, DEC=None, R26=None):
+def get_fits(name, args, data=None, RA=None, DEC=None, R26=None):
     """
     Retreive FITS with correct parameters, calculate and make mask, as well as get weight map and PSF for each band
     """
@@ -128,7 +128,7 @@ if __name__ == '__main__':
     parser.add_argument("--bands", help="Bands to download", default="griz")
     parser.add_argument("--mask", help="Estimates and creates a mask", action="store_true")
     parser.add_argument("--psf", help="Downloads the core PSF and estimates and extended PSF", action="store_true")
-    parser.add_argument("--wm", help="Downloads the inverse varianve map (weight map)", action="store_true")
+    parser.add_argument("--wm", help="Downloads the inverse variance map (weight map)", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing fits files", action="store_true")
 
     args = parser.parse_args()
