@@ -6,6 +6,7 @@ import pandas as pd
 import argparse
 import sys
 import os
+from pathlib import Path
 
 iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
 
@@ -14,66 +15,30 @@ import download_legacy_fits
 import get_mask
 import download_legacy_PSF
 import download_legacy_WM
-# import convert_npy_to_fits
 sys.path.append(os.path.join(iman_dir, 'imp/psf/'))
 
 import create_extended_PSF_DESI
 
-'''
-Need to:
- - Get image names
- - Get coordinates from the catalogue
- - Get R26 from the catalogue
- - Get a fits cutout of the region from legacy_survey (need to use iman)
- - Download the output to somewhere reasonable (ideally keeping thins in the same folder stucture)
-'''
+# TODO: Maybe reintroduce the --overwrite functionality
+def get_fits(file_names, RA, DEC, R26, args):
+    download_legacy_fits.main(file_names, RA, DEC, R=R26*args.factor, bands=args.bands, dr=args.dr)
 
-def get_image_names(path):
-    try:
-        files = os.listdir(path)
-        names = {path: list()}
-    except:
-        file = path.split("/")[-1]
-        file = file.split(".")[0] # This might break if there are multiple ".G"
-        path = "/".join(path.split("/")[:-1])
-        names = {path : [file]}
-        return names
+    if args.psf:
+        download_legacy_PSF.main([file + "_psf" for file in file_names], RA, DEC, R=R26*args.factor, bands=args.bands, dr=args.dr)
 
-    for i in files:
-        if os.path.isdir(path + i + "/"):
-            if args.r == True:
-                names[path].append(get_image_names(path + i + "/"))
-        else:
-            names[path].append(".".join(i.split(".")[:-1])) # Some files have "." in them that have nothing to do with the file extension
-
-    return names
-
-# TODO: Might want this to just take in paramters like RA, DEC, and R26 (as well as name) so that I can put things not in the catalogue into this
-def get_fits(name, args, data=None, RA=None, DEC=None, R26=None):
-    """
-    Retreive FITS with correct parameters, calculate and make mask, as well as get weight map and PSF for each band
-    """
-    # TODO: Still need to find a way to get the weight map
-    if not(data == None): # Allows to override needing to use the catalogue
-        RA = data[data["GALAXY"] == name]["RA"]
-        DEC = data[data["GALAXY"] == name]["DEC"]
-        R26 = data[data["GALAXY"] == name]["D26"]/2 # arcmin
-    
-    if not(os.path.isfile(name + ".fits")) or (os.path.isfile(name + ".fits") and args.overwrite):
-        download_legacy_fits.main([name], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
-        if args.psf:
-            download_legacy_PSF.main([name + "_psf"], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
-            images_dat_psf = fits.open(name + "_psf.fits")
+        for file in file_names:
+            images_dat_psf = fits.open(file + "_psf.fits")
 
             for i, image_dat_psf in enumerate(images_dat_psf):
                 band = images_dat_psf[0].header["BAND" + str(i)]
-                create_extended_PSF_DESI.main(name + "_psf.fits", name + "_psf_ex_" + band + ".fits", band=band)
+                create_extended_PSF_DESI.main(file + "_psf.fits", file + "_psf_ex_" + band + ".fits", band=band, layer=i)
                 # TODO: Recombine the bands of the PSF into one file so its less of a mess
 
-        if args.mask:
-            images_dat = fits.open(name + ".fits")
-
+    if args.mask:
+        for file in file_names:
+            images_dat = fits.open(file + ".fits")
             total_mask = np.zeros_like(images_dat[0].data[0])
+
             for i, image_dat in enumerate(images_dat[0].data):
                 band = images_dat[0].header["BAND" + str(i)]
                 try:
@@ -83,43 +48,62 @@ def get_fits(name, args, data=None, RA=None, DEC=None, R26=None):
                     continue 
 
             total_mask[total_mask >= 1] = 1
-            file_name = name + "_mask.fits"
+            file_name = file + "_mask.fits"
             fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
-        
-        if args.wm:
-            download_legacy_WM.main([name + "_wm"], [RA], [DEC], [R26*args.factor], bands=args.bands, dr=args.dr)
+    
+    if args.wm:
+        download_legacy_WM.main([file + "_wm" for file in file_names], RA, DEC, R=R26*args.factor, bands=args.bands, dr=args.dr)
+        # TODO: Might want to remove regular images and just keep weight maps
 
-def make_filestructure_and_download(names, data):
-    for name in names.keys():
-        files = names[name]
-        for file in files:
-            if type(file) == str:
-                get_fits(file, data)
-            elif type(file) == dict:
-                folder = list(file)[0].split("/")
-                folder = folder[-2]
-                try:
-                    os.mkdir(folder)
-                except FileExistsError:
-                    continue
-                finally:
-                    os.chdir(folder)
-                    make_filestructure_and_download(file, data)
-                    os.chdir("../")
+def get_quantities(files, data):
+    RA = [float(data[data["GALAXY"] == file]["RA"]) for file in files]
+    DEC = [float(data[data["GALAXY"] == file]["DEC"]) for file in files]
+    R26 = [float(data[data["GALAXY"] == file]["D26"])/2 for file in files]
+
+    return RA, DEC, R26
 
 def main(args):
-    all_data = fits.open(args.c + "SGA-2020.fits")
-    data = all_data[1].data # Select the right data
+    data = Table.read(args.c + "SGA-2020.fits")
 
-    names = get_image_names(args.p)
     if not(args.o == None):
         os.chdir(args.o)
-    
-    make_filestructure_and_download(names, data)
+
+    if args.r and not(args.p == None):
+        structure = os.walk(args.p)
+        main = Path(args.p)
+        for root, dirs, files in structure:
+            root = root.replace(str(main) + "/", "")
+            try:
+                if not(root==""):
+                    os.mkdir(root) # Remaking folder structure in output folder
+            except FileExistsError:
+                continue
+            finally:
+                files = [file.rsplit(".", maxsplit=1)[0] for file in files]
+                RA, DEC, R26 = get_quantities(files, data)
+
+                out = Path(args.o)
+                if not(root == ''):
+                    os.chdir(str(out) + "/" + root)
+                    get_fits(files, RA, DEC, R26, args)
+                    os.chdir("../")
+                else:
+                    get_fits(files, RA, DEC, R26, args)
+    else:
+        files = args.f
+        files = [os.path.basename(file) for file in files]
+
+        files = [file.rsplit(".", maxsplit=1)[0] for file in files]
+        RA, DEC, R26 = get_quantities(files, data)
+
+        os.chdir(Path(args.o))
+        get_fits(files, RA, DEC, R26, args)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Hello")
-    parser.add_argument("-p", help="Path to file/folder containing galaxy samples", default="./")
+    parser.add_argument("-p", help="Path to file/folder containing galaxy sample names")
+    parser.add_argument("-f", help="List of files (don't use in combination with -p)", nargs="+")
     parser.add_argument("-c", help="Catalogue of galaxy data (fits)", default="./")
     parser.add_argument("-r", help="Recursively go into subfolders", action="store_true")
     parser.add_argument("-o", help="Output directory", default="./")
@@ -133,4 +117,3 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     main(args)
-
