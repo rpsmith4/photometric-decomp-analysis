@@ -23,7 +23,7 @@ import create_extended_PSF_DESI
 def get_fits(file_names, RA, DEC, R26, args):
     download_legacy_fits.main(file_names, RA, DEC, R=R26*args.factor, bands=args.bands, dr=args.dr)
 
-    if args.psf:
+    if args.psf and (not(os.path.isfile(file + "_psf.fits")) or args.overwrite):
         download_legacy_PSF.main([file + "_psf" for file in file_names], RA, DEC, R=R26*args.factor, bands=args.bands, dr=args.dr)
 
         for file in file_names:
@@ -34,7 +34,7 @@ def get_fits(file_names, RA, DEC, R26, args):
                 create_extended_PSF_DESI.main(file + "_psf.fits", file + "_psf_ex_" + band + ".fits", band=band, layer=i)
                 # TODO: Recombine the bands of the PSF into one file so its less of a mess
 
-    if args.mask:
+    if args.mask and (not(os.path.isfile(file + "_mask.fits")) or args.overwrite):
         for file in file_names:
             images_dat = fits.open(file + ".fits")
             total_mask = np.zeros_like(images_dat[0].data[0])
@@ -51,7 +51,7 @@ def get_fits(file_names, RA, DEC, R26, args):
             file_name = file + "_mask.fits"
             fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
     
-    if args.wm:
+    if args.wm and (not(os.path.isfile(file + "_wm")) or args.overwrite):
         download_legacy_WM.main([file + "_wm" for file in file_names], RA, DEC, R=R26*args.factor, bands=args.bands, dr=args.dr)
         # TODO: Might want to remove regular images and just keep weight maps
 
