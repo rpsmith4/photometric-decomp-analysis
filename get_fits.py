@@ -22,12 +22,13 @@ import create_extended_PSF_DESI
 
 # TODO: Maybe reintroduce the --overwrite functionality
 def get_fits(file_names, RA, DEC, R26, args):
-    download_legacy_fits.main(file_names, RA, DEC, R=R26*args.factor, bands=args.bands, dr=args.dr)
+    for i, file in enumerate(file_names):
+        if not(os.path.isfile(file + ".fits") or args.overwrite):
+            download_legacy_fits.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], bands=args.bands, dr=args.dr)
 
-    if args.psf and (not(os.path.isfile(file + "_psf.fits") for file in file_names) or args.overwrite):
-        download_legacy_PSF.main([file + "_psf" for file in file_names], RA, DEC, R=R26*args.factor, bands=args.bands, dr=args.dr)
+        if args.psf and (not(os.path.isfile(file + "_psf.fits")) or args.overwrite):
+            download_legacy_PSF.main([file + "_psf"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], bands=args.bands, dr=args.dr)
 
-        for file in file_names:
             images_dat_psf = fits.open(file + "_psf.fits")
 
             for i, image_dat_psf in enumerate(images_dat_psf):
@@ -35,8 +36,7 @@ def get_fits(file_names, RA, DEC, R26, args):
                 create_extended_PSF_DESI.main(file + "_psf.fits", file + "_psf_ex_" + band + ".fits", band=band, layer=i)
                 # TODO: Recombine the bands of the PSF into one file so its less of a mess
 
-    if args.mask and (not(os.path.isfile(file + "_mask.fits") for file in file_names) or args.overwrite):
-        for file in file_names:
+        if args.mask and (not(os.path.isfile(file + "_mask.fits")) or args.overwrite):
             images_dat = fits.open(file + ".fits")
             total_mask = np.zeros_like(images_dat[0].data[0])
 
@@ -51,10 +51,10 @@ def get_fits(file_names, RA, DEC, R26, args):
             total_mask[total_mask >= 1] = 1
             file_name = file + "_mask.fits"
             fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
-    
-    if args.wm and (not(os.path.isfile(file + "_wm") for file in file_names) or args.overwrite):
-        download_legacy_WM.main([file + "_wm" for file in file_names], RA, DEC, R=R26*args.factor, bands=args.bands, dr=args.dr)
-        # TODO: Might want to remove regular images and just keep weight maps
+        
+        if args.wm and (not(os.path.isfile(file + "_wm")) or args.overwrite):
+            download_legacy_WM.main([file + "_wm"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], bands=args.bands, dr=args.dr)
+            # TODO: Might want to remove regular images and just keep weight maps
 
 def get_quantities(files, data):
     RA = [float(data[data["GALAXY"] == file]["RA"]) for file in files]
@@ -67,8 +67,6 @@ def main(args):
     data = Table.read(args.c + "SGA-2020.fits")
 
     if not(args.o == None):
-        print(PurePath(args.o))
-
         os.chdir(PurePath(args.o))
 
     if args.r and not(args.p == None):
