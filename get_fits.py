@@ -22,7 +22,7 @@ import create_extended_PSF_DESI
 # TODO: Maybe reintroduce the --overwrite functionality
 def get_fits(file_names, RA, DEC, R26, args):
     for i, file in enumerate(file_names):
-        if not(os.path.isfile(file + ".fits") or args.overwrite):
+        if not(os.path.isfile(file + ".fits")) or args.overwrite:
             download_legacy_fits.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], bands=args.bands, dr=args.dr)
 
         if args.psf and (not(os.path.isfile(file + "_psf.fits")) or args.overwrite):
