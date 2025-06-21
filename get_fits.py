@@ -7,7 +7,6 @@ import argparse
 import sys
 import os
 from pathlib import Path
-from pathlib import PurePath
 
 iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
 
@@ -67,7 +66,7 @@ def main(args):
     data = Table.read(args.c + "SGA-2020.fits")
 
     if not(args.o == None):
-        os.chdir(PurePath(args.o))
+        os.chdir(Path(args.o))
 
     if args.r and not(args.p == None):
         structure = os.walk(args.p)
@@ -85,7 +84,7 @@ def main(args):
 
                 out = Path(args.o)
                 if not(root == ''):
-                    os.chdir(str(out) + "/" + root)
+                    os.chdir(Path(root))
                     get_fits(files, RA, DEC, R26, args)
                     os.chdir("../")
                 else:
