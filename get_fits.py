@@ -15,11 +15,12 @@ import download_legacy_fits
 import get_mask
 import download_legacy_PSF
 import download_legacy_WM
-sys.path.append(os.path.join(iman_dir, 'imp/psf/'))
+import create_cube_fits
 
+sys.path.append(os.path.join(iman_dir, 'imp/psf/'))
 import create_extended_PSF_DESI
 
-# TODO: Maybe reintroduce the --overwrite functionality
+
 def get_fits(file_names, RA, DEC, R26, args):
     for i, file in enumerate(file_names):
         if not(os.path.isfile(file + ".fits")) or args.overwrite:
@@ -33,7 +34,11 @@ def get_fits(file_names, RA, DEC, R26, args):
             for i, image_dat_psf in enumerate(images_dat_psf):
                 band = images_dat_psf[0].header["BAND" + str(i)]
                 create_extended_PSF_DESI.main(file + "_psf.fits", file + "_psf_ex_" + band + ".fits", band=band, layer=i)
-                # TODO: Recombine the bands of the PSF into one file so its less of a mess
+            in_fits = list(Path().glob("*_psf_ex_*.fits"))
+            create_cube_fits.main(in_fits, file + "_psf_ex.fits")
+            for in_fit in in_fits:
+                os.remove(in_fit)
+                os.remove("azim_model_core.txt")
 
         if args.mask and (not(os.path.isfile(file + "_mask.fits")) or args.overwrite):
             images_dat = fits.open(file + ".fits")
