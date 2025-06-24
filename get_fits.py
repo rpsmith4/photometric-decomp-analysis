@@ -70,14 +70,15 @@ def get_quantities(files, data):
 def main(args):
     data = Table.read(args.c + "SGA-2020.fits")
 
+    structure = os.walk(Path(args.p).resolve())
+    main = Path(args.p).resolve()
+
     if not(args.o == None):
         os.chdir(Path(args.o))
 
     if args.r and not(args.p == None):
-        structure = os.walk(args.p)
-        main = Path(args.p)
         for root, dirs, files in structure:
-            root = root.replace(str(main) + "/", "")
+            root = Path(root).relative_to(main)
             try:
                 if not(root==""):
                     os.mkdir(root) # Remaking folder structure in output folder
@@ -86,7 +87,6 @@ def main(args):
             finally:
                 files = [file.rsplit(".", maxsplit=1)[0] for file in files]
                 RA, DEC, R26 = get_quantities(files, data)
-
                 out = Path(args.o)
                 if not(root == ''):
                     os.chdir(Path(root))
