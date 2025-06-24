@@ -8,32 +8,33 @@ import sys
 import os
 from pathlib import Path
 
+import download_legacy_DESI
+
 iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
 
 sys.path.append(os.path.join(iman_dir, 'misc_funcs/'))
-import download_legacy_fits
 import get_mask
-import download_legacy_PSF
-import download_legacy_WM
 import create_cube_fits
 
 sys.path.append(os.path.join(iman_dir, 'imp/psf/'))
 import create_extended_PSF_DESI
 
 
+
 def get_fits(file_names, RA, DEC, R26, args):
     for i, file in enumerate(file_names):
         if not(os.path.isfile(file + ".fits")) or args.overwrite:
-            download_legacy_fits.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], bands=args.bands, dr=args.dr)
+            download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["fits"], bands=args.bands, dr=args.dr)
 
         if args.psf and (not(os.path.isfile(file + "_psf.fits")) or args.overwrite):
-            download_legacy_PSF.main([file + "_psf"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], bands=args.bands, dr=args.dr)
+            download_legacy_DESI.main([file + "_psf"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["psf"], bands=args.bands, dr=args.dr)
 
             images_dat_psf = fits.open(file + "_psf.fits")
 
-            for i, image_dat_psf in enumerate(images_dat_psf):
-                band = images_dat_psf[0].header["BAND" + str(i)]
+            for k, image_dat_psf in enumerate(images_dat_psf):
+                band = images_dat_psf[0].header["BAND" + str(k)]
                 create_extended_PSF_DESI.main(file + "_psf.fits", file + "_psf_ex_" + band + ".fits", band=band, layer=i)
+
             in_fits = list(Path().glob("*_psf_ex_*.fits"))
             create_cube_fits.main(in_fits, file + "_psf_ex.fits")
             for in_fit in in_fits:
@@ -44,8 +45,8 @@ def get_fits(file_names, RA, DEC, R26, args):
             images_dat = fits.open(file + ".fits")
             total_mask = np.zeros_like(images_dat[0].data[0])
 
-            for i, image_dat in enumerate(images_dat[0].data):
-                band = images_dat[0].header["BAND" + str(i)]
+            for k, image_dat in enumerate(images_dat[0].data):
+                band = images_dat[0].header["BAND" + str(k)]
                 try:
                     image, mask, theta, sma, smb = get_mask.prepare_rotated(image_dat, subtract=False, rotate_ok=False)
                     total_mask += mask
@@ -56,8 +57,8 @@ def get_fits(file_names, RA, DEC, R26, args):
             file_name = file + "_mask.fits"
             fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
         
-        if args.wm and (not(os.path.isfile(file + "_wm")) or args.overwrite):
-            download_legacy_WM.main([file + "_wm"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], bands=args.bands, dr=args.dr)
+        if args.wm and (not(os.path.isfile(file + "_wm.fits")) or args.overwrite):
+            download_legacy_DESI.main([file + "_wm"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["wm"], bands=args.bands, dr=args.dr)
             # TODO: Might want to remove regular images and just keep weight maps
 
 def get_quantities(files, data):
@@ -70,8 +71,9 @@ def get_quantities(files, data):
 def main(args):
     data = Table.read(args.c + "SGA-2020.fits")
 
-    structure = os.walk(Path(args.p).resolve())
-    main = Path(args.p).resolve()
+    if not(args.p == None):
+        structure = os.walk(Path(args.p).resolve())
+        main = Path(args.p).resolve()
 
     if not(args.o == None):
         os.chdir(Path(args.o))
