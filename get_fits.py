@@ -80,7 +80,7 @@ def main(args):
         for root, dirs, files in structure:
             root = Path(root).relative_to(main)
             try:
-                if not(root==""):
+                if not(root==Path(".")):
                     os.mkdir(root) # Remaking folder structure in output folder
             except FileExistsError:
                 continue
@@ -88,7 +88,7 @@ def main(args):
                 files = [file.rsplit(".", maxsplit=1)[0] for file in files]
                 RA, DEC, R26 = get_quantities(files, data)
                 out = Path(args.o)
-                if not(root == ''):
+                if not(root == Path('.')):
                     os.chdir(Path(root))
                     get_fits(files, RA, DEC, R26, args)
                     os.chdir("../")
