@@ -38,7 +38,7 @@ def get_fits(file_names, RA, DEC, R26, args):
             create_cube_fits.main(in_fits, file + "_psf_ex.fits")
             for in_fit in in_fits:
                 os.remove(in_fit)
-                os.remove("azim_model_core.txt")
+            os.remove("azim_model_core.txt")
 
         if args.mask and (not(os.path.isfile(file + "_mask.fits")) or args.overwrite):
             images_dat = fits.open(file + ".fits")
