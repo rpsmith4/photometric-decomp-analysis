@@ -71,8 +71,11 @@ def get_fits(file_names, RA, DEC, R26, args):
             except Exception as e:
                 print(f"Failed to download psf for {file} ({e})! Continuing...")
                 continue
-            weights = fits.open(file + "_wm.fits")
-            combine_wm.combine_wm(file + "_wm.fits", weights)
+
+            images_dat = fits.open(file + ".fits")
+            out_shape = images_dat[0].data[0].shape
+            weights = fits.open(file + "_wm.fits")  
+            combine_wm.combine_wm(file + "_wm.fits", weights, out_shape)
 
 
 def get_quantities(files, data):

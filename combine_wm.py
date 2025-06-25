@@ -14,7 +14,7 @@ from reproject.mosaicking import reproject_and_coadd
 from reproject import reproject_interp
 from reproject import reproject_exact
 
-def combine_wm(name, weights):
+def combine_wm(name, weights, out_shape):
     # Assuming that the wm from DESI is in the order of image, weight, image, weight, ...
     # Weights should be an HDUlist
     print("Coadding Weight Map...")
@@ -37,7 +37,7 @@ def combine_wm(name, weights):
 
     for band in bands.keys():
         weights_band = bands[band]
-        out_im, footprint = reproject_and_coadd(weights_band, wcs_out, shape_out=shape_out, reproject_function=reproject_interp)
+        out_im, footprint = reproject_and_coadd(weights_band, wcs_out, shape_out=out_shape, reproject_function=reproject_interp)
         out_im_n = fits.ImageHDU(out_im)
 
         header_n = image_header # Replacing the header WCS
