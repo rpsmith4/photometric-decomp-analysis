@@ -9,17 +9,15 @@ import os
 from pathlib import Path
 
 import download_legacy_DESI
-import create_cube_fits
+import get_mask
+import combine_wm
 
 iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
-
-sys.path.append(os.path.join(iman_dir, 'misc_funcs/'))
-import get_mask
-
 sys.path.append(os.path.join(iman_dir, 'imp/psf/'))
+sys.path.append(os.path.join(iman_dir, 'misc_funcs/'))
 
+import create_cube_fits
 import create_extended_PSF_DESI
-import combine_wm
 
 
 
