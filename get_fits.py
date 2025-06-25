@@ -14,7 +14,6 @@ iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
 
 sys.path.append(os.path.join(iman_dir, 'misc_funcs/'))
 import get_mask
-import create_cube_fits
 
 sys.path.append(os.path.join(iman_dir, 'imp/psf/'))
 
