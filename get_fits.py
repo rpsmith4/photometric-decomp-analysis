@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 import download_legacy_DESI
+import create_cube_fits
 
 iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
 
