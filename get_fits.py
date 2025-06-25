@@ -26,10 +26,18 @@ import combine_wm
 def get_fits(file_names, RA, DEC, R26, args):
     for i, file in enumerate(file_names):
         if not(os.path.isfile(file + ".fits")) or args.overwrite:
-            download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["fits"], bands=args.bands, dr=args.dr)
+            try:
+                download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["fits"], bands=args.bands, dr=args.dr)
+            except Exception as e:
+                print(f"Failed to download fits for {file} ({e})! Continuing...")
+                continue
 
         if args.psf and (not(os.path.isfile(file + "_psf.fits")) or args.overwrite):
-            download_legacy_DESI.main([file + "_psf"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["psf"], bands=args.bands, dr=args.dr)
+            try:
+                download_legacy_DESI.main([file + "_psf"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["psf"], bands=args.bands, dr=args.dr)
+            except Exception as e:
+                print(f"Failed to download psf for {file} ({e})! Continuing...")
+                continue
 
             images_dat_psf = fits.open(file + "_psf.fits")
 
@@ -60,7 +68,11 @@ def get_fits(file_names, RA, DEC, R26, args):
             fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
         
         if args.wm and (not(os.path.isfile(file + "_wm.fits")) or args.overwrite):
-            download_legacy_DESI.main([file + "_wm"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["wm"], bands=args.bands, dr=args.dr)
+            try:
+                download_legacy_DESI.main([file + "_wm"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["wm"], bands=args.bands, dr=args.dr)
+            except Exception as e:
+                print(f"Failed to download psf for {file} ({e})! Continuing...")
+                continue
             weights = fits.open(file + "_wm.fits")
             combine_wm.combine_wm(file + "_wm.fits", weights)
 
@@ -101,6 +113,16 @@ def main(args):
                     os.chdir("../")
                 else:
                     get_fits(files, RA, DEC, R26, args)
+    elif not(args.r) and not(args.p == None):
+        files = os.listdir(Path(args.p).resolve())
+
+        files = [os.path.basename(file) for file in files]
+
+        files = [file.rsplit(".", maxsplit=1)[0] for file in files]
+        RA, DEC, R26 = get_quantities(files, data)
+
+        get_fits(files, RA, DEC, R26, args)
+
     else:
         files = args.f
         files = [os.path.basename(file) for file in files]
