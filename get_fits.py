@@ -108,7 +108,7 @@ def main(args):
                 if not(root == Path('.')):
                     os.chdir(Path(root))
                     get_fits(files, RA, DEC, R26, args)
-                    os.chdir("../")
+                    os.chdir(output)
                 else:
                     get_fits(files, RA, DEC, R26, args)
     elif not(args.r) and not(args.p == None):
