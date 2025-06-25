@@ -17,7 +17,9 @@ import get_mask
 import create_cube_fits
 
 sys.path.append(os.path.join(iman_dir, 'imp/psf/'))
+
 import create_extended_PSF_DESI
+import combine_wm
 
 
 
@@ -33,7 +35,7 @@ def get_fits(file_names, RA, DEC, R26, args):
 
             for k, image_dat_psf in enumerate(images_dat_psf):
                 band = images_dat_psf[0].header["BAND" + str(k)]
-                create_extended_PSF_DESI.main(file + "_psf.fits", file + "_psf_ex_" + band + ".fits", band=band, layer=i)
+                create_extended_PSF_DESI.main(file + "_psf.fits", file + "_psf_ex_" + band + ".fits", band=band, layer=k)
 
             in_fits = list(Path().glob("*_psf_ex_*.fits"))
             create_cube_fits.main(in_fits, file + "_psf_ex.fits")
@@ -59,7 +61,9 @@ def get_fits(file_names, RA, DEC, R26, args):
         
         if args.wm and (not(os.path.isfile(file + "_wm.fits")) or args.overwrite):
             download_legacy_DESI.main([file + "_wm"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["wm"], bands=args.bands, dr=args.dr)
-            # TODO: Might want to remove regular images and just keep weight maps
+            weights = fits.open(file + "_wm.fits")
+            combine_wm.combine_wm(file + "_wm.fits", weights)
+
 
 def get_quantities(files, data):
     RA = [float(data[data["GALAXY"] == file]["RA"]) for file in files]
@@ -76,7 +80,8 @@ def main(args):
         main = Path(args.p).resolve()
 
     if not(args.o == None):
-        os.chdir(Path(args.o))
+        output = Path(args.o).resolve()
+        os.chdir(output)
 
     if args.r and not(args.p == None):
         for root, dirs, files in structure:
