@@ -29,14 +29,14 @@ def get_fits(file_names, RA, DEC, R26, args):
                 download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["fits"], bands=args.bands, dr=args.dr)
             except Exception as e:
                 print(f"Failed to download fits for {file} ({e})! Continuing...")
-                continue
+                pass
 
         if args.psf and (not(os.path.isfile(file + "_psf.fits")) or args.overwrite):
             try:
                 download_legacy_DESI.main([file + "_psf"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["psf"], bands=args.bands, dr=args.dr)
             except Exception as e:
                 print(f"Failed to download psf for {file} ({e})! Continuing...")
-                continue
+                pass
 
             images_dat_psf = fits.open(file + "_psf.fits")
 
@@ -71,7 +71,7 @@ def get_fits(file_names, RA, DEC, R26, args):
                 download_legacy_DESI.main([file + "_wm"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["wm"], bands=args.bands, dr=args.dr)
             except Exception as e:
                 print(f"Failed to download psf for {file} ({e})! Continuing...")
-                continue
+                pass
 
             images_dat = fits.open(file + ".fits")
             out_shape = images_dat[0].data[0].shape
@@ -83,7 +83,7 @@ def get_fits(file_names, RA, DEC, R26, args):
                 download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["jpg"], bands=args.bands, dr=args.dr)
             except Exception as e:
                 print(f"Failed to download psf for {file} ({e})! Continuing...")
-                continue
+                pass
 
 
 def get_quantities(files, data):
