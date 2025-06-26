@@ -82,7 +82,7 @@ def get_fits(file_names, RA, DEC, R26, args):
             try:
                 download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["jpg"], bands=args.bands, dr=args.dr)
             except Exception as e:
-                print(f"Failed to download psf for {file} ({e})! Continuing...")
+                print(f"Failed to download jpg for {file} ({e})! Continuing...")
                 pass
 
 
