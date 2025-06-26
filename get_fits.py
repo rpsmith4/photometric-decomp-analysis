@@ -22,8 +22,9 @@ import create_extended_PSF_DESI
 
 
 def get_fits(file_names, RA, DEC, R26, args):
+    args.factor = float(args.factor)
     for i, file in enumerate(file_names):
-        if not(os.path.isfile(file + ".fits")) or args.overwrite:
+        if args.fits and (not(os.path.isfile(file + ".fits")) or args.overwrite):
             try:
                 download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["fits"], bands=args.bands, dr=args.dr)
             except Exception as e:
@@ -76,6 +77,13 @@ def get_fits(file_names, RA, DEC, R26, args):
             out_shape = images_dat[0].data[0].shape
             weights = fits.open(file + "_wm.fits")  
             combine_wm.combine_wm(file + "_wm.fits", weights, out_shape)
+
+        if args.jpg and (not(os.path.isfile(file + ".jpg")) or args.overwrite):
+            try:
+                download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["jpg"], bands=args.bands, dr=args.dr)
+            except Exception as e:
+                print(f"Failed to download psf for {file} ({e})! Continuing...")
+                continue
 
 
 def get_quantities(files, data):
@@ -144,9 +152,11 @@ if __name__ == '__main__':
     parser.add_argument("--dr", help="Data Release (dr9 or dr10)", default="dr10")
     parser.add_argument("--factor", help="Factor by which to multiply the R26 isphote radius by", default=3)
     parser.add_argument("--bands", help="Bands to download", default="griz")
+    parser.add_argument("--fits", help="Download the FITS file", action="store_true")
     parser.add_argument("--mask", help="Estimates and creates a mask", action="store_true")
     parser.add_argument("--psf", help="Downloads the core PSF and estimates and extended PSF", action="store_true")
     parser.add_argument("--wm", help="Downloads the inverse variance map (weight map)", action="store_true")
+    parser.add_argument("--jpg", help="Downloads a jpg image cutout", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing fits files", action="store_true")
 
     args = parser.parse_args()
