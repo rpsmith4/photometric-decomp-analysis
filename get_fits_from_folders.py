@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 import download_legacy_DESI
+import prepare_images
 import get_mask
 import combine_wm
 
@@ -23,67 +24,56 @@ import create_extended_PSF_DESI
 
 def get_fits(file_names, RA, DEC, R26, args):
     args.factor = float(args.factor)
+    # pixscale = 0.262
+    # RR = int(np.ceil(R26[k]*60. * args.factor/pixscale))
     for i, file in enumerate(file_names):
-        if args.fits and (not(os.path.isfile(file + ".fits")) or args.overwrite):
-            try:
-                download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["fits"], bands=args.bands, dr=args.dr)
-            except Exception as e:
-                print(f"Failed to download fits for {file} ({e})! Continuing...")
-                pass
+        os.makedirs(file, exist_ok=True)
+        os.chdir(file)
+        if args.fits and (not any(os.path.isfile(f"image_{band}.fits") for band in args.bands) or args.overwrite):
+            download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["fits"], bands=args.bands, dr=args.dr)
 
-        if args.psf and (not(os.path.isfile(file + "_psf.fits")) or args.overwrite):
-            try:
-                download_legacy_DESI.main([file + "_psf"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["psf"], bands=args.bands, dr=args.dr)
-            except Exception as e:
-                print(f"Failed to download psf for {file} ({e})! Continuing...")
-                pass
+        if args.psf and (not any(os.path.isfile(f"psf_core_{band}.fits") for band in args.bands) or args.overwrite):
+            download_legacy_DESI.main([file + "_psf"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["psf"], bands=args.bands, dr=args.dr)
 
-            images_dat_psf = fits.open(file + "_psf.fits")
 
-            for k, image_dat_psf in enumerate(images_dat_psf):
-                band = images_dat_psf[0].header["BAND" + str(k)]
-                create_extended_PSF_DESI.main(file + "_psf.fits", file + "_psf_ex_" + band + ".fits", band=band, layer=k)
+        if args.mask and (not(os.path.isfile("image_mask.fits")) or args.overwrite):
+            # images_dat = fits.open(file + ".fits")
+            pixscale = 0.262
+            RR = int(np.ceil(R26[i]*60. * args.factor/pixscale))
 
-            in_fits = list(Path().glob("*_psf_ex_*.fits"))
-            create_cube_fits.main(in_fits, file + "_psf_ex.fits")
-            for in_fit in in_fits:
-                os.remove(in_fit)
-            os.remove("azim_model_core.txt")
+            total_mask = np.zeros((RR*2, RR*2))
 
-        if args.mask and (not(os.path.isfile(file + "_mask.fits")) or args.overwrite):
-            images_dat = fits.open(file + ".fits")
-            total_mask = np.zeros_like(images_dat[0].data[0])
-
-            for k, image_dat in enumerate(images_dat[0].data):
-                band = images_dat[0].header["BAND" + str(k)]
+            for k, band in enumerate(args.bands):
                 try:
-                    image, mask, theta, sma, smb = get_mask.prepare_rotated(image_dat, subtract=False, rotate_ok=False)
-                    total_mask += mask
+                    image_dat = fits.open("image_" + band + ".fits")[0].data
+                    # band = images_dat[0].header["BAND" + str(k)]
+                    try:
+                        image, mask, theta, sma, smb = get_mask.prepare_rotated(image_dat, subtract=False, rotate_ok=False)
+                        total_mask += mask
+                    except:
+                        continue 
                 except:
-                    continue 
+                    continue
 
             total_mask[total_mask >= 1] = 1
-            file_name = file + "_mask.fits"
+            file_name = "image_mask.fits"
             fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
         
-        if args.wm and (not(os.path.isfile(file + "_wm.fits")) or args.overwrite):
-            try:
-                download_legacy_DESI.main([file + "_wm"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["wm"], bands=args.bands, dr=args.dr)
-            except Exception as e:
-                print(f"Failed to download psf for {file} ({e})! Continuing...")
-                pass
+        # if args.wm and (not(os.path.isfile(file + "_wm.fits")) or args.overwrite):
+        #     try:
+        #         download_legacy_DESI.main([file + "_wm"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["wm"], bands=args.bands, dr=args.dr)
+        #     except Exception as e:
+        #         print(f"Failed to download psf for {file} ({e})! Continuing...")
+        #         pass
 
-            images_dat = fits.open(file + ".fits")
-            out_shape = images_dat[0].data[0].shape
-            weights = fits.open(file + "_wm.fits")  
-            combine_wm.combine_wm(file + "_wm.fits", weights, out_shape)
+            # images_dat = fits.open(file + ".fits")
+            # out_shape = images_dat[0].data[0].shape
+            # weights = fits.open(file + "_wm.fits")  
+            # combine_wm.combine_wm(file + "_wm.fits", weights, out_shape)
 
         if args.jpg and (not(os.path.isfile(file + ".jpg")) or args.overwrite):
-            try:
-                download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["jpg"], bands=args.bands, dr=args.dr)
-            except Exception as e:
-                print(f"Failed to download jpg for {file} ({e})! Continuing...")
-                pass
+            download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["jpg"], bands=args.bands, dr=args.dr)
+        os.chdir("..")
 
 
 def get_quantities(files, data):
@@ -97,7 +87,8 @@ def main(args):
     data = Table.read(args.c + "SGA-2020.fits")
 
     if not(args.p == None):
-        structure = os.walk(Path(args.p).resolve())
+        in_path = Path(args.p).resolve()
+        structure = os.walk(in_path)
         main = Path(args.p).resolve()
 
     if not(args.o == None):
@@ -123,7 +114,7 @@ def main(args):
                 else:
                     get_fits(files, RA, DEC, R26, args)
     elif not(args.r) and not(args.p == None):
-        files = os.listdir(Path(args.p).resolve())
+        files = os.listdir(in_path)
 
         files = [os.path.basename(file) for file in files]
 

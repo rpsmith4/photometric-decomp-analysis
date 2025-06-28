@@ -10,10 +10,16 @@ import glob
 import shutil
 import argparse
 import numpy as np
+from io import BytesIO
+from astropy.io import fits
+from astropy.wcs import WCS
+import requests
+from prepare_images import make_patched_psf
+from PIL import Image
 
 
 def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9'):
-    url_base = "http://legacysurvey.org/viewer/"
+    url = "http://legacysurvey.org/viewer/"
 
     for k in range(len(RA)):
         # R in arcmin
@@ -31,25 +37,97 @@ def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9
             "wm": ["fits-cutout", "fits"]
         } # file type : [url_option, file extension]
 
+
         for file_type in file_types:
-            extra_option = ""
-            if file_type == "wm":
-                extra_option = "&subimage"
-            
-            url_full = url_base + file_types_dict[file_type][0] + options + extra_option
-            
-            output_file = names[k] + "." + file_types_dict[file_type][1]
+            url += file_types_dict[file_type][0]
+            output_file = names[k]
             print(f"{k}  {output_file}")
-            urllib.request.urlretrieve(url_full, output_file)
+
+            if file_type == "fits":
+                params = {
+                    "ra": RA[k],
+                    "dec": DEC[k],
+                    "size": 2*RR,
+                    "layer": "ls-" + dr,
+                    "pixscale": 0.262,
+                    "invvar": True
+                }
+
+                hdu = fits.open(get_data(url, params))
+
+                if not(hdu == None):
+                    bands = hdu[0].header["BANDS"].strip()
+                    wcs = WCS(hdu[0].header)
+                    for idx, band in enumerate(bands):
+                        data = hdu[0].data[idx, ...]
+                        if np.sum(data) == 0:
+                            continue
+                        fits.PrimaryHDU(data=data, header=wcs.to_header()).writeto(f"image_{band}.fits", overwrite=True)
+                    for idx, band in enumerate(bands):
+                        data = hdu[1].data[idx, ...]
+                        if np.sum(data) == 0:
+                            continue
+                        fits.PrimaryHDU(data=data, header=wcs.to_header()).writeto(f"image_{band}_invvar.fits", overwrite=True)
+
+            elif file_type == "psf":
+                params = {
+                    "ra": RA[k],
+                    "dec": DEC[k],
+                    "layer": "ls-" + dr,
+                    "pixscale": 0.262
+                }
+                psf_hdu = fits.open(get_data(url, params))
+
+                if not(psf_hdu == None):
+                    for hdu in psf_hdu:
+                        band = hdu.header['BAND']
+                        data = hdu.data
+                        fits.PrimaryHDU(data=data).writeto(f"psf_core_{band}.fits", overwrite=True)
+                        psf_combined = make_patched_psf(f"psf_core_{band}.fits", band, 150)
+                        fits.PrimaryHDU(data=psf_combined).writeto(f"psf_patched_{band}.fits", overwrite=True)
+            
+            elif file_type == "jpg":
+                params = {
+                    "ra": RA[k],
+                    "dec": DEC[k],
+                    "layer": "ls-" + dr,  
+                    "pixscale": 0.262
+                }
+
+                stream = get_data(url, params)
+                img = Image.open(stream)
+                img.save("image.jpg")
 
 
+
+def get_data(url, params):
+    attempts = 3
+    for attempt in range(attempts):
+        try:
+            # Make the request to the Legacy Survey API
+            print("Requesting data")
+            response = requests.get(url, params=params)
+            print(f"Response status: {response.reason}")
+
+            if response.status_code == 500:
+                print(f"Server error (500): {response.reason}.")
+                return None
+            response.raise_for_status()
+            print("Download OK")
+            # Open the response as a FITS file and save it to disk
+            return BytesIO(response.content)
+        except requests.exceptions.RequestException as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            if attempt == attempts - 1:
+                print("Max retries reached. Unable to download the file.")
+        except Exception as e:
+            print(f"Error handling file: {e}")
+            return None
+    return None
 
 def main(names, RA, DEC, R, bands='grz', pixscale=0.262, dr='dr9', file_types=["jpg"]):
-    print('Downloading...')
-
     download(names, RA, DEC, R, file_types, bands, pixscale, dr)
 
-    print('Done!')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Download from Legacysurvey")
