@@ -52,22 +52,24 @@ def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9
                     "pixscale": 0.262,
                     "invvar": True
                 }
+                try:
+                    hdu = fits.open(get_data(url, params))
 
-                hdu = fits.open(get_data(url, params))
-
-                if not(hdu == None):
-                    bands = hdu[0].header["BANDS"].strip()
-                    wcs = WCS(hdu[0].header)
-                    for idx, band in enumerate(bands):
-                        data = hdu[0].data[idx, ...]
-                        if np.sum(data) == 0:
-                            continue
-                        fits.PrimaryHDU(data=data, header=wcs.to_header()).writeto(f"image_{band}.fits", overwrite=True)
-                    for idx, band in enumerate(bands):
-                        data = hdu[1].data[idx, ...]
-                        if np.sum(data) == 0:
-                            continue
-                        fits.PrimaryHDU(data=data, header=wcs.to_header()).writeto(f"image_{band}_invvar.fits", overwrite=True)
+                    if not(hdu == None):
+                        bands = hdu[0].header["BANDS"].strip()
+                        wcs = WCS(hdu[0].header)
+                        for idx, band in enumerate(bands):
+                            data = hdu[0].data[idx, ...]
+                            if np.sum(data) == 0:
+                                continue
+                            fits.PrimaryHDU(data=data, header=wcs.to_header()).writeto(f"image_{band}.fits", overwrite=True)
+                        for idx, band in enumerate(bands):
+                            data = hdu[1].data[idx, ...]
+                            if np.sum(data) == 0:
+                                continue
+                            fits.PrimaryHDU(data=data, header=wcs.to_header()).writeto(f"image_{band}_invvar.fits", overwrite=True)
+                except:
+                    pass
 
             elif file_type == "psf":
                 params = {
@@ -76,15 +78,18 @@ def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9
                     "layer": "ls-" + dr,
                     "pixscale": 0.262
                 }
-                psf_hdu = fits.open(get_data(url, params))
+                try:
+                    psf_hdu = fits.open(get_data(url, params))
 
-                if not(psf_hdu == None):
-                    for hdu in psf_hdu:
-                        band = hdu.header['BAND']
-                        data = hdu.data
-                        fits.PrimaryHDU(data=data).writeto(f"psf_core_{band}.fits", overwrite=True)
-                        psf_combined = make_patched_psf(f"psf_core_{band}.fits", band, 150)
-                        fits.PrimaryHDU(data=psf_combined).writeto(f"psf_patched_{band}.fits", overwrite=True)
+                    if not(psf_hdu == None):
+                        for hdu in psf_hdu:
+                            band = hdu.header['BAND']
+                            data = hdu.data
+                            fits.PrimaryHDU(data=data).writeto(f"psf_core_{band}.fits", overwrite=True)
+                            psf_combined = make_patched_psf(f"psf_core_{band}.fits", band, 150)
+                            fits.PrimaryHDU(data=psf_combined).writeto(f"psf_patched_{band}.fits", overwrite=True)
+                except:
+                    pass
             
             elif file_type == "jpg":
                 params = {
@@ -93,10 +98,12 @@ def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9
                     "layer": "ls-" + dr,  
                     "pixscale": 0.262
                 }
-
-                stream = get_data(url, params)
-                img = Image.open(stream)
-                img.save("image.jpg")
+                try:
+                    stream = get_data(url, params)
+                    img = Image.open(stream)
+                    img.save("image.jpg")
+                except:
+                    pass
 
 
 

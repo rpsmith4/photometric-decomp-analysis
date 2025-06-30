@@ -13,15 +13,6 @@ import prepare_images
 import get_mask
 import combine_wm
 
-iman_dir = os.path.expanduser('~') + '/Documents/iman_new'
-sys.path.append(os.path.join(iman_dir, 'imp/psf/'))
-sys.path.append(os.path.join(iman_dir, 'misc_funcs/'))
-
-import create_cube_fits
-import create_extended_PSF_DESI
-
-
-
 def get_fits(file_names, RA, DEC, R26, args):
     args.factor = float(args.factor)
     # pixscale = 0.262
