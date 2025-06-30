@@ -71,7 +71,7 @@ def get_fits(file_names, RA, DEC, R26, args):
             # weights = fits.open(file + "_wm.fits")  
             # combine_wm.combine_wm(file + "_wm.fits", weights, out_shape)
 
-        if args.jpg and (not(os.path.isfile(file + ".jpg")) or args.overwrite):
+        if args.jpg and (not(os.path.isfile("image.jpg")) or args.overwrite):
             download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["jpg"], bands=args.bands, dr=args.dr)
         os.chdir("..")
 
@@ -123,7 +123,7 @@ def main(args):
 
         get_fits(files, RA, DEC, R26, args)
 
-    else:
+    elif not (args.f == None):
         files = args.f
         files = [os.path.basename(file) for file in files]
 
@@ -131,12 +131,18 @@ def main(args):
         RA, DEC, R26 = get_quantities(files, data)
 
         get_fits(files, RA, DEC, R26, args)
+    
+    elif not(args.n == None):
+        file = args.n
+        RA, DEC, R26 = get_quantities([file], data)
 
+        get_fits([file], RA, DEC, R26, args)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Hello")
     parser.add_argument("-p", help="Path to file/folder containing galaxy sample names")
     parser.add_argument("-f", help="List of files (don't use in combination with -p)", nargs="+")
+    parser.add_argument("-n", help="Name of galaxy")
     parser.add_argument("-c", help="Catalogue of galaxy data (fits)", default="./")
     parser.add_argument("-r", help="Recursively go into subfolders", action="store_true")
     parser.add_argument("-o", help="Output directory", default="./")
