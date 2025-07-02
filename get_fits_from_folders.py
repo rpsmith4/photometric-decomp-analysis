@@ -18,8 +18,9 @@ def get_fits(file_names, RA, DEC, R26, args):
     # pixscale = 0.262
     # RR = int(np.ceil(R26[k]*60. * args.factor/pixscale))
     for i, file in enumerate(file_names):
-        os.makedirs(file, exist_ok=True)
-        os.chdir(file)
+        if not(args.no_make_folder):
+            os.makedirs(file, exist_ok=True)
+            os.chdir(file)
         if args.fits and (not any(os.path.isfile(f"image_{band}.fits") for band in args.bands) or args.overwrite):
             download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["fits"], bands=args.bands, dr=args.dr)
 
@@ -62,9 +63,10 @@ def get_fits(file_names, RA, DEC, R26, args):
             # weights = fits.open(file + "_wm.fits")  
             # combine_wm.combine_wm(file + "_wm.fits", weights, out_shape)
 
-        if args.jpg and (not(os.path.isfile("image.jpg")) or args.overwrite):
+        if args.jpg and (not(os.path.isfile(f"{file}.jpg")) or args.overwrite):
             download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["jpg"], bands=args.bands, dr=args.dr)
-        os.chdir("..")
+        if not(args.no_make_folder):
+            os.chdir("..")
 
 
 def get_quantities(files, data):
@@ -145,6 +147,7 @@ if __name__ == '__main__':
     parser.add_argument("--psf", help="Downloads the core PSF and estimates and extended PSF", action="store_true")
     parser.add_argument("--wm", help="Downloads the inverse variance map (weight map)", action="store_true")
     parser.add_argument("--jpg", help="Downloads a jpg image cutout", action="store_true")
+    parser.add_argument("--no_make_folder", help="Decide whether to make separate folders for each galaxy", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing fits files", action="store_true")
 
     args = parser.parse_args()

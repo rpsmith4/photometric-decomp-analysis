@@ -2,7 +2,7 @@ import pandas as pd
 import argparse
 import os
 from pathlib import Path
-import get_fits
+import get_fits_from_folders
 
 
 def main(args):
@@ -25,7 +25,7 @@ def main(args):
 
         df = df.drop(df[df[name_col].notna()].index)
         
-        get_fits.get_fits(names, RA, DEC, size, args)
+        get_fits_from_folders.get_fits(names, RA, DEC, size, args)
         
 
 if __name__ == '__main__':
@@ -35,9 +35,12 @@ if __name__ == '__main__':
     parser.add_argument("--dr", help="Data Release (dr9 or dr10)", default="dr10")
     parser.add_argument("--factor", help="Factor by which to multiply the R26 isphote radius by", default=3)
     parser.add_argument("--bands", help="Bands to download", default="griz")
+    parser.add_argument("--fits", help="Download the FITS file", action="store_true")
     parser.add_argument("--mask", help="Estimates and creates a mask", action="store_true")
     parser.add_argument("--psf", help="Downloads the core PSF and estimates and extended PSF", action="store_true")
     parser.add_argument("--wm", help="Downloads the inverse variance map (weight map)", action="store_true")
+    parser.add_argument("--jpg", help="Downloads a jpg image cutout", action="store_true")
+    parser.add_argument("--no_make_folder", help="Decide whether to make separate folders for each galaxy", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing fits files", action="store_true")
 
     args = parser.parse_args()
