@@ -63,7 +63,7 @@ def get_fits(file_names, RA, DEC, R26, args):
             # weights = fits.open(file + "_wm.fits")  
             # combine_wm.combine_wm(file + "_wm.fits", weights, out_shape)
 
-        if args.jpg and (not(os.path.isfile(f"{file}.jpg")) or args.overwrite):
+        if args.jpg and (not(os.path.isfile(f"image.jpg")) or args.overwrite):
             download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["jpg"], bands=args.bands, dr=args.dr)
         if not(args.no_make_folder):
             os.chdir("..")
