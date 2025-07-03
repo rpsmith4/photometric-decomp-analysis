@@ -96,12 +96,14 @@ def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9
                     "ra": RA[k],
                     "dec": DEC[k],
                     "layer": "ls-" + dr,  
+                    "size": 2*RR,
                     "pixscale": 0.262
                 }
                 try:
                     stream = get_data(url, params)
                     img = Image.open(stream)
-                    img.save("image.jpg")
+                    # img.save(f"{names[k]}.jpg")
+                    img.save(f"image.jpg")
                 except:
                     pass
 
