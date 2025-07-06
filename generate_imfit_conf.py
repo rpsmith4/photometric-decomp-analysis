@@ -23,6 +23,10 @@ from photutils.isophote import build_ellipse_model
 
 import astropy.units as u
 
+import glob
+import itertools
+import threading
+
 def get_PA(img):
     # Estimate background
     bkg_estimator = MedianBackground()
@@ -66,7 +70,7 @@ def get_PA2(img): # Probably better
     x0 = shape[0]/2
     y0 = shape[1]/2
     I_e = np.max(img)/2
-    geometry = EllipseGeometry(x0=x0, y0=y0, sma=10, eps=0.5, pa=20.0 * np.pi / 180.0)
+    geometry = EllipseGeometry(x0=x0, y0=y0, sma=10, eps=0.5, pa=80.0 * np.pi / 180.0)
 
     aper = EllipticalAperture((geometry.x0, geometry.y0), geometry.sma, geometry.sma * (1 - geometry.eps), geometry.pa)
 
@@ -81,27 +85,22 @@ def get_PA2(img): # Probably better
 
     # host_PA = np.average(PA[(table["intens"] > I_e/100) & (table["intens"] < I_e/10)])
     # polar_PA = np.average(PA[table["intens"] < I_e/10])
-    host_PA = np.average(PA[:int(np.size(PA)/4)])
-    polar_PA = np.average(PA[int(np.size(PA)/4 * 3):])
+    # host_PA = np.average(PA[:int(np.size(PA)/4)])
+    # polar_PA = np.average(PA[int(np.size(PA)/4 * 3):])
+
+    host_PA = np.average(PA[:int(np.size(PA)/2)])
+    polar_PA = np.average(PA[-3:])
 
     return host_PA, polar_PA
 
 
 
-def init_guess_2_sersic(fits_dat, pol_str_type):
+def init_guess_2_sersic(img, pol_str_type):
     model = pyimfit.SimpleModelDescription()
 
-    shape = fits_dat[0].data.shape
-    img = fits_dat[0].data
-
-    if args.mask:
-        mask = fits.getdata("image_mask.fits")
-        img = img * (1-mask)
-
-
+    shape = img.shape
     model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
     model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
-
 
     if pol_str_type == "ring":
         # Inner Sersic (Host)
@@ -136,7 +135,7 @@ def init_guess_2_sersic(fits_dat, pol_str_type):
         I_e = (np.max(img) - np.min(img))/2
         polar.I_e.setValue(I_e/100, [0, I_e*10/100]) # Get from (max - min)/2
 
-        polar.r_e.setValue(50, [0, 1000]) # Maybe get an azimuthal average
+        polar.r_e.setValue(10, [0, 50]) # Maybe get an azimuthal average
         polar.n.setValue(3, [0, 10]) # Maybe keep as is
 
         model.addFunction(polar)
@@ -149,21 +148,38 @@ def main(args):
     if not(args.p == None):
         os.chdir(Path(args.p))
 
-    fits_file = fits.open("image_g.fits")
-    model_desc = init_guess_2_sersic(fits_file, pol_str_type=str(args.type).lower())
+    if args.r:
+        structure = os.walk(".")
+        for root, dirs, files in structure:
+            if not(files == []):
+                img_files = sorted(glob.glob(os.path.join(Path(root), "image_?.fits")))
 
-    print(model_desc)
+                # invvar_files = sorted(glob.glob(os.path.join(Path(root), "image_?_invvar.fits")))
+                # # Assuming the use of the patched PSF
+                # psf_files = sorted(glob.glob(os.path.join(Path(root), "psf_patched_?.fits")))
+                # assert(len(img_files) == len(invvar_files) == len(psf_files)), "Amount of image, invvar, and psf files unequal!"
 
-    with open("config.dat", "w") as f:
-        f.write(str(model_desc))
+                for img_file in img_files:
+                    print(f"Generating configs for {img_file}")
+                    img = fits.getdata(img_file)
 
+                    if args.mask:
+                        mask = fits.getdata(os.path.join(Path(root), "image_mask.fits"))
+                        img = img * (1-mask)
+
+                    model_desc = init_guess_2_sersic(img, pol_str_type=str(args.type).lower())
+
+                    band = img_file[-6] # Yes I know this is not the best way
+                    with open(os.path.join(Path(root), f"config_{band}.dat"), "w") as f:
+                        f.write(str(model_desc))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hello")
     parser.add_argument("-p", help="Path to file/folder containing galaxy FITS")
     parser.add_argument("--overwrite", help="Overwrite existing config files", action="store_true")
     parser.add_argument("--mask", help="Use the mask to guess initial values", action="store_true")
-    parser.add_argument("--type", help="Type of polar structure (ring, bulge, halo)")
+    parser.add_argument("--type", help="Type of polar structure", choices=["ring", "bulge", "halo"])
+    parser.add_argument("-r", help="Recursively go into subfolders (assumes that fits data is at the end of the filetree)", action="store_true")
     
 
     args = parser.parse_args()
