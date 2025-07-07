@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import pyimfit
 import subprocess
+import glob
 
 
 def run_imfit(args):
@@ -25,16 +26,30 @@ def main(args):
 
     # run_imfit(args)
 
-    structure = os.walk(".")
-    for root, dirs, files in structure:
-        if not(files == []):
-            img_files = sorted(glob.glob(os.path.join(Path(root), "image_?.fits")))
+    if args.r:
+        structure = os.walk(".")
+        for root, dirs, files in structure:
+            if not(files == []):
+                img_files = sorted(glob.glob(os.path.join(Path(root), "image_?.fits")))
 
-            for i in range(len(img_files)):
-                    band = img_file[-6] # Yes I know this is not the best way
-                    os.chdir(Path(root))
-                    subprocess.run(["imfit", "-c", "config.dat", f"image_{band}.fits", "--mask", "image_mask.fits", "--psf", f"psf_patched_{band}.fits", "--noise", f"image_{band}_invvar.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--errors-are-weights", "--save-params", f"{band}_fit_params.txt"])
-                    os.chdir(p)
+                for i in range(len(img_files)):
+                        band = img_file[-6] # Yes I know this is not the best way
+                        os.chdir(Path(root))
+
+                        # Assumes the names of the files for the most part
+                        # config file should be called config_[band].dat, may also include a way to change that 
+                        subprocess.run(["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--mask", "image_mask.fits", "--psf", f"psf_patched_{band}.fits", "--noise", f"image_{band}_invvar.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--errors-are-weights", "--save-params", f"{band}_fit_params.txt", "--nm"])
+                        os.chdir(p)
+    else:
+        img_files = sorted(glob.glob(os.path.join(Path("."), "image_?.fits")))
+
+        for i in range(len(img_files)):
+                band = img_files[i][-6] # Yes I know this is not the best way
+
+                # Assumes the names of the files for the most part
+                # config file should be called config_[band].dat, may also include a way to change that 
+                subprocess.run(["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--mask", "image_mask.fits", "--psf", f"psf_patched_{band}.fits", "--noise", f"image_{band}_invvar.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--errors-are-weights", "--save-params", f"{band}_fit_params.txt"])
+
 
 
 if __name__ == "__main__":
