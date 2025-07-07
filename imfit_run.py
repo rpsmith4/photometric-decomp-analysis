@@ -19,10 +19,22 @@ def run_imfit(args):
         subprocess.run(["imfit", "-c", "config.dat", f"image_{band}.fits", "--mask", "image_mask.fits", "--psf", f"psf_patched_{band}.fits", "--noise", f"image_{band}_invvar.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--errors-are-weights", "--save-params", f"{band}_fit_params.txt"])
 
 def main(args):
-    p = Path(args.p)
-    os.chdir(p)
+    if not(args.p == None):
+        p = Path(args.p)
+        os.chdir(p)
 
-    run_imfit(args)
+    # run_imfit(args)
+
+    structure = os.walk(".")
+    for root, dirs, files in structure:
+        if not(files == []):
+            img_files = sorted(glob.glob(os.path.join(Path(root), "image_?.fits")))
+
+            for i in range(len(img_files)):
+                    band = img_file[-6] # Yes I know this is not the best way
+                    os.chdir(Path(root))
+                    subprocess.run(["imfit", "-c", "config.dat", f"image_{band}.fits", "--mask", "image_mask.fits", "--psf", f"psf_patched_{band}.fits", "--noise", f"image_{band}_invvar.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--errors-are-weights", "--save-params", f"{band}_fit_params.txt"])
+                    os.chdir(p)
 
 
 if __name__ == "__main__":
