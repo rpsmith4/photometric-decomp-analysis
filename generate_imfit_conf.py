@@ -11,6 +11,8 @@ from photutils.background import Background2D, MedianBackground
 from photutils.segmentation import detect_sources, make_2dgaussian_kernel, SourceCatalog, deblend_sources
 
 from scipy.ndimage import rotate
+import scipy.integrate as integrate
+import scipy
 import pyimfit
 
 import argparse
@@ -65,22 +67,46 @@ def get_PA(img):
 
     return PA
 
-def get_PA2(img): # Probably better
-    shape = img.shape
-    x0 = shape[0]/2
-    y0 = shape[1]/2
-    I_e = np.max(img)/2
-    geometry = EllipseGeometry(x0=x0, y0=y0, sma=10, eps=0.5, pa=80.0 * np.pi / 180.0)
+def fit_iso(img, geometry):
 
     aper = EllipticalAperture((geometry.x0, geometry.y0), geometry.sma, geometry.sma * (1 - geometry.eps), geometry.pa)
 
     ellipse = Ellipse(img, geometry)
     isolist = ellipse.fit_image()
 
+    return isolist
+
+def get_PA2(img): # Probably better
+    shape = img.shape
+    x0 = shape[0]/2
+    y0 = shape[1]/2
+    I_e = np.max(img)/2
+
     #model_image = build_ellipse_model(data.shape, isolist)
     #residual = data - model_image
+    min_residual = np.inf
+    out_isolist = None
 
-    table = isolist.to_table()
+    for init_pa in [0, 45, 90]:
+        for init_sma_fact in [10, 30, 50]:
+            for init_eps in [0.0, 0.3, 0.5]:
+                geometry = EllipseGeometry(x0=x0, y0=y0, sma=img.shape[0]/init_sma_fact, eps=init_eps, pa=init_pa * np.pi / 180.0)
+                try:
+                    print(f"Trying {init_pa}, {init_sma_fact}, {init_eps}")
+                    print(min_residual)
+                    isolist = fit_iso(img, geometry)
+                    table = isolist.to_table()
+                    model_image = build_ellipse_model(img.shape, isolist)
+                    residual = img - model_image
+                    square_residual = np.sum(np.square(residual))
+                    if square_residual < min_residual:
+                        min_residual = square_residual
+                        out_isolist = isolist
+                except Exception as e:
+                    print(e)
+
+
+    table = out_isolist.to_table()
     PA = table["pa"]
 
     # host_PA = np.average(PA[(table["intens"] > I_e/100) & (table["intens"] < I_e/10)])
@@ -90,6 +116,11 @@ def get_PA2(img): # Probably better
 
     host_PA = np.average(PA[:int(np.size(PA)/2)])
     polar_PA = np.average(PA[-3:])
+    host_PA = np.average(PA[10:10+int(np.size(PA)/4)]).value % 360
+    polar_PA = np.average(PA[-3:]).value % 360
+
+    if np.abs(host_PA - polar_PA) < 30:
+        polar_PA = host_PA + 90
 
     return host_PA, polar_PA
 
@@ -107,19 +138,27 @@ def init_guess_2_sersic(img, pol_str_type):
         # Assuming galaxy is at the center
         host = pyimfit.make_imfit_function("Sersic", label="Host")
 
-        img_reduce = img.copy()
-        I_e = np.max(img)/2
-        img_reduce[img_reduce < I_e] = 0
+        # img_reduce = img.copy()
+        # I_e = np.max(img)/2
+        # img_reduce[img_reduce < I_e] = 0
         
         host_PA, polar_PA = get_PA2(img)
-        host_PA = host_PA.value - 90 # CCW from +x axis to CCW from +y axis 
-        polar_PA = polar_PA.value - 90
+        host_PA = host_PA - 90 # CCW from +x axis to CCW from +y axis 
+        polar_PA = polar_PA - 90
 
         host.PA.setValue(host_PA, [host_PA - 10, host_PA + 10]) # Hard to find probably, might get from the IMAN script ellipse fitting thing (might mask low intensities) # Actually seems to work well with the isophote fitting
 
         host.ell.setValue(0.5, [0, 1]) # Probably doesn't really have to be changed
-        host.I_e.setValue(I_e, [I_e/10, I_e*10]) # Get from (max - min)/2
-        host.r_e.setValue(10, [0, 100]) # Maybe get an azimuthal average
+
+        img_rot_host = scipy.ndimage.rotate(img, angle=host_PA + 90)
+        rad_slc = img_rot_host[int(img_rot_host.shape[0]/2), int(img_rot_host.shape[0]/2):]
+        S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size)))
+        I = np.cumsum(S)
+        I_e = I[-1]/2
+        r_e = np.argmin(np.abs(I - I_e)) # num of pixels from center
+
+        host.I_e.setValue(I_e, [I_e/10, I_e*10]) 
+        host.r_e.setValue(r_e, [0, r_e*5]) # Maybe get an azimuthal average
         host.n.setValue(3, [0, 5]) # Maybe keep as is
 
         model.addFunction(host)
@@ -132,10 +171,16 @@ def init_guess_2_sersic(img, pol_str_type):
         polar.ell.setValue(0.5, [0, 1]) # Probably doesn't really have to be changed
 
 
-        I_e = (np.max(img) - np.min(img))/2
-        polar.I_e.setValue(I_e/100, [0, I_e*10/100]) # Get from (max - min)/2
+        img_rot_polar = scipy.ndimage.rotate(img, angle=polar_PA + 90)
+        rad_slc = img_rot_polar[int(img_rot_polar.shape[0]/2), int(img_rot_polar.shape[0]/2):]
+        S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size)))
+        I = np.cumsum(S)
+        I_e = I[-1]/2
+        r_e = np.argmin(np.abs(I - I_e)) # num of pixels from center
 
-        polar.r_e.setValue(10, [0, 50]) # Maybe get an azimuthal average
+        polar.I_e.setValue(I_e/10, [I_e/100, I_e*10/100])
+
+        polar.r_e.setValue(r_e, [0, r_e*5]) # Maybe get an azimuthal average
         polar.n.setValue(3, [0, 10]) # Maybe keep as is
 
         model.addFunction(polar)
@@ -172,6 +217,21 @@ def main(args):
                     band = img_file[-6] # Yes I know this is not the best way
                     with open(os.path.join(Path(root), f"config_{band}.dat"), "w") as f:
                         f.write(str(model_desc))
+    else:
+        img_files = sorted(glob.glob(os.path.join(Path("."), "image_?.fits")))
+        for img_file in img_files:
+            print(f"Generating configs for {img_file}")
+            img = fits.getdata(img_file)
+
+            if args.mask:
+                mask = fits.getdata(os.path.join(Path("."), "image_mask.fits"))
+                img = img * (1-mask)
+
+            model_desc = init_guess_2_sersic(img, pol_str_type=str(args.type).lower())
+
+            band = img_file[-6] # Yes I know this is not the best way
+            with open(os.path.join(Path("."), f"config_{band}.dat"), "w") as f:
+                f.write(str(model_desc))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hello")
