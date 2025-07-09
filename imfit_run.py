@@ -17,6 +17,7 @@ def run_imfit(args):
     #imfit -c config.dat image_g.fits --mask image_mask.fits --psf psf_patched_g.fits --noise image_g_invvar.fits --save-model g_model.fits --save-residual g_residual.fits --max-threads 4 --errors-are-weights
     bands = "griz"
     for band in bands:
+        command = ["imfit", "-c", "config.dat", f"image_{band}.fits"]
         subprocess.run(["imfit", "-c", "config.dat", f"image_{band}.fits", "--mask", "image_mask.fits", "--psf", f"psf_patched_{band}.fits", "--noise", f"image_{band}_invvar.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--errors-are-weights", "--save-params", f"{band}_fit_params.txt"])
 
 def main(args):
@@ -46,6 +47,7 @@ def main(args):
 
         for i in range(len(img_files)):
                 band = img_files[i][-6] # Yes I know this is not the best way
+                files = os.listdir(".")
                 if not(any([f"{band}_model.fits" in files, f"{band}_residual.fits" in files, f"{band}_fit_params.txt" in files])) or args.overwrite:
                     # Assumes the names of the files for the most part
                     # config file should be called config_[band].dat, may also include a way to change that 
@@ -58,7 +60,10 @@ if __name__ == "__main__":
     
     parser.add_argument("-p", help="Path to folder containing galaxies")
     parser.add_argument("-r", help="Recursively go into subfolders to find")
-    parser.add_argument("--overwrite", help="Overwrites existing configs")
+    parser.add_argument("--overwrite", help="Overwrites existing configs", action="store_true")
+    parser.add_argument("--mask", help="Use mask image", action="store_true")
+    parser.add_argument("--psf", help="Use psf image", action="store_true")
+    parser.add_argument("--invvar", help="Use invvar map", action="store_true")
     # TODO: Add more arguments for IMFIT options
 
     args = parser.parse_args()

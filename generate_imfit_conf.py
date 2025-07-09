@@ -25,7 +25,6 @@ from photutils.isophote import build_ellipse_model
 
 import astropy.units as u
 
-import glob
 import itertools
 from threading import Thread
 import multiprocessing as mp
@@ -86,7 +85,7 @@ def normAngle(angle):
         angle = angle - np.sign(angle) * 360
     return angle
 
-def get_PA2(img): # Probably better
+def get_PA2_and_table(img): # Probably better
     shape = img.shape
     x0 = shape[0]/2
     y0 = shape[1]/2
@@ -135,7 +134,7 @@ def get_PA2(img): # Probably better
     if np.abs(host_PA - polar_PA) < 30 or np.abs(host_PA - polar_PA) > 150: # Check to see if the angle between then is close to the same line
         polar_PA = host_PA + 90
 
-    return host_PA, polar_PA
+    return host_PA, polar_PA, table
 
 
 
@@ -154,13 +153,12 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
         # I_e = np.max(img)/2
         # img_reduce[img_reduce < I_e] = 0
         
-        host_PA, polar_PA = get_PA2(img)
+        host_PA, polar_PA, table = get_PA2_and_table(img)
         host_PA = host_PA - 90 # CCW from +x axis to CCW from +y axis 
         polar_PA = polar_PA - 90
 
         host.PA.setValue(host_PA, [host_PA - 10, host_PA + 10]) # Hard to find probably, might get from the IMAN script ellipse fitting thing (might mask low intensities) # Actually seems to work well with the isophote fitting
 
-        host.ell.setValue(0.5, [0, 0.75]) # Probably doesn't really have to be changed
 
         img_rot_host = scipy.ndimage.rotate(img, angle=host_PA + 90)
         rad_slc = img_rot_host[int(img_rot_host.shape[0]/2), int(img_rot_host.shape[0]/2):]
@@ -169,8 +167,12 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
         B_e = B[-1]/2
         r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
         I_e = rad_slc[r_e]
+        e = np.average(table["ellipticity"][:r_e +1])
 
-        host.I_e.setValue(I_e, [I_e/10, I_e*10]) 
+        # host.ell.setValue(e, [0, (e*1.5) % 1]) 
+        host.ell.setValue(e, [0, 0.75]) 
+
+        host.I_e.setValue(I_e, [I_e/10, I_e*2]) 
         host.r_e.setValue(r_e, [r_e/2, r_e*5]) # Maybe get an azimuthal average
         host.n.setValue(3, [1, 10]) # Maybe keep as is
 
@@ -181,7 +183,6 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
 
         polar = pyimfit.make_imfit_function("Sersic", label="Polar")
         polar.PA.setValue(polar_PA, [polar_PA - 10, polar_PA + 10]) # Can probably just be the host PA +/- 90
-        polar.ell.setValue(0.5, [0, 0.75]) # Probably doesn't really have to be changed
 
         img_rot_polar = scipy.ndimage.rotate(img, angle=polar_PA + 90)
         rad_slc = img_rot_polar[int(img_rot_polar.shape[0]/2), int(img_rot_polar.shape[0]/2):]
@@ -190,7 +191,9 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
         B_e = B[-1]/2
         r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
         I_e = rad_slc[r_e]
+        e = np.average(table["ellipticity"][r_e-1:])
 
+        polar.ell.setValue(e, [0, 0.75]) 
         polar.I_e.setValue(I_e/10, [I_e/1000, I_e]) # Probably signifigantly dimmer
 
         polar.r_e.setValue(r_e, [r_e/10, r_e*10]) # Maybe get an azimuthal average
@@ -224,7 +227,7 @@ def main(args):
                     band = img_file[-6] # Yes I know this is not the best way
                     # outputs[band] = None
                     if not(f"config_{band}.dat" in files) or args.overwrite:
-                        print(f"Generating configs for {img_file}")
+                        print(f"Generating config for {img_file}")
                         img = fits.getdata(img_file)
 
                         if args.mask:
@@ -234,15 +237,17 @@ def main(args):
                         p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
                         jobs.append(p)  
                 
-                for p in jobs:
-                    p.start()
+                if not(len(jobs) == 0):
+                    for p in jobs:
+                        p.start()
 
-                for p in jobs:
-                    p.join()
+                    for p in jobs:
+                        p.join()
 
-                for band in model_desc.keys():
-                    with open(os.path.join(Path(root), f"config_{band}.dat"), "w") as f:
-                        f.write(model_desc[band])
+                    for band in model_desc.keys():
+                        if not(f"config_{band}.dat" in files) or args.overwrite:
+                            with open(os.path.join(Path(root), f"config_{band}.dat"), "w") as f:
+                                f.write(model_desc[band])
 
     else:
         img_files = sorted(glob.glob(os.path.join(Path("."), "image_?.fits")))
@@ -251,6 +256,7 @@ def main(args):
         for img_file in img_files:
             band = img_file[-6] # Yes I know this is not the best way
             # outputs[band] = None
+            files = os.listdir(".")
             if not(f"config_{band}.dat" in files) or args.overwrite:
                 print(f"Generating configs for {img_file}")
                 img = fits.getdata(img_file)
@@ -261,16 +267,18 @@ def main(args):
 
                 p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
                 jobs.append(p)  
-        
-        for p in jobs:
-            p.start()
 
-        for p in jobs:
-            p.join()
+        if not(len(jobs) == 0):
+            for p in jobs:
+                p.start()
 
-        for band in model_desc.keys():
-            with open(os.path.join(Path("."), f"config_{band}.dat"), "w") as f:
-                f.write(model_desc[band])
+            for p in jobs:
+                p.join()
+
+            for band in model_desc.keys():
+                if not(f"config_{band}.dat" in files) or args.overwrite:
+                    with open(os.path.join(Path("."), f"config_{band}.dat"), "w") as f:
+                        f.write(model_desc[band])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hello")
