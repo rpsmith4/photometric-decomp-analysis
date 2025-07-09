@@ -29,6 +29,8 @@ import glob
 import itertools
 from threading import Thread
 import multiprocessing as mp
+import warnings
+warnings.filterwarnings("ignore")
 
 def get_PA(img):
     # Estimate background
@@ -207,34 +209,58 @@ def main(args):
                 # # Assuming the use of the patched PSF
                 # psf_files = sorted(glob.glob(os.path.join(Path(root), "psf_patched_?.fits")))
                 # assert(len(img_files) == len(invvar_files) == len(psf_files)), "Amount of image, invvar, and psf files unequal!"
+                jobs = []
+                for img_file in img_files:
+                    band = img_file[-6] # Yes I know this is not the best way
+                    # outputs[band] = None
+
+                    print(f"Generating configs for {img_file}")
+                    img = fits.getdata(img_file)
+
+                    if args.mask:
+                        mask = fits.getdata(os.path.join(Path(root), "image_mask.fits"))
+                        img = img * (1-mask)
+
+                    p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
+                    jobs.append(p)  
+                
+                for p in jobs:
+                    p.start()
+
+                for p in jobs:
+                    p.join()
+
+                for band in model_desc.keys():
+                    with open(os.path.join(Path(root), f"config_{band}.dat"), "w") as f:
+                        f.write(model_desc[band])
 
     else:
         img_files = sorted(glob.glob(os.path.join(Path("."), "image_?.fits")))
 
-    jobs = []
-    for img_file in img_files:
-        band = img_file[-6] # Yes I know this is not the best way
-        # outputs[band] = None
+        jobs = []
+        for img_file in img_files:
+            band = img_file[-6] # Yes I know this is not the best way
+            # outputs[band] = None
 
-        print(f"Generating configs for {img_file}")
-        img = fits.getdata(img_file)
+            print(f"Generating configs for {img_file}")
+            img = fits.getdata(img_file)
 
-        if args.mask:
-            mask = fits.getdata(os.path.join(Path("."), "image_mask.fits"))
-            img = img * (1-mask)
+            if args.mask:
+                mask = fits.getdata(os.path.join(Path("."), "image_mask.fits"))
+                img = img * (1-mask)
 
-        p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
-        jobs.append(p)  
-    
-    for p in jobs:
-        p.start()
+            p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
+            jobs.append(p)  
+        
+        for p in jobs:
+            p.start()
 
-    for p in jobs:
-        p.join()
+        for p in jobs:
+            p.join()
 
-    for band in model_desc.keys():
-        with open(os.path.join(Path("."), f"config_{band}.dat"), "w") as f:
-            f.write(model_desc[band])
+        for band in model_desc.keys():
+            with open(os.path.join(Path("."), f"config_{band}.dat"), "w") as f:
+                f.write(model_desc[band])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hello")
