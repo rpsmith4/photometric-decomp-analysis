@@ -12,26 +12,24 @@ import subprocess
 import glob
 
 
-def run_imfit(args):
+def run_imfit(args, band):
     # Assumes alread in directory
     #imfit -c config.dat image_g.fits --mask image_mask.fits --psf psf_patched_g.fits --noise image_g_invvar.fits --save-model g_model.fits --save-residual g_residual.fits --max-threads 4 --errors-are-weights
-    bands = "griz"
-    for band in bands:
-        command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt"]
-        if args.mask or args.all:
-            command.extend(["--mask", "image_mask.fits"])
-        if args.psf or args.all:
-            command.extend(["--psf", f"psf_patched_{band}.fits"])
-        if args.invvar or args.all:
-            command.extend(["--noise", f"image_{band}_invvar.fits", "--errors-are-weights"])
-        if args.nm:
-            command.extend(["--nm"])
-        if args.de:
-            command.extend(["--de"])
-        if args.de_lhs:
-            command.extend(["--de_lhs"])
-        
-        subprocess.run(command)
+    command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt"]
+    if args.mask or args.all:
+        command.extend(["--mask", "image_mask.fits"])
+    if args.psf or args.all:
+        command.extend(["--psf", f"psf_patched_{band}.fits"])
+    if args.invvar or args.all:
+        command.extend(["--noise", f"image_{band}_invvar.fits", "--errors-are-weights"])
+    if args.nm:
+        command.extend(["--nm"])
+    if args.de:
+        command.extend(["--de"])
+    if args.de_lhs:
+        command.extend(["--de_lhs"])
+    
+    subprocess.run(command)
 
 def main(args):
     if not(args.p == None):
@@ -51,7 +49,7 @@ def main(args):
                         if not(any([f"{band}_model.fits" in files, f"{band}_residual.fits" in files, f"{band}_fit_params.txt" in files])) or args.overwrite:
                             # Assumes the names of the files for the most part
                             # config file should be called config_[band].dat, may also include a way to change that 
-                            run_imfit(args)
+                            run_imfit(args, band)
                             os.chdir(p)
     else:
         img_files = sorted(glob.glob(os.path.join(Path("."), "image_?.fits")))
