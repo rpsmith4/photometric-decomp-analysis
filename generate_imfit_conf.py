@@ -79,6 +79,13 @@ def fit_iso(img, geometry):
 
     return isolist
 
+def normAngle(angle):
+    # Return angle to be between -180 and 180
+    angle = angle % 360
+    if np.abs(angle) > 180:
+        angle = angle - np.sign(angle) * 360
+    return angle
+
 def get_PA2(img): # Probably better
     shape = img.shape
     x0 = shape[0]/2
@@ -119,10 +126,13 @@ def get_PA2(img): # Probably better
 
     host_PA = np.average(PA[:int(np.size(PA)/2)])
     polar_PA = np.average(PA[-3:])
-    host_PA = np.average(PA[10:10+int(np.size(PA)/4)]).value % 360
-    polar_PA = np.average(PA[-3:]).value % 360
+    host_PA = np.average(PA[10:10+int(np.size(PA)/4)]).value 
+    polar_PA = np.average(PA[-3:]).value
 
-    if np.abs(host_PA - polar_PA) < 30:
+    host_PA = normAngle(host_PA)
+    polar_PA = normAngle(polar_PA)
+
+    if np.abs(host_PA - polar_PA) < 30 or np.abs(host_PA - polar_PA) > 150: # Check to see if the angle between then is close to the same line
         polar_PA = host_PA + 90
 
     return host_PA, polar_PA
