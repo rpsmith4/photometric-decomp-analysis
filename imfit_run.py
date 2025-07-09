@@ -30,25 +30,26 @@ def main(args):
         structure = os.walk(".")
         for root, dirs, files in structure:
             if not(files == []):
+                # Assumes data is at the end of the file tree
                 img_files = sorted(glob.glob(os.path.join(Path(root), "image_?.fits")))
 
                 for i in range(len(img_files)):
                         band = img_file[-6] # Yes I know this is not the best way
                         os.chdir(Path(root))
-
-                        # Assumes the names of the files for the most part
-                        # config file should be called config_[band].dat, may also include a way to change that 
-                        subprocess.run(["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--mask", "image_mask.fits", "--psf", f"psf_patched_{band}.fits", "--noise", f"image_{band}_invvar.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--errors-are-weights", "--save-params", f"{band}_fit_params.txt", "--nm"])
-                        os.chdir(p)
+                        if not(any([f"{band}_model.fits" in files, f"{band}_residual.fits" in files, f"{band}_fit_params.txt" in files])) or args.overwrite:
+                            # Assumes the names of the files for the most part
+                            # config file should be called config_[band].dat, may also include a way to change that 
+                            subprocess.run(["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--mask", "image_mask.fits", "--psf", f"psf_patched_{band}.fits", "--noise", f"image_{band}_invvar.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--errors-are-weights", "--save-params", f"{band}_fit_params.txt", "--nm"])
+                            os.chdir(p)
     else:
         img_files = sorted(glob.glob(os.path.join(Path("."), "image_?.fits")))
 
         for i in range(len(img_files)):
                 band = img_files[i][-6] # Yes I know this is not the best way
-
-                # Assumes the names of the files for the most part
-                # config file should be called config_[band].dat, may also include a way to change that 
-                subprocess.run(["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--mask", "image_mask.fits", "--psf", f"psf_patched_{band}.fits", "--noise", f"image_{band}_invvar.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--errors-are-weights", "--save-params", f"{band}_fit_params.txt"])
+                if not(any([f"{band}_model.fits" in files, f"{band}_residual.fits" in files, f"{band}_fit_params.txt" in files])) or args.overwrite:
+                    # Assumes the names of the files for the most part
+                    # config file should be called config_[band].dat, may also include a way to change that 
+                    subprocess.run(["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--mask", "image_mask.fits", "--psf", f"psf_patched_{band}.fits", "--noise", f"image_{band}_invvar.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--errors-are-weights", "--save-params", f"{band}_fit_params.txt"])
 
 
 
@@ -57,6 +58,7 @@ if __name__ == "__main__":
     
     parser.add_argument("-p", help="Path to folder containing galaxies")
     parser.add_argument("-r", help="Recursively go into subfolders to find")
+    parser.add_argument("--overwrite", help="Overwrites existing configs")
     # TODO: Add more arguments for IMFIT options
 
     args = parser.parse_args()

@@ -213,16 +213,16 @@ def main(args):
                 for img_file in img_files:
                     band = img_file[-6] # Yes I know this is not the best way
                     # outputs[band] = None
+                    if not(f"config_{band}.dat" in files) or args.overwrite:
+                        print(f"Generating configs for {img_file}")
+                        img = fits.getdata(img_file)
 
-                    print(f"Generating configs for {img_file}")
-                    img = fits.getdata(img_file)
+                        if args.mask:
+                            mask = fits.getdata(os.path.join(Path(root), "image_mask.fits"))
+                            img = img * (1-mask)
 
-                    if args.mask:
-                        mask = fits.getdata(os.path.join(Path(root), "image_mask.fits"))
-                        img = img * (1-mask)
-
-                    p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
-                    jobs.append(p)  
+                        p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
+                        jobs.append(p)  
                 
                 for p in jobs:
                     p.start()
@@ -241,16 +241,16 @@ def main(args):
         for img_file in img_files:
             band = img_file[-6] # Yes I know this is not the best way
             # outputs[band] = None
+            if not(f"config_{band}.dat" in files) or args.overwrite:
+                print(f"Generating configs for {img_file}")
+                img = fits.getdata(img_file)
 
-            print(f"Generating configs for {img_file}")
-            img = fits.getdata(img_file)
+                if args.mask:
+                    mask = fits.getdata(os.path.join(Path("."), "image_mask.fits"))
+                    img = img * (1-mask)
 
-            if args.mask:
-                mask = fits.getdata(os.path.join(Path("."), "image_mask.fits"))
-                img = img * (1-mask)
-
-            p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
-            jobs.append(p)  
+                p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
+                jobs.append(p)  
         
         for p in jobs:
             p.start()
