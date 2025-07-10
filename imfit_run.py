@@ -15,7 +15,7 @@ import glob
 def run_imfit(args, band):
     # Assumes alread in directory
     #imfit -c config.dat image_g.fits --mask image_mask.fits --psf psf_patched_g.fits --noise image_g_invvar.fits --save-model g_model.fits --save-residual g_residual.fits --max-threads 4 --errors-are-weights
-    command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt"]
+    command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt", "--max-threads", "8"]
     if args.mask or args.all:
         command.extend(["--mask", "image_mask.fits"])
     if args.psf or args.all:
@@ -43,7 +43,7 @@ def main(args):
                 # Assumes data is at the end of the file tree
                 img_files = sorted(glob.glob(os.path.join(Path(root), "image_?.fits")))
 
-                for i in range(len(img_files)):
+                for img_file in img_files:
                         band = img_file[-6] # Yes I know this is not the best way
                         os.chdir(Path(root))
                         if not(any([f"{band}_model.fits" in files, f"{band}_residual.fits" in files, f"{band}_fit_params.txt" in files])) or args.overwrite:
@@ -54,8 +54,8 @@ def main(args):
     else:
         img_files = sorted(glob.glob(os.path.join(Path("."), "image_?.fits")))
 
-        for i in range(len(img_files)):
-                band = img_files[i][-6] # Yes I know this is not the best way
+        for img_file in img_files:
+                band = img_file[-6] # Yes I know this is not the best way
                 files = os.listdir(".")
                 if not(any([f"{band}_model.fits" in files, f"{band}_residual.fits" in files, f"{band}_fit_params.txt" in files])) or args.overwrite:
                     # Assumes the names of the files for the most part
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
     parser.add_argument("-p", help="Path to folder containing galaxies")
-    parser.add_argument("-r", help="Recursively go into subfolders to find")
+    parser.add_argument("-r", help="Recursively go into subfolders to find", action="store_true")
     parser.add_argument("--overwrite", help="Overwrites existing configs", action="store_true")
     parser.add_argument("--mask", help="Use mask image", action="store_true")
     parser.add_argument("--psf", help="Use psf image", action="store_true")
