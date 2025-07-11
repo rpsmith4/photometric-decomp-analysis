@@ -123,8 +123,8 @@ def get_PA2_and_table(img): # Probably better
     # host_PA = np.average(PA[:int(np.size(PA)/4)])
     # polar_PA = np.average(PA[int(np.size(PA)/4 * 3):])
 
-    host_PA = np.average(PA[:int(np.size(PA)/2)])
-    polar_PA = np.average(PA[-3:])
+    # host_PA = np.average(PA[:int(np.size(PA)/2)])
+    # polar_PA = np.average(PA[-3:])
     host_PA = np.average(PA[10:10+int(np.size(PA)/4)]).value 
     polar_PA = np.average(PA[-3:]).value
 
@@ -197,7 +197,7 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
         polar.I_e.setValue(I_e/10, [I_e/1000, I_e]) # Probably signifigantly dimmer
 
         polar.r_e.setValue(r_e, [r_e/10, r_e*10]) # Maybe get an azimuthal average
-        polar.n.setValue(3, [1, 10]) # Maybe keep as is
+        polar.n.setValue(3, [0, 10]) # Maybe keep as is # 0.2-0.3 for polar
 
         model.addFunction(polar)
 
@@ -218,10 +218,6 @@ def main(args):
             if not(files == []):
                 img_files = sorted(glob.glob(os.path.join(Path(root), "image_?.fits")))
 
-                # invvar_files = sorted(glob.glob(os.path.join(Path(root), "image_?_invvar.fits")))
-                # # Assuming the use of the patched PSF
-                # psf_files = sorted(glob.glob(os.path.join(Path(root), "psf_patched_?.fits")))
-                # assert(len(img_files) == len(invvar_files) == len(psf_files)), "Amount of image, invvar, and psf files unequal!"
                 jobs = []
                 for img_file in img_files:
                     band = img_file[-6] # Yes I know this is not the best way
@@ -255,7 +251,6 @@ def main(args):
         jobs = []
         for img_file in img_files:
             band = img_file[-6] # Yes I know this is not the best way
-            # outputs[band] = None
             files = os.listdir(".")
             if not(f"config_{band}.dat" in files) or args.overwrite:
                 print(f"Generating configs for {img_file}")
