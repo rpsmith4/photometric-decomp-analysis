@@ -15,7 +15,7 @@ import glob
 def run_imfit(args, band):
     # Assumes alread in directory
     #imfit -c config.dat image_g.fits --mask image_mask.fits --psf psf_patched_g.fits --noise image_g_invvar.fits --save-model g_model.fits --save-residual g_residual.fits --max-threads 4 --errors-are-weights
-    command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt", "--max-threads", "8"]
+    command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt", "--max-threads", args.max_threads]
     if args.mask or args.all:
         command.extend(["--mask", "image_mask.fits"])
     if args.psf or args.all:
@@ -50,7 +50,7 @@ def main(args):
                             # Assumes the names of the files for the most part
                             # config file should be called config_[band].dat, may also include a way to change that 
                             run_imfit(args, band)
-                            os.chdir(p)
+                        os.chdir(p)
     else:
         img_files = sorted(glob.glob(os.path.join(Path("."), "image_?.fits")))
 
@@ -60,7 +60,7 @@ def main(args):
                 if not(any([f"{band}_model.fits" in files, f"{band}_residual.fits" in files, f"{band}_fit_params.txt" in files])) or args.overwrite:
                     # Assumes the names of the files for the most part
                     # config file should be called config_[band].dat, may also include a way to change that 
-                    run_imfit(args)
+                    run_imfit(args, band)
 
 
 
@@ -77,6 +77,7 @@ if __name__ == "__main__":
     parser.add_argument("--nm", help="Use Nelder-Mead simplex solver (instead of Levenberg-Marquardt)", action="store_true")
     parser.add_argument("--de", help="Use differential evolution solver", action="store_true")
     parser.add_argument("--de_lhs", help="Use differential evolution solver (with Latin hypercube sampling)", action="store_true")
+    parser.add_argument("--max_threads", help="Max number of threads to use for a fit", type=int, default=4)
     # TODO: Add more arguments for IMFIT options
 
     args = parser.parse_args()
