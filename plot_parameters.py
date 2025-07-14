@@ -177,7 +177,7 @@ def quantities_plot(all_functions):
     return None
 
 def main(args):
-    p = Path(args.p)
+    p = Path(args.p).resolve()
     threshold = args.t # For reduced chi-sq
     all_functions = []
     total_bad_fit = 0
@@ -195,14 +195,18 @@ def main(args):
                     params_file = f"{functions[0]["band"]}_fit_params.txt"
                     os.chdir(Path(root).resolve())
                     try:
-                        make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
-                    except:
+                        if args.make_composed and (not(f"{functions[0]["band"]}_composed.fits" in files) or args.overwrite):
+                            make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
+                    except Exception as e:
                         print(f"Failed for {Path(img_file).stem}")
+                        print(e)
+                    os.chdir(p)
                     all_functions.extend(functions)
                     
                     total_fit += 1
                     if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
-                        warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})", UserWarning)
+                        print(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
+                        # warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
                         total_bad_fit += 1
     else:
         model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
@@ -213,16 +217,19 @@ def main(args):
             params_file = f"{functions[0]["band"]}_fit_params.txt"
             os.chdir(p.resolve())
             try:
-                make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
-            except:
+                if args.make_composed and (not(f"{functions[0]["band"]}_composed.fits" in files) or args.overwrite):
+                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
+            except Exception as e:
                 print(f"Failed for {Path(img_file).stem}")
+                print(e)
             all_functions.extend(functions)
             
             total_fit += 1
             if chi_sq_red > threshold:
                 warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
                 total_bad_fit += 1
-    quantities_plot(all_functions)
+    if args.plot_stats:
+        quantities_plot(all_functions)
     print(f"Total fit: {total_fit}")
     print(f"Total poor fit: {total_bad_fit} ({total_bad_fit/total_fit * 100:.2f}% bad)")
 
@@ -251,6 +258,9 @@ if __name__ == "__main__":
     parser.add_argument("-r", help="Recursively go into subfolders (assumes that fits data is at the end of the filetree)", action="store_true")
     parser.add_argument("-t", help="Reduced Chi-Sq threshold for a fit to be considered bad",type=float, default=1)
     parser.add_argument("-o", help="Output of overall statistics plot", default=".")
+    parser.add_argument("--plot_stats", help="Plot overall statistics", action="store_true")
+    parser.add_argument("--make_composed", help="Make a composed image of the galaxy (includes image, model, and components)", action="store_true")
+    parser.add_argument("--overwrite", help="Overwrite existing files", action="store_true")
     args = parser.parse_args()
     args.o = Path(args.o).resolve()
     main(args)
