@@ -128,17 +128,19 @@ def quantities_plot(all_functions):
         plt.hist(host_n, histtype='step', color=band_colors[band], label=band)
         plt.xlabel(r"Sersic Index $n$")
         plt.ylabel("Count")
-    ax.legend(bbox_to_anchor=(1.1, 1.05))
+    ax.legend(bbox_to_anchor=(1.15, 1.05))
     plt.tight_layout()
     plt.savefig(os.path.join(Path(args.o), "host.png"))
 
+    fig = plt.figure()
+    plt.suptitle("Polar")
     for band in "griz":
         df_band = df[df["band"] == band].copy()
-        polar_PA = df_band[df_band["label"] == "polar"]["parameters.PA"]
-        polar_ax_ratio = df_band[df_band["label"] == "polar"]["b/a"]
-        polar_I_e = df_band[df_band["label"] == "polar"]["parameters.I_e"]
-        polar_r_e = df_band[df_band["label"] == "polar"]["parameters.r_e"]
-        polar_n = df_band[df_band["label"] == "polar"]["parameters.n"]
+        polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
+        polar_ax_ratio = df_band[df_band["label"] == "Polar"]["b/a"]
+        polar_I_e = df_band[df_band["label"] == "Polar"]["parameters.I_e"]
+        polar_r_e = df_band[df_band["label"] == "Polar"]["parameters.r_e"]
+        polar_n = df_band[df_band["label"] == "Polar"]["parameters.n"]
 
 
         plt.subplot(2, 3, 1)
