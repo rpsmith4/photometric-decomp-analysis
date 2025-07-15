@@ -37,39 +37,38 @@ import make_model_ima_imfit
 def parse_results(file, galaxy_name):
     model = pyimfit.parse_config_file(file)
     band = Path(file).stem[0]
-    # print(model.functionLabelList())
-    # print(model.functionNameList())
-    # print(model.functionList()[i].parameterList()[0].value)
     with open(file, "r") as f:
         lines = f.readlines()
     status = lines[5].split(" ")[7]
     status_message = " ".join(lines[5].split(" ")[9:])
+    uncs = dict()
+    for k, line in enumerate(lines):
+        if "FUNCTION" in line:
+            func_type = line.split(" ")[1].rstrip()
+            func_label = line.split("LABEL ")[-1].rstrip()
+            func_params = pyimfit.get_function_dict()[func_type]
+            uncs[func_label] = dict()
+            for j, func_param in enumerate(func_params):
+                try:
+                    unc = lines[k + j + 1].split("+/-")[1].split("\t")[0]
+                    uncs[func_label][func_param] = float(unc) # Extremely janky way to get the uncertainties
+                except:
+                    uncs[func_label][func_param] = None
     # print(status)
     # print(status_message)
-
     chi_sq = float(lines[7].split(" ")[-1])
     chi_sq_red = float(lines[8].split(" ")[-1])
     functions = []
     for k, function in enumerate(model.functionList()):
-        # if k == 0: # Assume this is the host
-        #     print("Host:")
-        # elif k == 1: # Assume this is the polar 
-        #     print("Polar:")
-        # funcname = function._funcName
-        # if funcname == "Sersic":
-        #     params = function.parameterList()
-        #     PA = params[0]
-        #     print(PA)
-        # for j, parameter in enumerate(function.parameterList()):
-        #         print(f"{parameter.name} : {parameter.value}")
-        
         func_dict = function.getFunctionAsDict()
         for param in func_dict["parameters"]:
+            # func_dict["parameters_unc"][param] = func_dict["parameters"][param] 
             func_dict["parameters"][param] = func_dict["parameters"][param][0]
         if k == 0:
             func_dict["label"] = "Host"
         if k == 1:
             func_dict["label"] = "Polar"
+        func_dict["parameters_unc"] = uncs[func_dict["label"]]
         func_dict["band"] = band
         func_dict["Galaxy"] = galaxy_name
         # TODO: Get other parameters here (or somewhere somehow)
@@ -210,6 +209,12 @@ def main(args):
                         print(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
                         # warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
                         total_bad_fit += 1
+                    # for function in functions:
+                    #     # print(function)
+                    #     for param in function["parameters_unc"].keys():
+                    #         # print(function["parameters_unc"][param])
+                    #         if function["parameters_unc"][param] == 0:
+                    #             print(f"Zero uncertainty for {param} in {Path(model_file).resolve().relative_to(p.resolve())} (possibly sticking to bounds)!")
     else:
         model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
         for model_file in model_files:
