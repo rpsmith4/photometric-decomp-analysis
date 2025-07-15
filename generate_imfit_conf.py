@@ -168,6 +168,8 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
         r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
         I_e = rad_slc[r_e]
         e = np.average(table["ellipticity"][:r_e +1])
+        if e != e: # Sometimes is Nan for some reason
+            e = 0.2
 
         # host.ell.setValue(e, [0, (e*1.5) % 1]) 
         host.ell.setValue(e, [0, 0.75]) 
@@ -192,6 +194,8 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
         r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
         I_e = rad_slc[r_e]
         e = np.average(table["ellipticity"][r_e-1:])
+        if e != e: # Sometimes is Nan for some reason
+            e = 0.2
 
         polar.ell.setValue(e, [0, 0.75]) 
         polar.I_e.setValue(I_e/10, [I_e/1000, I_e]) # Probably signifigantly dimmer
