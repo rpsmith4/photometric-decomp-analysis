@@ -15,7 +15,8 @@ import glob
 def run_imfit(args, band):
     # Assumes alread in directory
     #imfit -c config.dat image_g.fits --mask image_mask.fits --psf psf_patched_g.fits --noise image_g_invvar.fits --save-model g_model.fits --save-residual g_residual.fits --max-threads 4 --errors-are-weights
-    command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt", "--max-threads", args.max_threads]
+    # command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt", "--max-threads", f"{args.max_threads}"]
+    command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-params", f"{band}_fit_params.txt", "--max-threads", f"{args.max_threads}"]
     if args.mask or args.all:
         command.extend(["--mask", "image_mask.fits"])
     if args.psf or args.all:
