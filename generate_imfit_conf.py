@@ -85,6 +85,17 @@ def normAngle(angle):
         angle = angle - np.sign(angle) * 360
     return angle
 
+def fix_close_angles(host_PA, polar_PA, pol_str_type):
+    # Angles should be in the range [-180, 180]
+    if pol_str_type == "ring" or pol_str_type == "halo":
+        if np.abs(host_PA - polar_PA) < 15 or np.abs(host_PA - polar_PA) > 165: 
+            host_PA = polar_PA + 90 # Often due to the host being rather circular and small
+    if pol_str_type == "bulge":
+        if np.abs(host_PA - polar_PA) < 15 or np.abs(host_PA - polar_PA) > 165: 
+            polar_PA = host_PA + 90 # Often due to the polar part being small
+    
+    return host_PA, polar_PA
+
 def get_PA2_and_table(img): # Probably better
     shape = img.shape
     x0 = shape[0]/2
@@ -131,14 +142,11 @@ def get_PA2_and_table(img): # Probably better
     host_PA = normAngle(host_PA)
     polar_PA = normAngle(polar_PA)
 
-    if np.abs(host_PA - polar_PA) < 15 or np.abs(host_PA - polar_PA) > 165: # Check to see if the angle between then is close to the same line
-        polar_PA = host_PA + 90
-
     return host_PA, polar_PA, table
 
 def fit_model(model, img):
     # Used for doing a minifit to get an initial guess
-    imfit_imfitter = pyimfit.Imfit(model, maxThreads=4)
+    imfit_imfitter = pyimfit.Imfit(model, maxThreads=1)
     imfit_imfitter.loadData(img, original_sky=50)
     result = imfit_imfitter.doFit(solver="DE")
     return result
@@ -153,73 +161,138 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     host_model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
     host_model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
 
-    if pol_str_type == "ring":
-        # Inner Sersic (Host)
-        # Assuming galaxy is at the center
-        host = pyimfit.make_imfit_function("Sersic", label="Host")
+    bounds_dict = { # Amount to add or subtract from guess/factor to multiply to guess
+        "ring" : {
+            "host": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.3, 0.4], # Possibly underestimated due to external dust/whatever
+                "n_bounds": [-1, 5], # Possibly underestimated
+                "I_e_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "r_e_factor": [1/2, 5] # Same as above
+            },
+            "polar": {
+                "PA_bounds": [-15, 15], # May need more variablility since the polar part is very dim
+                "ell_bounds": [-0.5, 0.5], # Hard to estimate for the polar part, so using a large range
+                "n_bounds": [-1, 5], # Likely to be underestimated
+                "I_e_factor": [1/100, 2], # Likely to be overestimated due to host component 
+                "r_e_factor": [1/5, 2] # Similar story
+            }
+        },
+        "bulge" : {
+            "host": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.3, 0.4], # Possibly underestimated due to external dust/whatever
+                "n_bounds": [-1, 5], # Possibly underestimated
+                "I_e_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "r_e_factor": [1/2, 5] # Same as above
+            },
+            "polar": {
+                "PA_bounds": [-15, 15], # May need more variablility since the polar part is very dim
+                "ell_bounds": [-0.5, 0.5], # Hard to estimate for the polar part, so using a large range
+                "n_bounds": [-1, 5], # Likely to be underestimated
+                "I_e_factor": [1/100, 2], # Likely to be overestimated due to host component 
+                "r_e_factor": [1/5, 2] # Similar story
+            }
+        },
+        "halo" : {
+            "host": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.3, 0.4], # Possibly underestimated due to external dust/whatever
+                "n_bounds": [-1, 5], # Possibly underestimated
+                "I_e_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "r_e_factor": [1/2, 5] # Same as above
+            },
+            "polar": {
+                "PA_bounds": [-15, 15], # May need more variablility since the polar part is very dim
+                "ell_bounds": [-0.5, 0.5], # Hard to estimate for the polar part, so using a large range
+                "n_bounds": [-1, 5], # Likely to be underestimated
+                "I_e_factor": [1/100, 2], # Likely to be overestimated due to host component 
+                "r_e_factor": [1/5, 2] # Similar story
+            }
+        }
+    }
+
+    # Inner Sersic (Host)
+    # Assuming galaxy is at the center
+    host = pyimfit.make_imfit_function("Sersic", label="Host")
+    
+    host_PA, polar_PA, table = get_PA2_and_table(img)
+    host_PA, polar_PA = fix_close_angles(host_PA, polar_PA, pol_str_type)
+    host_PA = host_PA - 90 # CCW from +x axis to CCW from +y axis 
+    polar_PA = polar_PA - 90
+
+    bounds_host = bounds_dict[pol_str_type]["host"]
+    host.PA.setValue(host_PA, [host_PA + bounds_host["PA_bounds"][0], host_PA + bounds_host["PA_bounds"][1]]) # Hard to find probably, might get from the IMAN script ellipse fitting thing (might mask low intensities) # Actually seems to work well with the isophote fitting
+
+    img_rot_host = scipy.ndimage.rotate(img, angle=host_PA + 90)
+    rad_slc = img_rot_host[int(img_rot_host.shape[0]/2), int(img_rot_host.shape[0]/2):]
+    S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size)))
+    B = np.cumsum(S)
+    B_e = B[-1]/2
+    r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
+    I_e = rad_slc[r_e]
+    e = np.average(table["ellipticity"][:r_e +1])
+    if e != e: # Sometimes is Nan for some reason
+        e = 0.2
+
+    # host.ell.setValue(e, [(e - bounds_host["ell_bounds"][0]).clip(min=0), (bounds_host["ell_bounds"][1]).clip(max=0.75)])
+    host.ell.setValue(e, np.clip(np.array([(e + bounds_host["ell_bounds"][0]), e + (bounds_host["ell_bounds"][1])]), 0, 0.75))
+
+    host.I_e.setValue(I_e, [I_e * bounds_host["I_e_factor"][0], I_e * bounds_host["I_e_factor"][1]]) 
+    host.r_e.setValue(r_e, [r_e * bounds_host["r_e_factor"][0], r_e * bounds_host["r_e_factor"][1]]) # Maybe get an azimuthal average
+    host.n.setValue(3, [0, 10]) # Maybe keep as is
+
+    host_model.addFunction(host)
+    img_host_reduced = img.copy()
+    img_host_reduced[img_host_reduced < I_e/10] = 0
+    result = fit_model(host_model, img_host_reduced)
+    # Order of PA, ell, n, I_e, r_e 
+    if result.fitConverged and not(args.dont_fit):
+        fitparams = result.params[2:]
+        PA = fitparams[0]
+        ell = fitparams[1]
+        n = fitparams[2]
+        I_e = fitparams[3]
+        r_e = fitparams[4]
+
+        host.PA.setValue(PA, [PA + bounds_host["PA_bounds"][0], PA + bounds_host["PA_bounds"][1]])
+        host.ell.setValue(ell, np.clip(np.array([(ell + bounds_host["ell_bounds"][0]), (ell + bounds_host["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+        host.n.setValue(n, np.clip(np.array([(n + bounds_host["n_bounds"][0]), (n + bounds_host["n_bounds"][1])]), 0, 10))# Likely to underestimate
+        host.I_e.setValue(I_e, [I_e * bounds_host["I_e_factor"][0], I_e * bounds_host["I_e_factor"][1]]) # Likely to underestimate
+        host.r_e.setValue(r_e, [r_e * bounds_host["r_e_factor"][0], r_e * bounds_host["r_e_factor"][1]]) # Likely to underestimate
         
-        host_PA, polar_PA, table = get_PA2_and_table(img)
-        host_PA = host_PA - 90 # CCW from +x axis to CCW from +y axis 
-        polar_PA = polar_PA - 90
+    model.addFunction(host)
 
-        host.PA.setValue(host_PA, [host_PA - 10, host_PA + 10]) # Hard to find probably, might get from the IMAN script ellipse fitting thing (might mask low intensities) # Actually seems to work well with the isophote fitting
+    # Outer Sersic (Polar)
+    # Assuming galaxy is at the center
 
+    polar = pyimfit.make_imfit_function("Sersic", label="Polar")
 
-        img_rot_host = scipy.ndimage.rotate(img, angle=host_PA + 90)
-        rad_slc = img_rot_host[int(img_rot_host.shape[0]/2), int(img_rot_host.shape[0]/2):]
-        S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size)))
-        B = np.cumsum(S)
-        B_e = B[-1]/2
-        r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
-        I_e = rad_slc[r_e]
-        e = np.average(table["ellipticity"][:r_e +1])
-        if e != e: # Sometimes is Nan for some reason
-            e = 0.2
+    bounds_polar = bounds_dict[pol_str_type]["polar"]
 
-        # host.ell.setValue(e, [0, (e*1.5) % 1]) 
-        host.ell.setValue(e, [0, 0.75]) 
+    polar.PA.setValue(polar_PA, [polar_PA + bounds_host["PA_bounds"][0], polar_PA + bounds_host["PA_bounds"][1]])
+    img_rot_polar = scipy.ndimage.rotate(img, angle=polar_PA + 90)
 
-        host.I_e.setValue(I_e, [I_e/10, I_e*2]) 
-        host.r_e.setValue(r_e, [r_e/2, r_e*5]) # Maybe get an azimuthal average
-        host.n.setValue(3, [1, 10]) # Maybe keep as is
+    rad_slc = img_rot_polar[int(img_rot_polar.shape[0]/2), int(img_rot_polar.shape[0]/2):]
+    S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size)))
+    B = np.cumsum(S)
+    B_e = B[-1]/2
+    r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
+    I_e = rad_slc[r_e]
+    e = np.average(table["ellipticity"][r_e-1:])
+    if e != e: # Sometimes is Nan for some reason
+        e = 0.2
 
-        print("Fitting")
-        host_model.addFunction(host)
-        img_host = img.copy()
-        img_host[img_host < I_e/10] = 0
-        fit_model(host_model, img_host)
-        print("Done Fitting")
-        model.addFunction(host)
+    polar.ell.setValue(ell, np.clip(np.array([(ell + bounds_polar["ell_bounds"][0]), (ell + bounds_polar["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+    # polar.n.setValue(3, np.clip(np.array([(n + bounds_polar["n_bounds"][0]), (n + bounds_polar["n_bounds"][1])]), 0, 10))# Likely to underestimate
+    polar.n.setValue(3, [0, 10]) # Maybe leave as is
+    polar.I_e.setValue(I_e, [I_e * bounds_polar["I_e_factor"][0], I_e * bounds_polar["I_e_factor"][1]]) # Likely to underestimate, probably very dim
+    polar.r_e.setValue(r_e, [r_e * bounds_polar["r_e_factor"][0], r_e * bounds_polar["r_e_factor"][1]]) # Likely to underestimate, maybe get azimuthal average
 
-        # Outer Sersic (Polar)
-        # Assuming galaxy is at the center
-
-        polar = pyimfit.make_imfit_function("Sersic", label="Polar")
-        polar.PA.setValue(polar_PA, [polar_PA - 10, polar_PA + 10]) # Can probably just be the host PA +/- 90
-
-        img_rot_polar = scipy.ndimage.rotate(img, angle=polar_PA + 90)
-        rad_slc = img_rot_polar[int(img_rot_polar.shape[0]/2), int(img_rot_polar.shape[0]/2):]
-        S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size)))
-        B = np.cumsum(S)
-        B_e = B[-1]/2
-        r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
-        I_e = rad_slc[r_e]
-        e = np.average(table["ellipticity"][r_e-1:])
-        if e != e: # Sometimes is Nan for some reason
-            e = 0.2
-
-        polar.ell.setValue(e, [0, 0.75]) 
-        polar.I_e.setValue(I_e/10, [I_e/1000, I_e]) # Probably signifigantly dimmer
-
-        polar.r_e.setValue(r_e, [r_e/10, r_e*10]) # Maybe get an azimuthal average
-        polar.n.setValue(3, [0, 10]) # Maybe keep as is # 0.2-0.3 for polar
-
-        model.addFunction(polar)
+    model.addFunction(polar)
 
     # Can perhaps run the DE solve on just the host (with isophote clipped) then on the polar component somehow (maybe by removing the center handful of pixels)
     model_desc[band] = str(model)
-
-    # return model
 
 def main(args):
     if not(args.p == None):
@@ -295,7 +368,8 @@ if __name__ == "__main__":
     parser.add_argument("-p", help="Path to file/folder containing galaxy FITS")
     parser.add_argument("--overwrite", help="Overwrite existing config files", action="store_true")
     parser.add_argument("--mask", help="Use the mask to guess initial values", action="store_true")
-    parser.add_argument("--type", help="Type of polar structure", choices=["ring", "bulge", "halo"])
+    parser.add_argument("--type", help="Type of polar structure", choices=["ring", "bulge", "halo"], default="ring")
+    parser.add_argument("--dont_fit", help="Don't use DE imfitting to try and do another guess at initial parameters", action="store_true")
     parser.add_argument("-r", help="Recursively go into subfolders (assumes that fits data is at the end of the filetree)", action="store_true")
     
 
