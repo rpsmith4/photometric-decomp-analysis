@@ -131,27 +131,32 @@ def get_PA2_and_table(img): # Probably better
     host_PA = normAngle(host_PA)
     polar_PA = normAngle(polar_PA)
 
-    if np.abs(host_PA - polar_PA) < 30 or np.abs(host_PA - polar_PA) > 150: # Check to see if the angle between then is close to the same line
+    if np.abs(host_PA - polar_PA) < 15 or np.abs(host_PA - polar_PA) > 165: # Check to see if the angle between then is close to the same line
         polar_PA = host_PA + 90
 
     return host_PA, polar_PA, table
 
-
+def fit_model(model, img):
+    # Used for doing a minifit to get an initial guess
+    imfit_imfitter = pyimfit.Imfit(model, maxThreads=4)
+    imfit_imfitter.loadData(img, original_sky=50)
+    result = imfit_imfitter.doFit(solver="DE")
+    return result
 
 def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     model = pyimfit.SimpleModelDescription()
+    host_model =  pyimfit.SimpleModelDescription()
     shape = img.shape
     model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
     model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
+
+    host_model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
+    host_model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
 
     if pol_str_type == "ring":
         # Inner Sersic (Host)
         # Assuming galaxy is at the center
         host = pyimfit.make_imfit_function("Sersic", label="Host")
-
-        # img_reduce = img.copy()
-        # I_e = np.max(img)/2
-        # img_reduce[img_reduce < I_e] = 0
         
         host_PA, polar_PA, table = get_PA2_and_table(img)
         host_PA = host_PA - 90 # CCW from +x axis to CCW from +y axis 
@@ -178,6 +183,12 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
         host.r_e.setValue(r_e, [r_e/2, r_e*5]) # Maybe get an azimuthal average
         host.n.setValue(3, [1, 10]) # Maybe keep as is
 
+        print("Fitting")
+        host_model.addFunction(host)
+        img_host = img.copy()
+        img_host[img_host < I_e/10] = 0
+        fit_model(host_model, img_host)
+        print("Done Fitting")
         model.addFunction(host)
 
         # Outer Sersic (Polar)
