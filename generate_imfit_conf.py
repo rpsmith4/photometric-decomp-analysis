@@ -231,13 +231,14 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     B_e = B[-1]/2
     r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
     I_e = rad_slc[r_e]
+    if I_e < 0:
+        I_e = -1 * I_e # Occasionaly negative due to sky subtractions, though magnitude matters more
     e = np.average(table["ellipticity"][:r_e +1])
     if e != e: # Sometimes is Nan for some reason
         e = 0.2
 
     # host.ell.setValue(e, [(e - bounds_host["ell_bounds"][0]).clip(min=0), (bounds_host["ell_bounds"][1]).clip(max=0.75)])
     host.ell.setValue(e, np.clip(np.array([(e + bounds_host["ell_bounds"][0]), e + (bounds_host["ell_bounds"][1])]), 0, 0.75))
-
     host.I_e.setValue(I_e, [I_e * bounds_host["I_e_factor"][0], I_e * bounds_host["I_e_factor"][1]]) 
     host.r_e.setValue(r_e, [r_e * bounds_host["r_e_factor"][0], r_e * bounds_host["r_e_factor"][1]]) # Maybe get an azimuthal average
     host.n.setValue(3, [0, 10]) # Maybe keep as is
@@ -254,6 +255,8 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
         n = fitparams[2]
         I_e = fitparams[3]
         r_e = fitparams[4]
+        if I_e < 0:
+            I_e = -1 * I_e # Occasionally negative due to sky subtractions, though magnitude matters more
 
         host.PA.setValue(PA, [PA + bounds_host["PA_bounds"][0], PA + bounds_host["PA_bounds"][1]])
         host.ell.setValue(ell, np.clip(np.array([(ell + bounds_host["ell_bounds"][0]), (ell + bounds_host["ell_bounds"][1])]), 0, 0.75)) # May overestimate
@@ -279,6 +282,8 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     B_e = B[-1]/2
     r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
     I_e = rad_slc[r_e]
+    if I_e < 0:
+        I_e = -1 * I_e # Occasionally negative due to sky subtractions, though magnitude matters more
     e = np.average(table["ellipticity"][r_e-1:])
     if e != e: # Sometimes is Nan for some reason
         e = 0.2
@@ -298,7 +303,6 @@ def main(args):
     if not(args.p == None):
         os.chdir(Path(args.p))
     manager = mp.Manager()
-    model_desc = manager.dict()
 
     if args.r:
         structure = os.walk(".")
@@ -307,10 +311,11 @@ def main(args):
                 img_files = sorted(glob.glob(os.path.join(Path(root), "image_?.fits")))
 
                 jobs = []
+                model_desc = manager.dict()
                 for img_file in img_files:
                     band = img_file[-6] # Yes I know this is not the best way
                     # outputs[band] = None
-                    if not(f"config_{band}.dat" in files) or args.overwrite:
+                    if not(f"2_sersic_{band}.dat" in files) or args.overwrite:
                         print(f"Generating config for {img_file}")
                         img = fits.getdata(img_file)
 
@@ -328,9 +333,10 @@ def main(args):
                     for p in jobs:
                         p.join()
 
+                    print(root)
                     for band in model_desc.keys():
-                        if not(f"config_{band}.dat" in files) or args.overwrite:
-                            with open(os.path.join(Path(root), f"config_{band}.dat"), "w") as f:
+                        if not(f"2_sersic_{band}.dat" in files) or args.overwrite:
+                            with open(os.path.join(Path(root), f"2_sersic_{band}.dat"), "w") as f:
                                 f.write(model_desc[band])
 
     else:
@@ -340,7 +346,7 @@ def main(args):
         for img_file in img_files:
             band = img_file[-6] # Yes I know this is not the best way
             files = os.listdir(".")
-            if not(f"config_{band}.dat" in files) or args.overwrite:
+            if not(f"2_sersic_{band}.dat" in files) or args.overwrite:
                 print(f"Generating configs for {img_file}")
                 img = fits.getdata(img_file)
 
@@ -359,8 +365,8 @@ def main(args):
                 p.join()
 
             for band in model_desc.keys():
-                if not(f"config_{band}.dat" in files) or args.overwrite:
-                    with open(os.path.join(Path("."), f"config_{band}.dat"), "w") as f:
+                if not(f"2_sersic_{band}.dat" in files) or args.overwrite:
+                    with open(os.path.join(Path("."), f"2_sersic_{band}.dat"), "w") as f:
                         f.write(model_desc[band])
 
 if __name__ == "__main__":
