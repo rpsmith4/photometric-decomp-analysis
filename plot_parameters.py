@@ -6,6 +6,7 @@ import math
 
 from astropy.convolution import convolve
 from astropy.io import fits
+from astropy.constants import c
 
 from photutils.background import Background2D, MedianBackground
 from photutils.segmentation import detect_sources, make_2dgaussian_kernel, SourceCatalog, deblend_sources
@@ -34,7 +35,7 @@ import make_model_ima_imfit
 
 # warnings.filterwarnings("ignore")
 
-def parse_results(file, galaxy_name):
+def parse_results(file, galaxy_name, table=None):
     model = pyimfit.parse_config_file(file)
     band = Path(file).stem[0]
     with open(file, "r") as f:
@@ -72,6 +73,17 @@ def parse_results(file, galaxy_name):
         func_dict["band"] = band
         func_dict["Galaxy"] = galaxy_name
         # TODO: Get other parameters here (or somewhere somehow)
+        if not(table == None):
+            H_0 = 70.8 * u.km / u.s / u.Mpc
+            z = table["GALAXY" == galaxy_name]["Z_LEDA"]
+            if z == -1:
+                func_dict["Distance"] = -1 # SGA sets z to -1 if z is not measured
+            else:
+                d = z * c / H_0
+                func_dict["Distance"] = d
+        else:
+            func_dict["Distance"] = -1
+            
         e = func_dict["parameters"]["ell"]
         axis_ratio = np.sqrt(-1*(np.square(e) - 1)) # b/a ratio
         func_dict["b/a"] = axis_ratio
@@ -85,7 +97,6 @@ def quantities_plot(all_functions):
     # df = pd.DataFrame(all_functions)
     df = pd.json_normalize(all_functions)
     df = df.groupby(by="Galaxy", group_keys=True)[df.columns].apply(lambda x: x)
-    # TODO: Add each band (maybe overlay them on the same plots, just different colors)
     fig = plt.figure()
     plt.suptitle("Host")
     band_colors = {
@@ -177,68 +188,60 @@ def quantities_plot(all_functions):
                 
     return None
 
+def get_functions_from_files(model_files, root, table=None):
+    model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
+    # print(model_files)
+    for model_file in model_files:
+        functions, chi_sq, chi_sq_red, status, status_message = parse_results(model_file, os.path.basename(root), table)
+        root = Path(root).resolve()
+        img_file = os.path.join(root, f"image_{functions[0]["band"]}.fits")
+        psf_file = os.path.join(root, f"psf_patched_{functions[0]["band"]}.fits")
+        params_file = os.path.join(root, f"{functions[0]["band"]}_fit_params.txt")
+        # os.chdir(Path(root).resolve())
+        try:
+            if args.make_composed and (not(f"{functions[0]["band"]}_composed.fits" in files) or args.overwrite):
+                make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
+        except Exception as e:
+            print(f"Failed for {Path(img_file).stem}")
+            print(e)
+        # os.chdir(p)
+        all_functions.extend(functions)
+        
+        total_fit += 1
+        if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
+            print(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
+            # warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
+            total_bad_fit += 1
+        # for function in functions:
+        #     # print(function)
+        #     for param in function["parameters_unc"].keys():
+        #         # print(function["parameters_unc"][param])
+        #         if function["parameters_unc"][param] == 0:
+        #             print(f"Zero uncertainty for {param} in {Path(model_file).resolve().relative_to(p.resolve())} (possibly sticking to bounds)!")
+    print(f"Total fit: {total_fit}")
+    print(f"Total poor fit: {total_bad_fit} ({total_bad_fit/total_fit * 100:.2f}% bad)")
+
+    return all_functions
+
 def main(args):
     p = Path(args.p).resolve()
     threshold = args.t # For reduced chi-sq
     all_functions = []
     total_bad_fit = 0
     total_fit = 0
+    table = Table.read(os.path.join(args.c, "SGA-2020.fits"))
     if args.r:
         structure = os.walk(p)
         for root, dirs, files in structure:
             if not(files == []):
                 model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
-                # print(model_files)
-                for model_file in model_files:
-                    functions, chi_sq, chi_sq_red, status, status_message = parse_results(model_file, os.path.basename(root))
-                    img_file = f"image_{functions[0]["band"]}.fits"
-                    psf_file = f"psf_patched_{functions[0]["band"]}.fits"
-                    params_file = f"{functions[0]["band"]}_fit_params.txt"
-                    os.chdir(Path(root).resolve())
-                    try:
-                        if args.make_composed and (not(f"{functions[0]["band"]}_composed.fits" in files) or args.overwrite):
-                            make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
-                    except Exception as e:
-                        print(f"Failed for {Path(img_file).stem}")
-                        print(e)
-                    os.chdir(p)
-                    all_functions.extend(functions)
-                    
-                    total_fit += 1
-                    if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
-                        print(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
-                        # warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
-                        total_bad_fit += 1
-                    # for function in functions:
-                    #     # print(function)
-                    #     for param in function["parameters_unc"].keys():
-                    #         # print(function["parameters_unc"][param])
-                    #         if function["parameters_unc"][param] == 0:
-                    #             print(f"Zero uncertainty for {param} in {Path(model_file).resolve().relative_to(p.resolve())} (possibly sticking to bounds)!")
+                all_functions = get_functions_from_files(model_files, root)
     else:
         model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
-        for model_file in model_files:
-            functions, chi_sq, chi_sq_red, status, status_message = parse_results(model_file, os.path.basename(p))
-            img_file = f"image_{functions[0]["band"]}.fits"
-            psf_file = f"psf_patched_{functions[0]["band"]}.fits"
-            params_file = f"{functions[0]["band"]}_fit_params.txt"
-            os.chdir(p.resolve())
-            try:
-                if args.make_composed and (not(f"{functions[0]["band"]}_composed.fits" in files) or args.overwrite):
-                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
-            except Exception as e:
-                print(f"Failed for {Path(img_file).stem}")
-                print(e)
-            all_functions.extend(functions)
-            
-            total_fit += 1
-            if chi_sq_red > threshold:
-                warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
-                total_bad_fit += 1
+        all_functions = get_functions_from_files(model_files, root=Path(".").resolve())
+
     if args.plot_stats:
         quantities_plot(all_functions)
-    print(f"Total fit: {total_fit}")
-    print(f"Total poor fit: {total_bad_fit} ({total_bad_fit/total_fit * 100:.2f}% bad)")
 
 def _warning(
     message,
@@ -268,6 +271,7 @@ if __name__ == "__main__":
     parser.add_argument("--plot_stats", help="Plot overall statistics", action="store_true")
     parser.add_argument("--make_composed", help="Make a composed image of the galaxy (includes image, model, and components)", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing files", action="store_true")
+    parser.add_argument("-c", "Directory to Sienna Galaxy Atlas File (used to get redshift)", default=".")
     args = parser.parse_args()
     args.o = Path(args.o).resolve()
     main(args)
