@@ -322,7 +322,15 @@ def main(args):
                         if args.mask:
                             mask = fits.getdata(os.path.join(Path(root), "image_mask.fits"))
                             img = img * (1-mask)
-
+                        
+                        folder_type_dict = {
+                            "Polar Rings": "ring",
+                            "Polar_Tilted Bulges": "bulge",
+                            "Polar_Tilted Halo": "halo"
+                        }
+                        for folder in ["Polar Rings", "Polar_Tilted Bulges", "Polar_Tilted Halo"]: # Attempt to autodetect type
+                            if folder in root:
+                                args.type = folder_type_dict[folder]
                         p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
                         jobs.append(p)  
                 
