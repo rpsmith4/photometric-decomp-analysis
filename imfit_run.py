@@ -47,7 +47,7 @@ def main(args):
                 for img_file in img_files:
                         band = img_file[-6] # Yes I know this is not the best way
                         os.chdir(Path(root))
-                        if not(any([f"{args.fits_type}_{band}_composed.fits" in files, f"{args.fit_type}_{band}_fit_params.txt" in files])) or args.overwrite:
+                        if not(any([f"{args.fit_type}_{band}_composed.fits" in files, f"{args.fit_type}_{band}_fit_params.txt" in files])) or args.overwrite:
                             # Assumes the names of the files for the most part
                             # config file should be called config_[band].dat, may also include a way to change that 
                             run_imfit(args, band)
@@ -58,7 +58,7 @@ def main(args):
         for img_file in img_files:
                 band = img_file[-6] # Yes I know this is not the best way
                 files = os.listdir(".")
-                if not(any([f"{args.fits_type}_{band}_composed.fits" in files, f"{args.fit_type}_{band}_fit_params.txt" in files])) or args.overwrite:
+                if not(any([f"{args.fit_type}_{band}_composed.fits" in files, f"{args.fit_type}_{band}_fit_params.txt" in files])) or args.overwrite:
                     # Assumes the names of the files for the most part
                     # config file should be called config_[band].dat, may also include a way to change that 
                     run_imfit(args, band)
