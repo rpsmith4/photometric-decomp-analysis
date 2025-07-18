@@ -101,18 +101,15 @@ def quantities_plot(all_functions):
     df = Table.from_pandas(df)
     df = df[df["Distance"] != -1]
     fig = plt.figure()
-    plt.suptitle("Host")
     band_colors = {
         "g": "g",
         "r" : "r",
         "i" : "firebrick",
         "z" : "darkred"
     }
-    host_PA = df[df["label"] == "Host"]["parameters.PA"]
-    polar_PA = df[df["label"] == "Polar"]["parameters.PA"]
-    diff_PA = host_PA - polar_PA
     # d = np.array(df["Distance"])
-
+    fig = plt.figure(figsize=(16, 8))
+    plt.suptitle("Host")
     for band in "griz":
         df_band = df[df["band"] == band].copy()
         host_ax_ratio = df_band[df_band["label"] == "Host"]["b/a"]
@@ -120,6 +117,9 @@ def quantities_plot(all_functions):
         host_r_e = df_band[df_band["label"] == "Host"]["parameters.r_e"] * u.pix
         host_n = df_band[df_band["label"] == "Host"]["parameters.n"]
         d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
+        host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
+        polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
+        diff_PA = host_PA - polar_PA
 
         pixscale = 0.262 * u.arcsec / u.pix
 
@@ -154,7 +154,7 @@ def quantities_plot(all_functions):
     plt.tight_layout()
     plt.savefig(os.path.join(Path(args.o), "host.png"))
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(16, 8))
     plt.suptitle("Polar")
     for band in "griz":
         df_band = df[df["band"] == band].copy()
@@ -163,6 +163,9 @@ def quantities_plot(all_functions):
         polar_r_e = df_band[df_band["label"] == "Polar"]["parameters.r_e"] * u.pix
         polar_n = df_band[df_band["label"] == "Polar"]["parameters.n"]
         d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
+        host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
+        polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
+        diff_PA = host_PA - polar_PA
 
         polar_r_e = (np.tan(polar_r_e * pixscale) * d).to(u.kpc)
 
@@ -192,7 +195,6 @@ def quantities_plot(all_functions):
         plt.ylabel("Count")
     # ax.legend(bbox_to_anchor=(1.7, 1.05))
     ax_leg = plt.subplot(2,3,6)
-    print(l)
     ax_leg.legend(handles=[l[-1][0]])
     plt.tight_layout()
     plt.savefig(os.path.join(Path(args.o), "polar.png"))
