@@ -7,6 +7,7 @@ import math
 from astropy.convolution import convolve
 from astropy.io import fits
 from astropy.constants import c
+from astropy.table import Table
 
 from photutils.background import Background2D, MedianBackground
 from photutils.segmentation import detect_sources, make_2dgaussian_kernel, SourceCatalog, deblend_sources
@@ -105,18 +106,24 @@ def quantities_plot(all_functions):
         "i" : "firebrick",
         "z" : "darkred"
     }
+    host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
+    polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
+    diff_PA = host_PA - polar_PA
+
     for band in "griz":
         df_band = df[df["band"] == band].copy()
-        host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
         host_ax_ratio = df_band[df_band["label"] == "Host"]["b/a"]
         host_I_e = df_band[df_band["label"] == "Host"]["parameters.I_e"]
         host_r_e = df_band[df_band["label"] == "Host"]["parameters.r_e"]
         host_n = df_band[df_band["label"] == "Host"]["parameters.n"]
 
+        pixscale = u.pixel_scale(0.262)
+        r_e = (np.tan(r_e * pixscale) * d).to(u.kpc)
+
 
         plt.subplot(2, 3, 1)
-        plt.hist(host_PA, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel("PA")
+        plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
+        plt.xlabel(r"PA_{host} - PA_{polar} (deg)")
         plt.ylabel("Count")
 
         plt.subplot(2, 3, 2)
@@ -126,12 +133,12 @@ def quantities_plot(all_functions):
 
         plt.subplot(2, 3, 3)
         plt.hist(host_I_e, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"Half light intensity $I_e$")
+        plt.xlabel(r"Half light intensity $I_e$ (nanomaggies)")
         plt.ylabel("Count")
 
         plt.subplot(2, 3, 4)
         plt.hist(host_r_e, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"Half light radius $r_e$")
+        plt.xlabel(r"Half light radius $r_e$ (kpc)")
         plt.ylabel("Count")
 
         ax = plt.subplot(2, 3, 5)
@@ -146,16 +153,18 @@ def quantities_plot(all_functions):
     plt.suptitle("Polar")
     for band in "griz":
         df_band = df[df["band"] == band].copy()
-        polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
         polar_ax_ratio = df_band[df_band["label"] == "Polar"]["b/a"]
         polar_I_e = df_band[df_band["label"] == "Polar"]["parameters.I_e"]
         polar_r_e = df_band[df_band["label"] == "Polar"]["parameters.r_e"]
         polar_n = df_band[df_band["label"] == "Polar"]["parameters.n"]
 
+        pixscale = u.pixel_scale(0.262)
+        r_e = (np.tan(r_e * pixscale) * d).to(u.kpc)
+
 
         plt.subplot(2, 3, 1)
-        plt.hist(polar_PA, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel("PA")
+        plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
+        plt.xlabel(r"PA_{host} - PA_{polar} (deg)")
         plt.ylabel("Count")
 
         plt.subplot(2, 3, 2)
@@ -165,12 +174,12 @@ def quantities_plot(all_functions):
 
         plt.subplot(2, 3, 3)
         plt.hist(polar_I_e, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"Half light intensity $I_e$")
+        plt.xlabel(r"Half light intensity $I_e$ (nanomaggies)")
         plt.ylabel("Count")
 
         plt.subplot(2, 3, 4)
         plt.hist(polar_r_e, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"Half light radius $r_e$")
+        plt.xlabel(r"Half light radius $r_e$ (kpc)")
         plt.ylabel("Count")
 
         ax = plt.subplot(2, 3, 5)
@@ -189,7 +198,11 @@ def quantities_plot(all_functions):
     return None
 
 def get_functions_from_files(model_files, root, table=None):
+    threshold = args.t # For reduced chi-sq
+    all_functions = []
     model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
+    global total_fit
+    global total_bad_fit
     # print(model_files)
     for model_file in model_files:
         functions, chi_sq, chi_sq_red, status, status_message = parse_results(model_file, os.path.basename(root), table)
@@ -206,30 +219,28 @@ def get_functions_from_files(model_files, root, table=None):
             print(e)
         # os.chdir(p)
         all_functions.extend(functions)
-        
         total_fit += 1
         if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
-            print(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
+            name = Path(model_file).resolve().relative_to(p)
+            print(f"{name} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
             # warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
             total_bad_fit += 1
-        # for function in functions:
-        #     # print(function)
-        #     for param in function["parameters_unc"].keys():
-        #         # print(function["parameters_unc"][param])
-        #         if function["parameters_unc"][param] == 0:
-        #             print(f"Zero uncertainty for {param} in {Path(model_file).resolve().relative_to(p.resolve())} (possibly sticking to bounds)!")
-    print(f"Total fit: {total_fit}")
-    print(f"Total poor fit: {total_bad_fit} ({total_bad_fit/total_fit * 100:.2f}% bad)")
+        for function in functions:
+            for param in function["parameters_unc"].keys():
+                if function["parameters_unc"][param] == 0:
+                    name = Path(model_file).resolve().relative_to(p)
+                    print(f"Zero uncertainty for {param} in {name} (possibly sticking to bounds)!")
 
     return all_functions
 
 def main(args):
+    global p
     p = Path(args.p).resolve()
-    threshold = args.t # For reduced chi-sq
-    all_functions = []
+    table = Table.read(os.path.join(args.c, "SGA-2020.fits"))
+    global total_bad_fit
+    global total_fit
     total_bad_fit = 0
     total_fit = 0
-    table = Table.read(os.path.join(args.c, "SGA-2020.fits"))
     if args.r:
         structure = os.walk(p)
         for root, dirs, files in structure:
@@ -239,6 +250,9 @@ def main(args):
     else:
         model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
         all_functions = get_functions_from_files(model_files, root=Path(".").resolve())
+
+    print(f"Total fit: {total_fit}")
+    print(f"Total poor fit: {total_bad_fit} ({total_bad_fit/total_fit * 100:.2f}% bad)")
 
     if args.plot_stats:
         quantities_plot(all_functions)
@@ -254,6 +268,7 @@ def _warning(
         print(f"{message}")
     else:
         print(f"{category}: {message} at {lineno}")
+
 warnings.showwarning = _warning
 # class customWarning(Warning):
 #     def __init__(self, message):
@@ -271,7 +286,7 @@ if __name__ == "__main__":
     parser.add_argument("--plot_stats", help="Plot overall statistics", action="store_true")
     parser.add_argument("--make_composed", help="Make a composed image of the galaxy (includes image, model, and components)", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing files", action="store_true")
-    parser.add_argument("-c", "Directory to Sienna Galaxy Atlas File (used to get redshift)", default=".")
+    parser.add_argument("-c", help="Directory to Sienna Galaxy Atlas File (used to get redshift)", default=".")
     args = parser.parse_args()
     args.o = Path(args.o).resolve()
     main(args)
