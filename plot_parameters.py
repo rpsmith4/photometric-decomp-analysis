@@ -74,14 +74,14 @@ def parse_results(file, galaxy_name, table=None):
         func_dict["band"] = band
         func_dict["Galaxy"] = galaxy_name
         # TODO: Get other parameters here (or somewhere somehow)
-        if not(table == None):
+        if table:
             H_0 = 70.8 * u.km / u.s / u.Mpc
             z = table["GALAXY" == galaxy_name]["Z_LEDA"]
             if z == -1:
                 func_dict["Distance"] = -1 # SGA sets z to -1 if z is not measured
             else:
-                d = z * c / H_0
-                func_dict["Distance"] = d
+                d = (z * c / H_0).to(u.Mpc)
+                func_dict["Distance"] = d.value
         else:
             func_dict["Distance"] = -1
             
@@ -98,6 +98,8 @@ def quantities_plot(all_functions):
     # df = pd.DataFrame(all_functions)
     df = pd.json_normalize(all_functions)
     df = df.groupby(by="Galaxy", group_keys=True)[df.columns].apply(lambda x: x)
+    df = Table.from_pandas(df)
+    df = df[df["Distance"] != -1]
     fig = plt.figure()
     plt.suptitle("Host")
     band_colors = {
@@ -106,19 +108,22 @@ def quantities_plot(all_functions):
         "i" : "firebrick",
         "z" : "darkred"
     }
-    host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
-    polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
+    host_PA = df[df["label"] == "Host"]["parameters.PA"]
+    polar_PA = df[df["label"] == "Polar"]["parameters.PA"]
     diff_PA = host_PA - polar_PA
+    # d = np.array(df["Distance"])
 
     for band in "griz":
         df_band = df[df["band"] == band].copy()
         host_ax_ratio = df_band[df_band["label"] == "Host"]["b/a"]
-        host_I_e = df_band[df_band["label"] == "Host"]["parameters.I_e"]
-        host_r_e = df_band[df_band["label"] == "Host"]["parameters.r_e"]
+        host_I_e = df_band[df_band["label"] == "Host"]["parameters.I_e"] * u.nmgy
+        host_r_e = df_band[df_band["label"] == "Host"]["parameters.r_e"] * u.pix
         host_n = df_band[df_band["label"] == "Host"]["parameters.n"]
+        d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
 
-        pixscale = u.pixel_scale(0.262)
-        r_e = (np.tan(r_e * pixscale) * d).to(u.kpc)
+        pixscale = 0.262 * u.arcsec / u.pix
+
+        host_r_e = (np.tan(host_r_e * pixscale) * d).to(u.kpc)
 
 
         plt.subplot(2, 3, 1)
@@ -154,13 +159,12 @@ def quantities_plot(all_functions):
     for band in "griz":
         df_band = df[df["band"] == band].copy()
         polar_ax_ratio = df_band[df_band["label"] == "Polar"]["b/a"]
-        polar_I_e = df_band[df_band["label"] == "Polar"]["parameters.I_e"]
-        polar_r_e = df_band[df_band["label"] == "Polar"]["parameters.r_e"]
+        polar_I_e = df_band[df_band["label"] == "Polar"]["parameters.I_e"] * u.nmgy
+        polar_r_e = df_band[df_band["label"] == "Polar"]["parameters.r_e"] * u.pix
         polar_n = df_band[df_band["label"] == "Polar"]["parameters.n"]
+        d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
 
-        pixscale = u.pixel_scale(0.262)
-        r_e = (np.tan(r_e * pixscale) * d).to(u.kpc)
-
+        polar_r_e = (np.tan(polar_r_e * pixscale) * d).to(u.kpc)
 
         plt.subplot(2, 3, 1)
         plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
@@ -183,10 +187,13 @@ def quantities_plot(all_functions):
         plt.ylabel("Count")
 
         ax = plt.subplot(2, 3, 5)
-        plt.hist(polar_n, histtype='step', color=band_colors[band], label=band)
+        l = plt.hist(polar_n, histtype='step', color=band_colors[band], label=band)
         plt.xlabel(r"Sersic Index $n$")
         plt.ylabel("Count")
-    ax.legend(bbox_to_anchor=(1.1, 1.05))
+    # ax.legend(bbox_to_anchor=(1.7, 1.05))
+    ax_leg = plt.subplot(2,3,6)
+    print(l)
+    ax_leg.legend(handles=[l[-1][0]])
     plt.tight_layout()
     plt.savefig(os.path.join(Path(args.o), "polar.png"))
     
@@ -199,7 +206,6 @@ def quantities_plot(all_functions):
 
 def get_functions_from_files(model_files, root, table=None):
     threshold = args.t # For reduced chi-sq
-    all_functions = []
     model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
     global total_fit
     global total_bad_fit
@@ -220,16 +226,16 @@ def get_functions_from_files(model_files, root, table=None):
         # os.chdir(p)
         all_functions.extend(functions)
         total_fit += 1
-        if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
-            name = Path(model_file).resolve().relative_to(p)
-            print(f"{name} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
-            # warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
-            total_bad_fit += 1
-        for function in functions:
-            for param in function["parameters_unc"].keys():
-                if function["parameters_unc"][param] == 0:
-                    name = Path(model_file).resolve().relative_to(p)
-                    print(f"Zero uncertainty for {param} in {name} (possibly sticking to bounds)!")
+        # if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
+        #     name = Path(model_file).resolve().relative_to(p)
+        #     print(f"{name} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
+        #     # warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
+        #     total_bad_fit += 1
+        # for function in functions:
+        #     for param in function["parameters_unc"].keys():
+        #         if function["parameters_unc"][param] == 0:
+        #             name = Path(model_file).resolve().relative_to(p)
+        #             print(f"Zero uncertainty for {param} in {name} (possibly sticking to bounds)!")
 
     return all_functions
 
@@ -241,15 +247,17 @@ def main(args):
     global total_fit
     total_bad_fit = 0
     total_fit = 0
+    global all_functions
+    all_functions = []
     if args.r:
         structure = os.walk(p)
         for root, dirs, files in structure:
             if not(files == []):
                 model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
-                all_functions = get_functions_from_files(model_files, root)
+                all_functions = get_functions_from_files(model_files, root, table)
     else:
         model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
-        all_functions = get_functions_from_files(model_files, root=Path(".").resolve())
+        all_functions = get_functions_from_files(model_files, root=Path(".").resolve(), table=table)
 
     print(f"Total fit: {total_fit}")
     print(f"Total poor fit: {total_bad_fit} ({total_bad_fit/total_fit * 100:.2f}% bad)")
