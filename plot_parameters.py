@@ -128,7 +128,7 @@ def quantities_plot(all_functions):
 
         plt.subplot(2, 3, 1)
         plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"PA_{host} - PA_{polar} (deg)")
+        plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
         plt.ylabel("Count")
 
         plt.subplot(2, 3, 2)
@@ -168,7 +168,7 @@ def quantities_plot(all_functions):
 
         plt.subplot(2, 3, 1)
         plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"PA_{host} - PA_{polar} (deg)")
+        plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
         plt.ylabel("Count")
 
         plt.subplot(2, 3, 2)
