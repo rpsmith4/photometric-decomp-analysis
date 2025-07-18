@@ -38,7 +38,7 @@ import make_model_ima_imfit
 
 def parse_results(file, galaxy_name, table=None):
     model = pyimfit.parse_config_file(file)
-    band = Path(file).stem[0]
+    band = Path(file).stem.rsplit("_")[-3]
     with open(file, "r") as f:
         lines = f.readlines()
     status = lines[5].split(" ")[7]
@@ -206,26 +206,26 @@ def quantities_plot(all_functions):
                 
     return None
 
-def get_functions_from_files(model_files, root, table=None):
+def get_functions_from_files(root, table=None):
     threshold = args.t # For reduced chi-sq
-    model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
+    model_files = sorted(glob.glob(os.path.join(Path(root), f"{args.fit_type}_?_fit_params.txt")))
     global total_fit
     global total_bad_fit
     # print(model_files)
+    files = os.listdir(root)
     for model_file in model_files:
         functions, chi_sq, chi_sq_red, status, status_message = parse_results(model_file, os.path.basename(root), table)
         root = Path(root).resolve()
-        img_file = os.path.join(root, f"image_{functions[0]["band"]}.fits")
-        psf_file = os.path.join(root, f"psf_patched_{functions[0]["band"]}.fits")
-        params_file = os.path.join(root, f"{functions[0]["band"]}_fit_params.txt")
-        # os.chdir(Path(root).resolve())
+        img_file = f"image_{functions[0]["band"]}.fits"
+        psf_file = f"psf_patched_{functions[0]["band"]}.fits"
+        params_file = f"{args.fit_type}_{functions[0]["band"]}_fit_params.txt"
+        os.chdir(root)
         try:
-            if args.make_composed and (not(f"{functions[0]["band"]}_composed.fits" in files) or args.overwrite):
-                make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
+            if args.make_composed and (not(f"{args.fit_type}_{functions[0]["band"]}_composed.fits" in files) or args.overwrite):
+                make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
         except Exception as e:
-            print(f"Failed for {Path(img_file).stem}")
+            print(f"Failed for {Path(img_file)}")
             print(e)
-        # os.chdir(p)
         all_functions.extend(functions)
         total_fit += 1
         # if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
@@ -255,11 +255,11 @@ def main(args):
         structure = os.walk(p)
         for root, dirs, files in structure:
             if not(files == []):
-                model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
-                all_functions = get_functions_from_files(model_files, root, table)
+                # model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
+                all_functions = get_functions_from_files(Path(root).resolve(), table)
     else:
-        model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
-        all_functions = get_functions_from_files(model_files, root=Path(".").resolve(), table=table)
+        # model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
+        all_functions = get_functions_from_files(root=Path(".").resolve(), table=table)
 
     print(f"Total fit: {total_fit}")
     print(f"Total poor fit: {total_bad_fit} ({total_bad_fit/total_fit * 100:.2f}% bad)")
@@ -297,6 +297,7 @@ if __name__ == "__main__":
     parser.add_argument("--make_composed", help="Make a composed image of the galaxy (includes image, model, and components)", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing files", action="store_true")
     parser.add_argument("-c", help="Directory to Sienna Galaxy Atlas File (used to get redshift)", default=".")
+    parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic"], default="2_sersic")
     args = parser.parse_args()
     args.o = Path(args.o).resolve()
     main(args)
