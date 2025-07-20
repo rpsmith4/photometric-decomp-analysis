@@ -211,6 +211,7 @@ def get_functions_from_files(root, table=None):
     model_files = sorted(glob.glob(os.path.join(Path(root), f"{args.fit_type}_?_fit_params.txt")))
     global total_fit
     global total_bad_fit
+    global bound_sticking
     # print(model_files)
     files = os.listdir(root)
     for model_file in model_files:
@@ -228,16 +229,18 @@ def get_functions_from_files(root, table=None):
             print(e)
         all_functions.extend(functions)
         total_fit += 1
-        # if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
-        #     name = Path(model_file).resolve().relative_to(p)
-        #     print(f"{name} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
-        #     # warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
-        #     total_bad_fit += 1
-        # for function in functions:
-        #     for param in function["parameters_unc"].keys():
-        #         if function["parameters_unc"][param] == 0:
-        #             name = Path(model_file).resolve().relative_to(p)
-        #             print(f"Zero uncertainty for {param} in {name} (possibly sticking to bounds)!")
+        if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
+            name = Path(model_file).resolve().relative_to(p)
+            if args.verbose: print(f"{name} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
+            # warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
+            total_bad_fit += 1
+        for function in functions:
+            for param in function["parameters_unc"].keys():
+                # if param not in ["ell", "n", "r_e"]:
+                if function["parameters_unc"][param] == 0:
+                    name = Path(model_file).resolve().relative_to(p)
+                    if args.verbose: print(f"Zero uncertainty for {param} in {name} (possibly sticking to bounds)!")
+                    bound_sticking += 1
 
     return all_functions
 
@@ -247,8 +250,10 @@ def main(args):
     table = Table.read(os.path.join(args.c, "SGA-2020.fits"))
     global total_bad_fit
     global total_fit
+    global bound_sticking
     total_bad_fit = 0
     total_fit = 0
+    bound_sticking = 0
     global all_functions
     all_functions = []
     if args.r:
@@ -263,6 +268,7 @@ def main(args):
 
     print(f"Total fit: {total_fit}")
     print(f"Total poor fit: {total_bad_fit} ({total_bad_fit/total_fit * 100:.2f}% bad)")
+    print(f"Total parameter bounds sticking: {bound_sticking}")
 
     if args.plot_stats:
         quantities_plot(all_functions)
@@ -298,6 +304,7 @@ if __name__ == "__main__":
     parser.add_argument("--overwrite", help="Overwrite existing files", action="store_true")
     parser.add_argument("-c", help="Directory to Sienna Galaxy Atlas File (used to get redshift)", default=".")
     parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic"], default="2_sersic")
+    parser.add_argument("--verbose", help="Show warnings for fits", action="store_true")
     args = parser.parse_args()
     args.o = Path(args.o).resolve()
     main(args)
