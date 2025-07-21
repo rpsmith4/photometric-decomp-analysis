@@ -79,7 +79,7 @@ if __name__ == "__main__":
     parser.add_argument("--de", help="Use differential evolution solver", action="store_true")
     parser.add_argument("--de_lhs", help="Use differential evolution solver (with Latin hypercube sampling)", action="store_true")
     parser.add_argument("--max_threads", help="Max number of threads to use for a fit", type=int, default=4)
-    parser.add_argument("--fit_type", choices=["2_sersic", "2_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
+    parser.add_argument("--fit_type", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
     # TODO: Add more arguments for IMFIT options
 
     args = parser.parse_args()

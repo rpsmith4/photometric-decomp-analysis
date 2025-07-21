@@ -264,7 +264,7 @@ def main(args):
                 all_functions = get_functions_from_files(Path(root).resolve(), table)
     else:
         # model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
-        all_functions = get_functions_from_files(root=Path(".").resolve(), table=table)
+        all_functions = get_functions_from_files(root=Path(p).resolve(), table=table)
 
     print(f"Total fit: {total_fit}")
     print(f"Total poor fit: {total_bad_fit} ({total_bad_fit/total_fit * 100:.2f}% bad)")
@@ -303,7 +303,7 @@ if __name__ == "__main__":
     parser.add_argument("--make_composed", help="Make a composed image of the galaxy (includes image, model, and components)", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing files", action="store_true")
     parser.add_argument("-c", help="Directory to Sienna Galaxy Atlas File (used to get redshift)", default=".")
-    parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic"], default="2_sersic")
+    parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
     parser.add_argument("--verbose", help="Show warnings for fits", action="store_true")
     args = parser.parse_args()
     args.o = Path(args.o).resolve()
