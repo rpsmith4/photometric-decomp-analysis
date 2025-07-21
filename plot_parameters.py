@@ -105,7 +105,7 @@ def quantities_plot(all_functions):
         "g": "g",
         "r" : "r",
         "i" : "firebrick",
-        "z" : "darkred"
+        "z" : "blueviolet"
     }
     # d = np.array(df["Distance"])
     fig = plt.figure(figsize=(16, 8))
@@ -193,9 +193,9 @@ def quantities_plot(all_functions):
         l = plt.hist(polar_n, histtype='step', color=band_colors[band], label=band)
         plt.xlabel(r"Sersic Index $n$")
         plt.ylabel("Count")
-    # ax.legend(bbox_to_anchor=(1.7, 1.05))
-    ax_leg = plt.subplot(2,3,6)
-    ax_leg.legend(handles=[l[-1][0]])
+    ax.legend(bbox_to_anchor=(1.15, 1.05))
+    # ax_leg = plt.subplot(2,3,6)
+    # ax_leg.legend(handles=[l[-1][0]])
     plt.tight_layout()
     plt.savefig(os.path.join(Path(args.o), "polar.png"))
     
@@ -220,10 +220,22 @@ def get_functions_from_files(root, table=None):
         img_file = f"image_{functions[0]["band"]}.fits"
         psf_file = f"psf_patched_{functions[0]["band"]}.fits"
         params_file = f"{args.fit_type}_{functions[0]["band"]}_fit_params.txt"
+        mask_file = f"image_mask.fits"
         os.chdir(root)
         try:
             if args.make_composed and (not(f"{args.fit_type}_{functions[0]["band"]}_composed.fits" in files) or args.overwrite):
-                make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
+                if args.mask:
+                    img_dat = fits.open(img_file)
+                    img = img_dat[0].data
+                    mask = fits.open(mask_file)[0].data
+                    img = img * (1 - mask)
+                    fits.writeto("masked.fits", data=img, header=img_dat[0].header)
+
+                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
+                    os.remove("./masked.fits")
+                else:
+                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
+
         except Exception as e:
             print(f"Failed for {Path(img_file)}")
             print(e)
@@ -304,6 +316,7 @@ if __name__ == "__main__":
     parser.add_argument("--overwrite", help="Overwrite existing files", action="store_true")
     parser.add_argument("-c", help="Directory to Sienna Galaxy Atlas File (used to get redshift)", default=".")
     parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
+    parser.add_argument("--mask", help="Use mask on the original image", action="store_true")
     parser.add_argument("--verbose", help="Show warnings for fits", action="store_true")
     args = parser.parse_args()
     args.o = Path(args.o).resolve()
