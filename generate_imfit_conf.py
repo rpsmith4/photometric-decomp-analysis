@@ -147,19 +147,23 @@ def get_PA2_and_table(img): # Probably better
 def fit_model(model, img):
     # Used for doing a minifit to get an initial guess
     imfit_imfitter = pyimfit.Imfit(model, maxThreads=1)
-    imfit_imfitter.loadData(img, original_sky=50)
+    imfit_imfitter.loadData(img, original_sky=10)
     result = imfit_imfitter.doFit(solver="DE")
-    return result
+    result_img = imfit_imfitter.getModelImage()
+    return result, result_img
 
 def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     model = pyimfit.SimpleModelDescription()
-    host_model =  pyimfit.SimpleModelDescription()
+    host_model = pyimfit.SimpleModelDescription()
+    polar_model = pyimfit.SimpleModelDescription()
     shape = img.shape
     model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
     model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
 
     host_model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
     host_model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
+    polar_model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
+    polar_model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
 
     bounds_dict = { # Amount to add or subtract from guess/factor to multiply to guess
         "ring" : {
@@ -217,7 +221,7 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     host = pyimfit.make_imfit_function("Sersic", label="Host")
     
     host_PA, polar_PA, table = get_PA2_and_table(img)
-    host_PA, polar_PA = fix_close_angles(host_PA, polar_PA, pol_str_type)
+    # host_PA, polar_PA = fix_close_angles(host_PA, polar_PA, pol_str_type)
     host_PA = host_PA - 90 # CCW from +x axis to CCW from +y axis 
     polar_PA = polar_PA - 90
 
@@ -246,23 +250,24 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     host_model.addFunction(host)
     img_host_reduced = img.copy()
     img_host_reduced[img_host_reduced < I_e/10] = 0
-    result = fit_model(host_model, img_host_reduced)
-    # Order of PA, ell, n, I_e, r_e 
-    if result.fitConverged and not(args.dont_fit):
-        fitparams = result.params[2:]
-        PA = fitparams[0]
-        ell = fitparams[1]
-        n = fitparams[2]
-        I_e = fitparams[3]
-        r_e = fitparams[4]
-        if I_e < 0:
-            I_e = -1 * I_e # Occasionally negative due to sky subtractions, though magnitude matters more
+    if not(args.dont_fit):
+        result, img_host_refined = fit_model(host_model, img_host_reduced)
+        # Order of PA, ell, n, I_e, r_e 
+        if result.fitConverged:
+            fitparams = result.params[2:]
+            PA = fitparams[0]
+            ell = fitparams[1]
+            n = fitparams[2]
+            I_e = fitparams[3]
+            r_e = fitparams[4]
+            if I_e < 0:
+                I_e = -1 * I_e # Occasionally negative due to sky subtractions, though magnitude matters more
 
-        host.PA.setValue(PA, [PA + bounds_host["PA_bounds"][0], PA + bounds_host["PA_bounds"][1]])
-        host.ell.setValue(ell, np.clip(np.array([(ell + bounds_host["ell_bounds"][0]), (ell + bounds_host["ell_bounds"][1])]), 0, 0.75)) # May overestimate
-        host.n.setValue(n, np.clip(np.array([(n + bounds_host["n_bounds"][0]), (n + bounds_host["n_bounds"][1])]), 0, 10))# Likely to underestimate
-        host.I_e.setValue(I_e, [I_e * bounds_host["I_e_factor"][0], I_e * bounds_host["I_e_factor"][1]]) # Likely to underestimate
-        host.r_e.setValue(r_e, [r_e * bounds_host["r_e_factor"][0], r_e * bounds_host["r_e_factor"][1]]) # Likely to underestimate
+            host.PA.setValue(PA, [PA + bounds_host["PA_bounds"][0], PA + bounds_host["PA_bounds"][1]])
+            host.ell.setValue(ell, np.clip(np.array([(ell + bounds_host["ell_bounds"][0]), (ell + bounds_host["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+            host.n.setValue(n, np.clip(np.array([(n + bounds_host["n_bounds"][0]), (n + bounds_host["n_bounds"][1])]), 0, 10))# Likely to underestimate
+            host.I_e.setValue(I_e, [I_e * bounds_host["I_e_factor"][0], I_e * bounds_host["I_e_factor"][1]]) # Likely to underestimate
+            host.r_e.setValue(r_e, [r_e * bounds_host["r_e_factor"][0], r_e * bounds_host["r_e_factor"][1]]) # Likely to underestimate
         
     model.addFunction(host)
 
@@ -288,11 +293,33 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     if e != e: # Sometimes is Nan for some reason
         e = 0.2
 
-    polar.ell.setValue(ell, np.clip(np.array([(ell + bounds_polar["ell_bounds"][0]), (ell + bounds_polar["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+    polar.ell.setValue(e, np.clip(np.array([(e + bounds_polar["ell_bounds"][0]), (e + bounds_polar["ell_bounds"][1])]), 0, 0.75)) # May overestimate
     # polar.n.setValue(3, np.clip(np.array([(n + bounds_polar["n_bounds"][0]), (n + bounds_polar["n_bounds"][1])]), 0, 10))# Likely to underestimate
     polar.n.setValue(3, [0, 10]) # Maybe leave as is
     polar.I_e.setValue(I_e, [I_e * bounds_polar["I_e_factor"][0], I_e * bounds_polar["I_e_factor"][1]]) # Likely to underestimate, probably very dim
     polar.r_e.setValue(r_e, [r_e * bounds_polar["r_e_factor"][0], r_e * bounds_polar["r_e_factor"][1]]) # Likely to underestimate, maybe get azimuthal average
+
+    polar_model.addFunction(polar)
+    if not(args.dont_fit):
+        img_polar_reduced = img - img_host_refined # Trying to remove the host component to only fit the polar structure
+        img_polar_reduced[img_polar_reduced < I_e/10] = 0
+        result, img_polar_refined = fit_model(polar_model, img_polar_reduced)
+        # order of pa, ell, n, i_e, r_e 
+        if result.fitConverged:
+            fitparams = result.params[2:]
+            PA = fitparams[0]
+            ell = fitparams[1]
+            n = fitparams[2]
+            I_e = fitparams[3]
+            r_e = fitparams[4]
+            if I_e < 0:
+                I_e = -1 * I_e # occasionally negative due to sky subtractions, though magnitude matters more
+
+            polar.PA.setValue(PA, [PA + bounds_polar["PA_bounds"][0], PA + bounds_polar["PA_bounds"][1]])
+            polar.ell.setValue(ell, np.clip(np.array([(ell + bounds_polar["ell_bounds"][0]), (ell + bounds_polar["ell_bounds"][1])]), 0, 0.75)) # may overestimate
+            polar.n.setValue(n, np.clip(np.array([(n + bounds_polar["n_bounds"][0]), (n + bounds_polar["n_bounds"][1])]), 0, 10))# likely to underestimate
+            polar.I_e.setValue(I_e, [I_e * bounds_polar["I_e_factor"][0], I_e * bounds_polar["I_e_factor"][1]]) # likely to underestimate
+            polar.r_e.setValue(r_e, [r_e * bounds_polar["r_e_factor"][0], r_e * bounds_polar["r_e_factor"][1]]) # likely to underestimate
 
     model.addFunction(polar)
 
@@ -341,7 +368,6 @@ def main(args):
                     for p in jobs:
                         p.join()
 
-                    print(root)
                     for band in model_desc.keys():
                         if not(f"2_sersic_{band}.dat" in files) or args.overwrite:
                             with open(os.path.join(Path(root), f"2_sersic_{band}.dat"), "w") as f:
