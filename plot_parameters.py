@@ -243,16 +243,20 @@ def get_functions_from_files(root, table=None):
         total_fit += 1
         if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
             name = Path(model_file).resolve().relative_to(p)
-            if args.verbose: print(f"{name} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
+            if args.v: print(f"{name} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
             # warnings.warn(f"{Path(model_file).resolve().relative_to(p.resolve())} has high reduced chi-sq! ({chi_sq_red} > {threshold})")
             total_bad_fit += 1
+        bounds_stick = False
         for function in functions:
             for param in function["parameters_unc"].keys():
                 # if param not in ["ell", "n", "r_e"]:
                 if function["parameters_unc"][param] == 0:
                     name = Path(model_file).resolve().relative_to(p)
-                    if args.verbose: print(f"Zero uncertainty for {param} in {name} (possibly sticking to bounds)!")
+                    if args.vvv: print(f"Zero uncertainty for {param} in {name} (possibly sticking to bounds)!")
+                    bounds_stick = True
                     bound_sticking += 1
+        name = Path(model_file).resolve().relative_to(p)
+        if args.vv and bounds_stick: print(f"{name} has sticking bounds!")
 
     return all_functions
 
@@ -317,7 +321,9 @@ if __name__ == "__main__":
     parser.add_argument("-c", help="Directory to Sienna Galaxy Atlas File (used to get redshift)", default=".")
     parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
     parser.add_argument("--mask", help="Use mask on the original image", action="store_true")
-    parser.add_argument("--verbose", help="Show warnings for fits", action="store_true")
+    parser.add_argument("-v", help="Show chi-sq warnings for fits", action="store_true")
+    parser.add_argument("-vv", help="Show chi-sq and parameter bounds warnings for fits", action="store_true")
+    parser.add_argument("-vvv", help="Show chi-sq and parameter bounds (specific) warnings for fits", action="store_true")
     args = parser.parse_args()
     args.o = Path(args.o).resolve()
     main(args)
