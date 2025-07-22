@@ -38,74 +38,77 @@ def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9
         } # file type : [url_option, file extension]
 
 
-        for file_type in file_types:
-            url += file_types_dict[file_type][0]
-            output_file = names[k]
-            print(f"{k}  {output_file}")
+        output_file = names[k]
+        print(f"{k}  {output_file}")
 
-            if file_type == "fits":
-                params = {
-                    "ra": RA[k],
-                    "dec": DEC[k],
-                    "size": 2*RR,
-                    "layer": "ls-" + dr,
-                    "pixscale": 0.262,
-                    "invvar": True
-                }
-                try:
-                    hdu = fits.open(get_data(url, params))
+        if "fits" in file_types:
+            url_new = url + file_types_dict["fits"][0]
+            params = {
+                "ra": RA[k],
+                "dec": DEC[k],
+                "size": 2*RR,
+                "layer": "ls-" + dr,
+                "pixscale": 0.262,
+                "invvar": True
+            }
+            try:
+                hdu = fits.open(get_data(url_new, params))
 
-                    if not(hdu == None):
-                        bands = hdu[0].header["BANDS"].strip()
-                        wcs = WCS(hdu[0].header)
-                        for idx, band in enumerate(bands):
-                            data = hdu[0].data[idx, ...]
-                            if np.sum(data) == 0:
-                                continue
-                            fits.PrimaryHDU(data=data, header=wcs.to_header()).writeto(f"image_{band}.fits", overwrite=True)
-                        for idx, band in enumerate(bands):
-                            data = hdu[1].data[idx, ...]
-                            if np.sum(data) == 0:
-                                continue
-                            fits.PrimaryHDU(data=data, header=wcs.to_header()).writeto(f"image_{band}_invvar.fits", overwrite=True)
-                except:
-                    pass
+                if not(hdu == None):
+                    bands = hdu[0].header["BANDS"].strip()
+                    wcs = WCS(hdu[0].header)
+                    for idx, band in enumerate(bands):
+                        data = hdu[0].data[idx, ...]
+                        if np.sum(data) == 0:
+                            continue
+                        fits.PrimaryHDU(data=data, header=wcs.to_header()).writeto(f"image_{band}.fits", overwrite=True)
+                    for idx, band in enumerate(bands):
+                        data = hdu[1].data[idx, ...]
+                        if np.sum(data) == 0:
+                            continue
+                        fits.PrimaryHDU(data=data, header=wcs.to_header()).writeto(f"image_{band}_invvar.fits", overwrite=True)
+            except Exception as e:
+                print(e)
+                pass
 
-            elif file_type == "psf":
-                params = {
-                    "ra": RA[k],
-                    "dec": DEC[k],
-                    "layer": "ls-" + dr,
-                    "pixscale": 0.262
-                }
-                try:
-                    psf_hdu = fits.open(get_data(url, params))
+        if "psf" in file_types:
+            url_new = url + file_types_dict["psf"][0]
+            params = {
+                "ra": RA[k],
+                "dec": DEC[k],
+                "layer": "ls-" + dr,
+                "pixscale": 0.262
+            }
+            try:
+                psf_hdu = fits.open(get_data(url_new, params))
 
-                    if not(psf_hdu == None):
-                        for hdu in psf_hdu:
-                            band = hdu.header['BAND']
-                            data = hdu.data
-                            fits.PrimaryHDU(data=data).writeto(f"psf_core_{band}.fits", overwrite=True)
-                            psf_combined = make_patched_psf(f"psf_core_{band}.fits", band, 150)
-                            fits.PrimaryHDU(data=psf_combined).writeto(f"psf_patched_{band}.fits", overwrite=True)
-                except:
-                    pass
-            
-            elif file_type == "jpg":
-                params = {
-                    "ra": RA[k],
-                    "dec": DEC[k],
-                    "layer": "ls-" + dr,  
-                    "size": 2*RR,
-                    "pixscale": 0.262
-                }
-                try:
-                    stream = get_data(url, params)
-                    img = Image.open(stream)
-                    # img.save(f"{names[k]}.jpg")
-                    img.save(f"image.jpg")
-                except:
-                    pass
+                if not(psf_hdu == None):
+                    for hdu in psf_hdu:
+                        band = hdu.header['BAND']
+                        data = hdu.data
+                        fits.PrimaryHDU(data=data).writeto(f"psf_core_{band}.fits", overwrite=True)
+                        psf_combined = make_patched_psf(f"psf_core_{band}.fits", band, 150)
+                        fits.PrimaryHDU(data=psf_combined).writeto(f"psf_patched_{band}.fits", overwrite=True)
+            except Exception as e:
+                print(e)
+                pass
+        
+        if "jpg" in file_types:
+            url_new = url + file_types_dict["jpg"][0]
+            params = {
+                "ra": RA[k],
+                "dec": DEC[k],
+                "layer": "ls-" + dr,  
+                "size": 2*RR,
+                "pixscale": 0.262
+            }
+            try:
+                stream = get_data(url_new, params)
+                img = Image.open(stream)
+                # img.save(f"{names[k]}.jpg")
+                img.save(f"image.jpg")
+            except:
+                pass
 
 
 
