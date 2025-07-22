@@ -36,7 +36,7 @@ import make_model_ima_imfit
 
 # warnings.filterwarnings("ignore")
 
-def parse_results(file, galaxy_name, table=None):
+def parse_results(file, galaxy_name, galaxy_type, table=None):
     model = pyimfit.parse_config_file(file)
     band = Path(file).stem.rsplit("_")[-3]
     with open(file, "r") as f:
@@ -73,6 +73,7 @@ def parse_results(file, galaxy_name, table=None):
         func_dict["parameters_unc"] = uncs[func_dict["label"]]
         func_dict["band"] = band
         func_dict["Galaxy"] = galaxy_name
+        func_dict["Galaxy_type"] = galaxy_type
         # TODO: Get other parameters here (or somewhere somehow)
         if table:
             H_0 = 70.8 * u.km / u.s / u.Mpc
@@ -108,105 +109,157 @@ def quantities_plot(all_functions):
         "z" : "blueviolet"
     }
     # d = np.array(df["Distance"])
-    fig = plt.figure(figsize=(16, 8))
-    plt.suptitle("Host")
-    for band in "griz":
-        df_band = df[df["band"] == band].copy()
-        host_ax_ratio = df_band[df_band["label"] == "Host"]["b/a"]
-        host_I_e = df_band[df_band["label"] == "Host"]["parameters.I_e"] * u.nmgy
-        host_r_e = df_band[df_band["label"] == "Host"]["parameters.r_e"] * u.pix
-        host_n = df_band[df_band["label"] == "Host"]["parameters.n"]
-        d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
-        host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
-        polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
-        diff_PA = host_PA - polar_PA
+    # TODO: Convert nmgy to AB magnitudes/arcsecond 
+    if args.plot_type == "compare_structure":
+        fig = plt.figure(figsize=(16, 8))
+        plt.suptitle("Host")
+        for band in "griz":
+            df_band = df[df["band"] == band].copy()
+            host_ax_ratio = df_band[df_band["label"] == "Host"]["b/a"]
+            host_I_e = df_band[df_band["label"] == "Host"]["parameters.I_e"] * u.nmgy
+            host_r_e = df_band[df_band["label"] == "Host"]["parameters.r_e"] * u.pix
+            host_n = df_band[df_band["label"] == "Host"]["parameters.n"]
+            d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
+            host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
+            polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
+            diff_PA = host_PA - polar_PA
+            diff_PA = np.abs(diff_PA)
 
-        pixscale = 0.262 * u.arcsec / u.pix
+            pixscale = 0.262 * u.arcsec / u.pix
 
-        host_r_e = (np.tan(host_r_e * pixscale) * d).to(u.kpc)
+            host_r_e = (np.tan(host_r_e * pixscale) * d).to(u.kpc)
 
 
-        plt.subplot(2, 3, 1)
-        plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
-        plt.ylabel("Count")
+            plt.subplot(2, 3, 1)
+            plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
+            plt.ylabel("Count")
 
-        plt.subplot(2, 3, 2)
-        plt.hist(host_ax_ratio, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel("Axis ratio (b/a)")
-        plt.ylabel("Count")
+            plt.subplot(2, 3, 2)
+            plt.hist(host_ax_ratio, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel("Axis ratio (b/a)")
+            plt.ylabel("Count")
 
-        plt.subplot(2, 3, 3)
-        plt.hist(host_I_e, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"Half light intensity $I_e$ (nanomaggies)")
-        plt.ylabel("Count")
+            plt.subplot(2, 3, 3)
+            plt.hist(host_I_e, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"Half light intensity $I_e$ (nanomaggies)")
+            plt.ylabel("Count")
 
-        plt.subplot(2, 3, 4)
-        plt.hist(host_r_e, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"Half light radius $r_e$ (kpc)")
-        plt.ylabel("Count")
+            plt.subplot(2, 3, 4)
+            plt.hist(host_r_e, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"Half light radius $r_e$ (kpc)")
+            plt.ylabel("Count")
 
-        ax = plt.subplot(2, 3, 5)
-        plt.hist(host_n, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"Sersic Index $n$")
-        plt.ylabel("Count")
-    ax.legend(bbox_to_anchor=(1.15, 1.05))
-    plt.tight_layout()
-    plt.savefig(os.path.join(Path(args.o), "host.png"))
+            ax = plt.subplot(2, 3, 5)
+            plt.hist(host_n, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"Sersic Index $n$")
+            plt.ylabel("Count")
+        ax.legend(bbox_to_anchor=(1.15, 1.05))
+        plt.tight_layout()
+        plt.savefig(os.path.join(Path(args.o), "host.png"))
 
-    fig = plt.figure(figsize=(16, 8))
-    plt.suptitle("Polar")
-    for band in "griz":
-        df_band = df[df["band"] == band].copy()
-        polar_ax_ratio = df_band[df_band["label"] == "Polar"]["b/a"]
-        polar_I_e = df_band[df_band["label"] == "Polar"]["parameters.I_e"] * u.nmgy
-        polar_r_e = df_band[df_band["label"] == "Polar"]["parameters.r_e"] * u.pix
-        polar_n = df_band[df_band["label"] == "Polar"]["parameters.n"]
-        d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
-        host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
-        polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
-        diff_PA = host_PA - polar_PA
+        fig = plt.figure(figsize=(16, 8))
+        plt.suptitle("Polar")
+        for band in "griz":
+            df_band = df[df["band"] == band].copy()
+            polar_ax_ratio = df_band[df_band["label"] == "Polar"]["b/a"]
+            polar_I_e = df_band[df_band["label"] == "Polar"]["parameters.I_e"] * u.nmgy
+            polar_r_e = df_band[df_band["label"] == "Polar"]["parameters.r_e"] * u.pix
+            polar_n = df_band[df_band["label"] == "Polar"]["parameters.n"]
+            d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
+            host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
+            polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
+            diff_PA = host_PA - polar_PA
+            diff_PA = np.abs(diff_PA)
 
-        polar_r_e = (np.tan(polar_r_e * pixscale) * d).to(u.kpc)
+            polar_r_e = (np.tan(polar_r_e * pixscale) * d).to(u.kpc)
 
-        plt.subplot(2, 3, 1)
-        plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
-        plt.ylabel("Count")
+            plt.subplot(2, 3, 1)
+            plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
+            plt.ylabel("Count")
 
-        plt.subplot(2, 3, 2)
-        plt.hist(polar_ax_ratio, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel("Axis ratio (b/a)")
-        plt.ylabel("Count")
+            plt.subplot(2, 3, 2)
+            plt.hist(polar_ax_ratio, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel("Axis ratio (b/a)")
+            plt.ylabel("Count")
 
-        plt.subplot(2, 3, 3)
-        plt.hist(polar_I_e, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"Half light intensity $I_e$ (nanomaggies)")
-        plt.ylabel("Count")
+            plt.subplot(2, 3, 3)
+            plt.hist(polar_I_e, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"Half light intensity $I_e$ (nanomaggies)")
+            plt.ylabel("Count")
 
-        plt.subplot(2, 3, 4)
-        plt.hist(polar_r_e, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"Half light radius $r_e$ (kpc)")
-        plt.ylabel("Count")
+            plt.subplot(2, 3, 4)
+            plt.hist(polar_r_e, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"Half light radius $r_e$ (kpc)")
+            plt.ylabel("Count")
 
-        ax = plt.subplot(2, 3, 5)
-        l = plt.hist(polar_n, histtype='step', color=band_colors[band], label=band)
-        plt.xlabel(r"Sersic Index $n$")
-        plt.ylabel("Count")
-    ax.legend(bbox_to_anchor=(1.15, 1.05))
-    # ax_leg = plt.subplot(2,3,6)
-    # ax_leg.legend(handles=[l[-1][0]])
-    plt.tight_layout()
-    plt.savefig(os.path.join(Path(args.o), "polar.png"))
-    
-    #     for function in functions:
-    #         if function["label"] == "Host":
-    #             print("")
-    #             # host_PAs.append(function["PA"])
-                
+            ax = plt.subplot(2, 3, 5)
+            l = plt.hist(polar_n, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"Sersic Index $n$")
+            plt.ylabel("Count")
+        ax.legend(bbox_to_anchor=(1.15, 1.05))
+        # ax_leg = plt.subplot(2,3,6)
+        # ax_leg.legend(handles=[l[-1][0]])
+        plt.tight_layout()
+        plt.savefig(os.path.join(Path(args.o), "polar.png"))
+        
+        #     for function in functions:
+        #         if function["label"] == "Host":
+        #             print("")
+        #             # host_PAs.append(function["PA"])
+    elif args.plot_type == "compare_type":
+        for galaxy_type in ["ring", "bulge", "halo"]:
+            fig = plt.figure(figsize=(16, 8))
+            plt.suptitle(f"Host (Polar {galaxy_type})")
+            for band in "griz":
+                df_type = df[df["Galaxy_type"] == galaxy_type].copy()
+                df_band = df_type[df_type["band"] == band]
+                host_ax_ratio = df_band[df_band["label"] == "Host"]["b/a"]
+                host_I_e = df_band[df_band["label"] == "Host"]["parameters.I_e"] * u.nmgy
+                host_r_e = df_band[df_band["label"] == "Host"]["parameters.r_e"] * u.pix
+                host_n = df_band[df_band["label"] == "Host"]["parameters.n"]
+                d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
+                host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
+                polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
+                diff_PA = host_PA - polar_PA
+                diff_PA = np.abs(diff_PA)
+
+                pixscale = 0.262 * u.arcsec / u.pix
+
+                host_r_e = (np.tan(host_r_e * pixscale) * d).to(u.kpc)
+
+
+                plt.subplot(2, 3, 1)
+                plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
+                plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
+                plt.ylabel("Count")
+
+                plt.subplot(2, 3, 2)
+                plt.hist(host_ax_ratio, histtype='step', color=band_colors[band], label=band)
+                plt.xlabel("Axis ratio (b/a)")
+                plt.ylabel("Count")
+
+                plt.subplot(2, 3, 3)
+                plt.hist(host_I_e, histtype='step', color=band_colors[band], label=band)
+                plt.xlabel(r"Half light intensity $I_e$ (nanomaggies)")
+                plt.ylabel("Count")
+
+                plt.subplot(2, 3, 4)
+                plt.hist(host_r_e, histtype='step', color=band_colors[band], label=band)
+                plt.xlabel(r"Half light radius $r_e$ (kpc)")
+                plt.ylabel("Count")
+
+                ax = plt.subplot(2, 3, 5)
+                plt.hist(host_n, histtype='step', color=band_colors[band], label=band)
+                plt.xlabel(r"Sersic Index $n$")
+                plt.ylabel("Count")
+            ax.legend(bbox_to_anchor=(1.15, 1.05))
+            plt.tight_layout()
+            plt.savefig(os.path.join(Path(args.o), f"host_{galaxy_type}.png"))
     return None
 
-def get_functions_from_files(root, table=None):
+def get_functions_from_files(root, galaxy_type, table=None):
     threshold = args.t # For reduced chi-sq
     model_files = sorted(glob.glob(os.path.join(Path(root), f"{args.fit_type}_?_fit_params.txt")))
     global total_fit
@@ -215,15 +268,15 @@ def get_functions_from_files(root, table=None):
     # print(model_files)
     files = os.listdir(root)
     for model_file in model_files:
-        functions, chi_sq, chi_sq_red, status, status_message = parse_results(model_file, os.path.basename(root), table)
+        functions, chi_sq, chi_sq_red, status, status_message = parse_results(model_file, os.path.basename(root), galaxy_type, table)
         root = Path(root).resolve()
-        img_file = f"image_{functions[0]["band"]}.fits"
-        psf_file = f"psf_patched_{functions[0]["band"]}.fits"
-        params_file = f"{args.fit_type}_{functions[0]["band"]}_fit_params.txt"
+        img_file = f"image_{functions[0]['band']}.fits"
+        psf_file = f"psf_patched_{functions[0]['band']}.fits"
+        params_file = f"{args.fit_type}_{functions[0]['band']}_fit_params.txt"
         mask_file = f"image_mask.fits"
         os.chdir(root)
         try:
-            if args.make_composed and (not(f"{args.fit_type}_{functions[0]["band"]}_composed.fits" in files) or args.overwrite):
+            if args.make_composed and (not(f"{args.fit_type}_{functions[0]['band']}_composed.fits" in files) or args.overwrite):
                 if args.mask:
                     img_dat = fits.open(img_file)
                     img = img_dat[0].data
@@ -231,10 +284,10 @@ def get_functions_from_files(root, table=None):
                     img = img * (1 - mask)
                     fits.writeto("masked.fits", data=img, header=img_dat[0].header)
 
-                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
+                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]['band']}_composed.fits", comp_names=["Host", "Polar"])
                     os.remove("./masked.fits")
                 else:
-                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]["band"]}_composed.fits", comp_names=["Host", "Polar"])
+                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]['band']}_composed.fits", comp_names=["Host", "Polar"])
 
         except Exception as e:
             print(f"Failed for {Path(img_file)}")
@@ -276,11 +329,19 @@ def main(args):
         structure = os.walk(p)
         for root, dirs, files in structure:
             if not(files == []):
+                folder_type_dict = {
+                    "Polar Rings": "ring",
+                    "Polar_Tilted Bulges": "bulge",
+                    "Polar_Tilted Halo": "halo"
+                }
+                for folder in ["Polar Rings", "Polar_Tilted Bulges", "Polar_Tilted Halo"]: # Attempt to autodetect type
+                    if folder in root:
+                        galaxy_type = folder_type_dict[folder]
                 # model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
-                all_functions = get_functions_from_files(Path(root).resolve(), table)
+                all_functions = get_functions_from_files(Path(root).resolve(), galaxy_type, table)
     else:
         # model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
-        all_functions = get_functions_from_files(root=Path(p).resolve(), table=table)
+        all_functions = get_functions_from_files(root=Path(p).resolve(), galaxy_type=None, table=table)
 
     print(f"Total fit: {total_fit}")
     print(f"Total poor fit: {total_bad_fit} ({total_bad_fit/total_fit * 100:.2f}% bad)")
@@ -321,6 +382,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", help="Directory to Sienna Galaxy Atlas File (used to get redshift)", default=".")
     parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
     parser.add_argument("--mask", help="Use mask on the original image", action="store_true")
+    parser.add_argument("--plot_type", help="Type of plots to make", choices=["compare_structure", "compare_type"], default="compare_structure")
     parser.add_argument("-v", help="Show chi-sq warnings for fits", action="store_true")
     parser.add_argument("-vv", help="Show chi-sq and parameter bounds warnings for fits", action="store_true")
     parser.add_argument("-vvv", help="Show chi-sq and parameter bounds (specific) warnings for fits", action="store_true")
