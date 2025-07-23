@@ -10,6 +10,9 @@ from pathlib import Path
 import pyimfit
 import subprocess
 import glob
+IMAN_DIR = os.path.expanduser("~/Documents/iman_new")
+sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
+import make_model_ima_imfit
 
 
 def run_imfit(args, band):
@@ -30,7 +33,8 @@ def run_imfit(args, band):
     if args.de_lhs:
         command.extend(["--de_lhs"])
     
-    subprocess.run(command)
+    p = subprocess.Popen(command)
+    p.wait()
 
 def main(args):
     if not(args.p == None):
@@ -62,6 +66,22 @@ def main(args):
                     # Assumes the names of the files for the most part
                     # config file should be called config_[band].dat, may also include a way to change that 
                     run_imfit(args, band)
+                    img_file = f"image_{band}.fits"
+                    psf_file = f"psf_patched_{band}.fits"
+                    params_file = f"{args.fit_type}_{band}_fit_params.txt"
+                    mask_file = f"image_mask.fits"
+                    if args.make_composed and (not(f"{args.fit_type}_{band}_composed.fits" in files) or args.overwrite):
+                        if args.mask:
+                            img_dat = fits.open(img_file)
+                            img = img_dat[0].data
+                            mask = fits.open(mask_file)[0].data
+                            img = img * (1 - mask)
+                            fits.writeto("masked.fits", data=img, header=img_dat[0].header)
+
+                            make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{args.fit_type}_{band}_composed.fits", comp_names=["Host", "Polar"])
+                            os.remove("./masked.fits")
+                        else:
+                            make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{args.fit_type}_{band}_composed.fits", comp_names=["Host", "Polar"])
 
 
 
@@ -80,6 +100,7 @@ if __name__ == "__main__":
     parser.add_argument("--de_lhs", help="Use differential evolution solver (with Latin hypercube sampling)", action="store_true")
     parser.add_argument("--max_threads", help="Max number of threads to use for a fit", type=int, default=4)
     parser.add_argument("--fit_type", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
+    parser.add_argument("--make_composed", help="Make a composed image of the galaxy (includes image, model, and components)", action="store_true")
     # TODO: Add more arguments for IMFIT options
 
     args = parser.parse_args()
