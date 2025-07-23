@@ -277,6 +277,11 @@ def get_functions_from_files(root, galaxy_type, table=None):
         os.chdir(root)
         try:
             if args.make_composed and (not(f"{args.fit_type}_{functions[0]['band']}_composed.fits" in files) or args.overwrite):
+                components = {
+                    "2_sersic" : ["Host", "Polar"]
+                    "3_sersic" : ["Core", "Wings", "Polar"]
+                    "1_sersic_1_gauss_ring" : ["Host", "Polar"]
+                }
                 if args.mask:
                     img_dat = fits.open(img_file)
                     img = img_dat[0].data
@@ -284,10 +289,10 @@ def get_functions_from_files(root, galaxy_type, table=None):
                     img = img * (1 - mask)
                     fits.writeto("masked.fits", data=img, header=img_dat[0].header)
 
-                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]['band']}_composed.fits", comp_names=["Host", "Polar"])
+                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]['band']}_composed.fits", comp_names=components[args.fit_type])
                     os.remove("./masked.fits")
                 else:
-                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]['band']}_composed.fits", comp_names=["Host", "Polar"])
+                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{args.fit_type}_{functions[0]['band']}_composed.fits", comp_names=components[args.fit_type])
 
         except Exception as e:
             print(f"Failed for {Path(img_file)}")
