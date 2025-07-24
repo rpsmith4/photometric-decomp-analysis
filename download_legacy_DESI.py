@@ -87,7 +87,10 @@ def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9
                         band = hdu.header['BAND']
                         data = hdu.data
                         fits.PrimaryHDU(data=data).writeto(f"psf_core_{band}.fits", overwrite=True)
-                        psf_combined = make_patched_psf(f"psf_core_{band}.fits", band, 150)
+                        psf_size = 150
+                        if band == "z":
+                            psf_size = 600
+                        psf_combined = make_patched_psf(f"psf_core_{band}.fits", band, psf_size)
                         fits.PrimaryHDU(data=psf_combined).writeto(f"psf_patched_{band}.fits", overwrite=True)
             except Exception as e:
                 print(e)
