@@ -30,6 +30,7 @@ from threading import Thread
 import multiprocessing as mp
 import warnings
 warnings.filterwarnings("ignore")
+from plot_parameters import parse_results
 
 def get_PA(img):
     # Estimate background
@@ -151,6 +152,329 @@ def fit_model(model, img):
     result = imfit_imfitter.doFit(solver="DE")
     result_img = imfit_imfitter.getModelImage()
     return result, result_img
+
+def init_guess_1_sersic_1_gauss_ring(img, pol_str_type, model_desc, band):
+    model = pyimfit.SimpleModelDescription()
+    host_model = pyimfit.SimpleModelDescription()
+    polar_model = pyimfit.SimpleModelDescription()
+    shape = img.shape
+    model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
+    model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
+
+    host_model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
+    host_model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
+    polar_model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
+    polar_model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
+
+    bounds_dict = { # Amount to add or subtract from guess/factor to multiply to guess
+        "ring" : {
+            "host": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.3, 0.4], # Possibly underestimated due to external dust/whatever
+                "n_bounds": [-1, 5], # Possibly underestimated
+                "I_e_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "r_e_factor": [1/2, 5] # Same as above
+            },
+            "polar": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.5, 0.5], # Hard to estimate for the polar part, so using a large range
+                "A_factor": [1/100, 5], # May be underestimated except in the case that the host PA is perfect
+                "R_factor": [1/5, 2], # Similar story
+                "sigma_r_bounds": [-5, 15]
+            }
+        },
+        "bulge" : {
+            "host": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.3, 0.4], # Possibly underestimated due to external dust/whatever
+                "n_bounds": [-1, 5], # Possibly underestimated
+                "I_e_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "r_e_factor": [1/2, 5] # Same as above
+            },
+            "polar": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.5, 0.5], # Hard to estimate for the polar part, so using a large range
+                "A_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "R_factor": [1/5, 2], # Similar story
+                "sigma_r_bounds": [-15, 15]
+            }
+        },
+        "halo" : {
+            "host": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.3, 0.4], # Possibly underestimated due to external dust/whatever
+                "n_bounds": [-1, 5], # Possibly underestimated
+                "I_e_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "r_e_factor": [1/2, 5] # Same as above
+            },
+            "polar": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.5, 0.5], # Hard to estimate for the polar part, so using a large range
+                "A_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "R_factor": [1/5, 2], # Similar story
+                "sigma_r_bounds": [-15, 15]
+            }
+        }
+    }
+
+    # Inner Sersic (Host)
+    # Assuming galaxy is at the center
+    host = pyimfit.make_imfit_function("Sersic", label="Host")
+    
+    host_PA, polar_PA, table = get_PA2_and_table(img)
+    # host_PA, polar_PA = fix_close_angles(host_PA, polar_PA, pol_str_type)
+    host_PA = host_PA - 90 # CCW from +x axis to CCW from +y axis 
+    polar_PA = polar_PA - 90
+
+    bounds_host = bounds_dict[pol_str_type]["host"]
+    host.PA.setValue(host_PA, [host_PA + bounds_host["PA_bounds"][0], host_PA + bounds_host["PA_bounds"][1]]) # Hard to find probably, might get from the IMAN script ellipse fitting thing (might mask low intensities) # Actually seems to work well with the isophote fitting
+
+    img_rot_host = scipy.ndimage.rotate(img, angle=host_PA + 90)
+    rad_slc = img_rot_host[int(img_rot_host.shape[0]/2), int(img_rot_host.shape[0]/2):]
+    S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size)))
+    B = np.cumsum(S)
+    B_e = B[-1]/2
+    r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
+    I_e = rad_slc[r_e]
+    if I_e < 0:
+        I_e = -1 * I_e # Occasionaly negative due to sky subtractions, though magnitude matters more
+    e = np.average(table["ellipticity"][:r_e +1])
+    if e != e: # Sometimes is Nan for some reason
+        e = 0.2
+
+    # host.ell.setValue(e, [(e - bounds_host["ell_bounds"][0]).clip(min=0), (bounds_host["ell_bounds"][1]).clip(max=0.75)])
+    host.ell.setValue(e, np.clip(np.array([(e + bounds_host["ell_bounds"][0]), e + (bounds_host["ell_bounds"][1])]), 0, 0.75))
+    host.I_e.setValue(I_e, [I_e * bounds_host["I_e_factor"][0], I_e * bounds_host["I_e_factor"][1]]) 
+    host.r_e.setValue(r_e, [r_e * bounds_host["r_e_factor"][0], r_e * bounds_host["r_e_factor"][1]]) # Maybe get an azimuthal average
+    host.n.setValue(3, [0, 10]) # Maybe keep as is
+
+    host_model.addFunction(host)
+    img_host_reduced = img.copy()
+    img_host_reduced[img_host_reduced < I_e/10] = 0
+    if not(args.dont_fit):
+        result, img_host_refined = fit_model(host_model, img_host_reduced)
+        # Order of PA, ell, n, I_e, r_e 
+        if result.fitConverged:
+            fitparams = result.params[2:]
+            PA = fitparams[0]
+            ell = fitparams[1]
+            n = fitparams[2]
+            I_e = fitparams[3]
+            r_e = fitparams[4]
+            if I_e < 0:
+                I_e = -1 * I_e # Occasionally negative due to sky subtractions, though magnitude matters more
+
+            host.PA.setValue(PA, [PA + bounds_host["PA_bounds"][0], PA + bounds_host["PA_bounds"][1]])
+            host.ell.setValue(ell, np.clip(np.array([(ell + bounds_host["ell_bounds"][0]), (ell + bounds_host["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+            host.n.setValue(n, np.clip(np.array([(n + bounds_host["n_bounds"][0]), (n + bounds_host["n_bounds"][1])]), 0, 10))# Likely to underestimate
+            host.I_e.setValue(I_e, [I_e * bounds_host["I_e_factor"][0], I_e * bounds_host["I_e_factor"][1]]) # Likely to underestimate
+            host.r_e.setValue(r_e, [r_e * bounds_host["r_e_factor"][0], r_e * bounds_host["r_e_factor"][1]]) # Likely to underestimate
+        
+    model.addFunction(host)
+
+    # Outer Sersic (Polar)
+    # Assuming galaxy is at the center
+
+    polar = pyimfit.make_imfit_function("GaussianRing", label="Polar")
+    #['PA', 'ell', 'A', 'R_ring', 'sigma_r']
+
+    bounds_polar = bounds_dict[pol_str_type]["polar"]
+
+    polar.PA.setValue(polar_PA, [polar_PA + bounds_host["PA_bounds"][0], polar_PA + bounds_host["PA_bounds"][1]])
+    img_rot_polar = scipy.ndimage.rotate(img, angle=polar_PA + 90)
+
+    rad_slc = img_rot_polar[int(img_rot_polar.shape[0]/2), int(img_rot_polar.shape[0]/2):]
+    S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size)))
+    B = np.cumsum(S)
+    B_e = B[-1]/2
+    r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
+    I_e = rad_slc[r_e]
+    if I_e < 0:
+        I_e = -1 * I_e # Occasionally negative due to sky subtractions, though magnitude matters more
+    e = np.average(table["ellipticity"][r_e-1:])
+    if e != e: # Sometimes is Nan for some reason
+        e = 0.2
+
+    polar.ell.setValue(e, np.clip(np.array([(e + bounds_polar["ell_bounds"][0]), (e + bounds_polar["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+    # polar.n.setValue(3, np.clip(np.array([(n + bounds_polar["n_bounds"][0]), (n + bounds_polar["n_bounds"][1])]), 0, 10))# Likely to underestimate
+    # polar.A.setValue(n, [0, 10]) # Maybe leave as is
+    polar.A.setValue(I_e, [I_e * bounds_polar["A_factor"][0], I_e * bounds_polar["A_factor"][1]]) # Likely to underestimate, probably very dim
+    polar.R_ring.setValue(r_e*2, [r_e * bounds_polar["R_factor"][0], r_e * bounds_polar["R_factor"][1]]) # Likely to underestimate, maybe get azimuthal average
+    polar.sigma_r.setValue(10, [10 + bounds_polar["sigma_r_bounds"][0], 10 + bounds_polar["sigma_r_bounds"][1]]) # Likely to underestimate, maybe get azimuthal average
+
+    polar_model.addFunction(polar)
+    if not(args.dont_fit):
+        img_polar_reduced = img - img_host_refined # Trying to remove the host component to only fit the polar structure
+        img_polar_reduced[img_polar_reduced < I_e/10] = 0
+        result, img_polar_refined = fit_model(polar_model, img_polar_reduced)
+        # order of pa, ell, n, i_e, r_e 
+        if result.fitConverged:
+            fitparams = result.params[2:]
+            PA = fitparams[0]
+            ell = fitparams[1]
+            n = fitparams[2]
+            I_e = fitparams[3]
+            r_e = fitparams[4]
+            if I_e < 0:
+                I_e = -1 * I_e # occasionally negative due to sky subtractions, though magnitude matters more
+
+            polar.PA.setValue(PA, [PA + bounds_polar["PA_bounds"][0], PA + bounds_polar["PA_bounds"][1]])
+            polar.ell.setValue(e, np.clip(np.array([(e + bounds_polar["ell_bounds"][0]), (e + bounds_polar["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+            # polar.n.setValue(3, np.clip(np.array([(n + bounds_polar["n_bounds"][0]), (n + bounds_polar["n_bounds"][1])]), 0, 10))# Likely to underestimate
+            # polar.A.setValue(n, [0, 10]) # Maybe leave as is
+            polar.A.setValue(I_e, [I_e * bounds_polar["A_factor"][0], I_e * bounds_polar["A_factor"][1]]) # Likely to underestimate, probably very dim
+            polar.R_ring.setValue(r_e*2, [r_e * bounds_polar["R_factor"][0], r_e * bounds_polar["R_factor"][1]]) # Likely to underestimate, maybe get azimuthal average
+            polar.sigma_r.setValue(10, [10 + bounds_polar["sigma_r_bounds"][0], 10 + bounds_polar["sigma_r_bounds"][1]]) # Likely to underestimate, maybe get azimuthal average
+
+    model.addFunction(polar)
+
+    # Can perhaps run the DE solve on just the host (with isophote clipped) then on the polar component somehow (maybe by removing the center handful of pixels)
+    model_desc[band] = str(model)
+
+def init_guess_1_sersic_1_gauss_ring(img, two_sersic_fit_params, pol_str_type, model_desc, band):
+    functions, chi_sq, chi_sq_red, status, status_message = parse_results(two_sersic_fit_params, galaxy_name=None, galaxy_type=None, table=None)
+    model = pyimfit.SimpleModelDescription()
+    shape = img.shape
+    model.x0.setValue(shape[0]/2 - 1, [shape[0]/2 - 30, shape[0]/2 + 30])
+    model.y0.setValue(shape[1]/2 - 1, [shape[1]/2 - 30, shape[1]/2 + 30])
+
+    bounds_dict = { # Amount to add or subtract from guess/factor to multiply to guess
+        "ring" : {
+            "host": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.3, 0.4], # Possibly underestimated due to external dust/whatever
+                "n_bounds": [-1, 5], # Possibly underestimated
+                "I_e_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "r_e_factor": [1/2, 5] # Same as above
+            },
+            "polar": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.5, 0.5], # Hard to estimate for the polar part, so using a large range
+                "A_factor": [1/100, 5], # May be underestimated except in the case that the host PA is perfect
+                "R_factor": [1/5, 2], # Similar story
+                "sigma_r_bounds": [-5, 15]
+            }
+        },
+        "bulge" : {
+            "host": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.3, 0.4], # Possibly underestimated due to external dust/whatever
+                "n_bounds": [-1, 5], # Possibly underestimated
+                "I_e_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "r_e_factor": [1/2, 5] # Same as above
+            },
+            "polar": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.5, 0.5], # Hard to estimate for the polar part, so using a large range
+                "A_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "R_factor": [1/5, 2], # Similar story
+                "sigma_r_bounds": [-15, 15]
+            }
+        },
+        "halo" : {
+            "host": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.3, 0.4], # Possibly underestimated due to external dust/whatever
+                "n_bounds": [-1, 5], # Possibly underestimated
+                "I_e_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "r_e_factor": [1/2, 5] # Same as above
+            },
+            "polar": {
+                "PA_bounds": [-10, 10],
+                "ell_bounds": [-0.5, 0.5], # Hard to estimate for the polar part, so using a large range
+                "A_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
+                "R_factor": [1/5, 2], # Similar story
+                "sigma_r_bounds": [-15, 15]
+            }
+        }
+    }
+
+    # Inner Sersic (Host)
+    # Assuming galaxy is at the center
+    host = pyimfit.make_imfit_function("Sersic", label="Host")
+    host_sersic = functions[0]["parameters"]
+    
+    bounds_host = bounds_dict[pol_str_type]["host"]
+    host_PA = host_sersic["PA"]
+    host.PA.setValue(host_PA, [host_PA + bounds_host["PA_bounds"][0], host_PA + bounds_host["PA_bounds"][1]]) 
+
+    e = host_sersic["ell"]
+    host.ell.setValue(e, np.clip(np.array([(e + bounds_host["ell_bounds"][0]), e + (bounds_host["ell_bounds"][1])]), 0, 0.75))
+    I_e = host_sersic["I_e"]
+    host.I_e.setValue(I_e, [I_e * bounds_host["I_e_factor"][0], I_e * bounds_host["I_e_factor"][1]]) 
+    r_e = host_sersic["r_e"]
+    host.r_e.setValue(r_e, [r_e * bounds_host["r_e_factor"][0], r_e * bounds_host["r_e_factor"][1]]) # Maybe get an azimuthal average
+    n = host_sersic["n"]
+    host.n.setValue(n, [0, 10]) # Maybe keep as is
+
+    # host_model.addFunction(host)
+    model.addFunction(host)
+
+    # Outer Sersic (Polar)
+    # Assuming galaxy is at the center
+
+    polar = pyimfit.make_imfit_function("GaussianRing", label="Polar")
+    #['PA', 'ell', 'A', 'R_ring', 'sigma_r']
+
+    bounds_polar = bounds_dict[pol_str_type]["polar"]
+    polar_sersic = functions[1]["parameters"]
+
+    polar_PA = polar_sersic["PA"]
+    polar.PA.setValue(polar_PA, [polar_PA + bounds_host["PA_bounds"][0], polar_PA + bounds_host["PA_bounds"][1]])
+
+    '''
+    img_rot_polar = scipy.ndimage.rotate(img, angle=polar_PA + 90)
+
+    rad_slc = img_rot_polar[int(img_rot_polar.shape[0]/2), int(img_rot_polar.shape[0]/2):]
+    S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size)))
+    B = np.cumsum(S)
+    B_e = B[-1]/2
+    r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
+    I_e = rad_slc[r_e]
+    if I_e < 0:
+        I_e = -1 * I_e # Occasionally negative due to sky subtractions, though magnitude matters more
+    e = np.average(table["ellipticity"][r_e-1:])
+    if e != e: # Sometimes is Nan for some reason
+        e = 0.2
+    '''
+    e = polar_sersic["ell"]
+    polar.ell.setValue(e, np.clip(np.array([(e + bounds_polar["ell_bounds"][0]), (e + bounds_polar["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+    # polar.n.setValue(3, np.clip(np.array([(n + bounds_polar["n_bounds"][0]), (n + bounds_polar["n_bounds"][1])]), 0, 10))# Likely to underestimate
+    # polar.A.setValue(n, [0, 10]) # Maybe leave as is
+    A = polar_sersic["I_e"] * 2
+    polar.A.setValue(A, [A * bounds_polar["A_factor"][0], A * bounds_polar["A_factor"][1]]) # Likely to underestimate, probably very dim
+    R = polar_sersic["r_e"] * 2
+    polar.R_ring.setValue(R, [R * bounds_polar["R_factor"][0], R * bounds_polar["R_factor"][1]]) # Likely to underestimate, maybe get azimuthal average
+    polar.sigma_r.setValue(10, [10 + bounds_polar["sigma_r_bounds"][0], 10 + bounds_polar["sigma_r_bounds"][1]]) # Maybe get some azimuthal average or something
+
+    # polar_model.addFunction(polar)
+    '''
+    if not(args.dont_fit):
+        img_polar_reduced = img - img_host_refined # Trying to remove the host component to only fit the polar structure
+        img_polar_reduced[img_polar_reduced < I_e/10] = 0
+        result, img_polar_refined = fit_model(polar_model, img_polar_reduced)
+        # order of pa, ell, n, i_e, r_e 
+        if result.fitConverged:
+            fitparams = result.params[2:]
+            PA = fitparams[0]
+            ell = fitparams[1]
+            n = fitparams[2]
+            I_e = fitparams[3]
+            r_e = fitparams[4]
+            if I_e < 0:
+                I_e = -1 * I_e # occasionally negative due to sky subtractions, though magnitude matters more
+
+            polar.PA.setValue(PA, [PA + bounds_polar["PA_bounds"][0], PA + bounds_polar["PA_bounds"][1]])
+            polar.ell.setValue(e, np.clip(np.array([(e + bounds_polar["ell_bounds"][0]), (e + bounds_polar["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+            # polar.n.setValue(3, np.clip(np.array([(n + bounds_polar["n_bounds"][0]), (n + bounds_polar["n_bounds"][1])]), 0, 10))# Likely to underestimate
+            # polar.A.setValue(n, [0, 10]) # Maybe leave as is
+            polar.A.setValue(I_e, [I_e * bounds_polar["A_factor"][0], I_e * bounds_polar["A_factor"][1]]) # Likely to underestimate, probably very dim
+            polar.R_ring.setValue(r_e*2, [r_e * bounds_polar["R_factor"][0], r_e * bounds_polar["R_factor"][1]]) # Likely to underestimate, maybe get azimuthal average
+            polar.sigma_r.setValue(10, [10 + bounds_polar["sigma_r_bounds"][0], 10 + bounds_polar["sigma_r_bounds"][1]]) # Likely to underestimate, maybe get azimuthal average
+        '''
+    model.addFunction(polar)
+
+    model_desc[band] = str(model)
 
 def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     model = pyimfit.SimpleModelDescription()
@@ -358,7 +682,11 @@ def main(args):
                         for folder in ["Polar Rings", "Polar_Tilted Bulges", "Polar_Tilted Halo"]: # Attempt to autodetect type
                             if folder in root:
                                 args.type = folder_type_dict[folder]
-                        p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
+                        if args.fit_type == "2_sersic":
+                            p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
+                        elif args.fit_type == "1_sersic_1_gauss_ring":
+                            two_sersic_fit_params = f"2_sersic_{band}_fit_params.txt"
+                            p = mp.Process(target = init_guess_1_sersic_1_gauss_ring, args=(img, two_sersic_fit_params, str(args.type).lower(), model_desc, band))
                         jobs.append(p)  
                 
                 if not(len(jobs) == 0):
@@ -377,6 +705,7 @@ def main(args):
         img_files = sorted(glob.glob(os.path.join(Path("."), "image_?.fits")))
 
         jobs = []
+        model_desc = manager.dict()
         for img_file in img_files:
             band = img_file[-6] # Yes I know this is not the best way
             files = os.listdir(".")
@@ -388,7 +717,11 @@ def main(args):
                     mask = fits.getdata(os.path.join(Path("."), "image_mask.fits"))
                     img = img * (1-mask)
 
-                p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
+                if args.fit_type == "2_sersic":
+                    p = mp.Process(target = init_guess_2_sersic, args=(img, str(args.type).lower(), model_desc, band))
+                elif args.fit_type == "1_sersic_1_gauss_ring":
+                    two_sersic_fit_params = f"2_sersic_{band}_fit_params.txt"
+                    p = mp.Process(target = init_guess_1_sersic_1_gauss_ring, args=(img, two_sersic_fit_params, str(args.type).lower(), model_desc, band))
                 jobs.append(p)  
 
         if not(len(jobs) == 0):
@@ -399,8 +732,8 @@ def main(args):
                 p.join()
 
             for band in model_desc.keys():
-                if not(f"2_sersic_{band}.dat" in files) or args.overwrite:
-                    with open(os.path.join(Path("."), f"2_sersic_{band}.dat"), "w") as f:
+                if not(f"{args.fit_type}_{band}.dat" in files) or args.overwrite:
+                    with open(os.path.join(Path("."), f"{args.fit_type}_{band}.dat"), "w") as f:
                         f.write(model_desc[band])
 
 if __name__ == "__main__":
@@ -410,6 +743,7 @@ if __name__ == "__main__":
     parser.add_argument("--mask", help="Use the mask to guess initial values", action="store_true")
     parser.add_argument("--type", help="Type of polar structure", choices=["ring", "bulge", "halo"], default="ring")
     parser.add_argument("--dont_fit", help="Don't use DE imfitting to try and do another guess at initial parameters", action="store_true")
+    parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
     parser.add_argument("-r", help="Recursively go into subfolders (assumes that fits data is at the end of the filetree)", action="store_true")
     
 
