@@ -278,8 +278,8 @@ def get_functions_from_files(root, galaxy_type, table=None):
         try:
             if args.make_composed and (not(f"{args.fit_type}_{functions[0]['band']}_composed.fits" in files) or args.overwrite):
                 components = {
-                    "2_sersic" : ["Host", "Polar"]
-                    "3_sersic" : ["Core", "Wings", "Polar"]
+                    "2_sersic" : ["Host", "Polar"],
+                    "3_sersic" : ["Core", "Wings", "Polar"],
                     "1_sersic_1_gauss_ring" : ["Host", "Polar"]
                 }
                 if args.mask:
