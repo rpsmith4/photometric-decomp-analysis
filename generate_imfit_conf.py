@@ -222,7 +222,7 @@ def init_guess_1_sersic_1_gauss_ring(img, pol_str_type, model_desc, band):
     host = pyimfit.make_imfit_function("Sersic", label="Host")
     
     host_PA, polar_PA, table = get_PA2_and_table(img)
-    # host_PA, polar_PA = fix_close_angles(host_PA, polar_PA, pol_str_type)
+    host_PA, polar_PA = fix_close_angles(host_PA, polar_PA, pol_str_type)
     host_PA = host_PA - 90 # CCW from +x axis to CCW from +y axis 
     polar_PA = polar_PA - 90
 
@@ -545,7 +545,7 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     host = pyimfit.make_imfit_function("Sersic", label="Host")
     
     host_PA, polar_PA, table = get_PA2_and_table(img)
-    # host_PA, polar_PA = fix_close_angles(host_PA, polar_PA, pol_str_type)
+    host_PA, polar_PA = fix_close_angles(host_PA, polar_PA, pol_str_type)
     host_PA = host_PA - 90 # CCW from +x axis to CCW from +y axis 
     polar_PA = polar_PA - 90
 
