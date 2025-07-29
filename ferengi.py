@@ -923,27 +923,30 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             nhi[hi_pixels] += 1
         
         # Select pixels for K-correction
-        good = np.where((nhi >= 3) & (np.abs(nsig[:, :, filt_i]) > siglim))[0]
-        if good.size == 0:
+        good = np.where((nhi >= 3) & (np.abs(nsig[:, :, filt_i]) > siglim))
+        goodsize = np.size(good[0]) + np.size(good[1])
+        if goodsize == 0:
             print('less than 3 filters have high sigma pixels')
-            good = np.where((nhi >= 2) & (np.abs(nsig[:, :, filt_i]) > siglim))[0]
-        if good.size == 0:
+            good = np.where((nhi >= 2) & (np.abs(nsig[:, :, filt_i]) > siglim))
+        if goodsize == 0:
             print('less than 2 filters have high sigma pixels')
-            good = np.where((nhi >= 1) & (np.abs(nsig[:, :, filt_i]) > siglim))[0]
-        if good.size == 0:
+            good = np.where((nhi >= 1) & (np.abs(nsig[:, :, filt_i]) > siglim))
+        if goodsize == 0:
             print('NO filter has high sigma pixels')
-            good = np.where((nhi >= 0) & (np.abs(nsig[:, :, filt_i]) > siglim))[0] # All pixels if no high sigma
+            good = np.where((nhi >= 0) & (np.abs(nsig[:, :, filt_i]) > siglim)) # All pixels if no high sigma
         
-        good1 = np.where((np.abs(nsig[:, :, filt_i]) > 0.25) & (np.abs(nsig[:, :, filt_i]) <= siglim))[0]
-        if good1.size > 0:
+        good1 = np.where((np.abs(nsig[:, :, filt_i]) > 0.25) & (np.abs(nsig[:, :, filt_i]) <= siglim))
+        good1size = np.size(good1[0]) + np.size(good1[1])
+        if good1size > 0:
             # Select only 50% of these pixels
-            if good1.size > 1: # random_indices expects len > 0
-                good1 = good1[random_indices(good1.size, int(np.round(good1.size * 0.5)))]
+            if good1size > 1: # random_indices expects len > 0
+                good1 = (good1[0][random_indices(np.size(good1[0]), int(np.round(np.size(good1[0]) * 0.5)))],good1[1][random_indices(np.size(good1[1]), int(np.round(np.size(good1[1]) * 0.5)))])
             else: # If only one pixel, just take it
                 good1 = good1
         
-        good = np.unique(np.concatenate((good, good1)))
-        ngood = good.size
+        # good = (np.unique(np.concatenate((good[0], good1[0]))), np.unique(np.concatenate((good[1], good1[1]))))
+        good = (np.concatenate((good[0], good1[0])), np.concatenate((good[1], good1[1])))
+        ngood = np.size(good[0])
 
         if ngood == 0:
             print("No pixels selected for K-correction.")
@@ -954,10 +957,12 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             # Setup arrays for K-correction
             maggies_for_k = np.zeros((nbands, ngood))
             err_for_k = np.zeros((nbands, ngood))
+            # for j in range(nbands):
+            #     maggies_for_k[j, :] = im_ds.flatten()[good][j::nbands] # Reshape to (bands, pixels)
+            #     err_for_k[j, :] = imerr_ds.flatten()[good][j::nbands]
             for j in range(nbands):
-                maggies_for_k[j, :] = im_ds.flatten()[good][j::nbands] # Reshape to (bands, pixels)
-                err_for_k[j, :] = imerr_ds.flatten()[good][j::nbands]
-
+                maggies_for_k[j, :] = im_ds[:, :, j][good]
+                err_for_k[j, :] = imerr_ds[:, :, j][good]
             # Remove infinite values in error
             err_for_k[~np.isfinite(err_for_k)] = 99999
             err_for_k = np.minimum(err_for_k, 99999) # Clip large errors
@@ -1005,9 +1010,14 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
                 # Given the `maggies_for_k` structure, it's likely (bands, pixels), so maggies_reconstructed is similar.
                 
                 # Reshape maggies_reconstructed for easier assignment
-                reshaped_maggies_rec = np.zeros_like(im_ds.flatten())
+                # reshaped_maggies_rec = np.zeros_like(im_ds.flatten())
+                reshaped_maggies_rec = np.zeros_like(im_ds)
+                s = np.shape(im_ds)
+                # good = (good[1] + 1) + (good[0]) * s[0]
+                # for band_idx in range(nbands):
+                #     reshaped_maggies_rec[good + band_idx * (im_ds[:,:,0].size)] = maggies_reconstructed[band_idx, :]
                 for band_idx in range(nbands):
-                    reshaped_maggies_rec[good + band_idx * (im_ds[:,:,0].size)] = maggies_reconstructed[band_idx, :]
+                    reshaped_maggies_rec[:, :,band_idx][good] = maggies_reconstructed[band_idx, :]
                 
                 # Correct indexing is crucial here. The IDL code's `im_ds[good] = maggies/(1.+zhi)` is ambiguous
                 # when `im_ds` is 3D and `good` is 1D from a flattened 2D index.
@@ -1032,11 +1042,15 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
                 
                 # To emulate `im_ds[good] = maggies/(1.+zhi)` when `im_ds` is 3D, and `good` are flattened indices:
                 # We need to create a mask for `im_ds` for each band.
+
                 reshaped_good = np.unravel_index(good, im_ds[:,:,0].shape)
+
                 # Apply the k-corrected values to all bands at the `good` pixel locations
                 # This is a very strong assumption about `maggies_reconstructed` structure.
                 for band_idx in range(nbands):
                     im_ds[reshaped_good[0], reshaped_good[1], band_idx] = maggies_reconstructed[band_idx, :] / (1. + zhi)
+                # for band_idx in range(nbands):
+                #     im_ds[:, :, band_idx][good] = maggies_reconstructed[band_idx, :] / (1. + zhi)
                 
         # Background: choose closest in redshift-space (this logic also from original)
         # Using the original image before K-correction to determine background.
@@ -1056,7 +1070,8 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             bg = maggies2cts(bg, thi, zphi) # Convert background too
 
     # im_ds = im[..., np.newaxis]
-    im_ds = np.expand_dims(im_ds, axis=-1)
+    print(im_ds.shape)
+    # im_ds = np.expand_dims(im_ds, axis=-1)
     # Remove infinite pixels: replace with median (3x3)
     # This loop applies to all bands if multi-band
     for j in range(nbands):
@@ -1100,7 +1115,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
 
     # Subtract sky again after K-correction and cleaning (if not already done)
     for j in range(nbands):
-        sky_sub_value = ring_sky(im_ds[:, :, j], 50, 15, nw=True)
+        sky_sub_value = ring_sky(np.squeeze(im_ds[:, :, j], axis=-1), 50, 15, nw=True) # Idk if this works
         im_ds[:, :, j] -= sky_sub_value
 
     if noconv:
@@ -1152,15 +1167,19 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
 
         # Convolve the high redshift image with the transformation PSF and add noise
         # This part needs to handle multi-band images if nok is False
-        temp_im_ds_conv = np.zeros_like(im_ds)
-        for j in range(nbands):
-            temp_im_ds_conv[:, :, j] = ferengi_convolve_plus_noise(im_ds[:, :, j] / thi, psf_t, sky, thi,
-                                                                  border_clip=3, extend=False) # extend=False means crop borders
+        temp_im_ds_conv = np.zeros_like(np.squeeze(im_ds, axis=-1))
+        print(temp_im_ds_conv.shape)
+        print(im_ds.shape)
+        # for j in range(nbands):
+        #     temp_im_ds_conv[:, :, j] = ferengi_convolve_plus_noise(np.squeeze(im_ds[:, :, j] / thi, axis=-1), psf_t, sky, thi,
+        #                                                           border_clip=3, extend=False) # extend=False means crop borders
 
-        im_ds = temp_im_ds_conv
+        # im_ds = temp_im_ds_conv
 
 
     # Write output FITS files
+    print(np.shape(im_ds))
+    im_ds = np.squeeze(im_ds, axis=-1)
     for j in range(nbands):
         fits.writeto(f"{im_out_file}_{j}", im_ds[:, :, j], overwrite=True)
     fits.writeto(psf_out_file, recon, overwrite=True)
