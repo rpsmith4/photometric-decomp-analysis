@@ -363,9 +363,9 @@ def ferengi_make_psf_same(psf1, psf2):
     small_padded = np.pad(small, ((lo_x, hi_x), (lo_y, hi_y)), 'constant', constant_values=0)
 
     if flag_c:
-        psf2[:] = small_padded
+        psf2 = small_padded
     else:
-        psf1[:] = small_padded
+        psf1 = small_padded
 
 
 def ferengi_psf_centre(psf0):
@@ -1055,6 +1055,8 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         if not nok: # Only if K-correction was attempted
             bg = maggies2cts(bg, thi, zphi) # Convert background too
 
+    # im_ds = im[..., np.newaxis]
+    im_ds = np.expand_dims(im_ds, axis=-1)
     # Remove infinite pixels: replace with median (3x3)
     # This loop applies to all bands if multi-band
     for j in range(nbands):
@@ -1159,7 +1161,8 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
 
 
     # Write output FITS files
-    fits.writeto(im_out_file, im_ds, overwrite=True)
+    for j in range(nbands):
+        fits.writeto(f"{im_out_file}_{j}", im_ds[:, :, j], overwrite=True)
     fits.writeto(psf_out_file, recon, overwrite=True)
 
     print("FERENGI process completed.")
