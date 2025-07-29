@@ -3,6 +3,7 @@ from scipy.ndimage import convolve, median_filter, zoom
 from scipy.optimize import curve_fit
 from astropy.io import fits
 from astropy.cosmology import FlatLambdaCDM
+import matplotlib.pyplot as plt
 
 # Define cosmology for luminosity distance calculations
 cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
@@ -551,6 +552,7 @@ def ferengi_clip_edge(npix_clip, im, auto_frac=2, clip_also=None, norm=False):
         if clip_also is not None:
             clip_also /= np.sum(clip_also)
         im /= np.sum(im)
+    return im
 
 
 def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=False, evo=None):
@@ -846,7 +848,6 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         nbands = 1
         im = im[:, :, np.newaxis] # Make it 3D for consistent indexing
         imerr = imerr[:, :, np.newaxis] # Make it 3D
-
     nok = (nbands == 1) # Flag for no K-correction if only 1 band
 
     # Convert from cts (input frame) to maggies and back to cts (output frame)
@@ -855,6 +856,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         im_ds = ferengi_downscale(im_nok, zlo, zhi, scllo, sclhi,
                                   nofluxscl=noflux, evo=evo)
         psf_lo = psflo
+        im_ds = np.expand_dims(im_ds, axis=-1)
     else:
         # Select best matching PSF for output redshift (based on wavelength)
         dz = np.abs(lambda_hi / lambda_lo - 1)
@@ -1070,8 +1072,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             bg = maggies2cts(bg, thi, zphi) # Convert background too
 
     # im_ds = im[..., np.newaxis]
-    print(im_ds.shape)
-    # im_ds = np.expand_dims(im_ds, axis=-1)
+
     # Remove infinite pixels: replace with median (3x3)
     # This loop applies to all bands if multi-band
     for j in range(nbands):
@@ -1115,7 +1116,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
 
     # Subtract sky again after K-correction and cleaning (if not already done)
     for j in range(nbands):
-        sky_sub_value = ring_sky(np.squeeze(im_ds[:, :, j], axis=-1), 50, 15, nw=True) # Idk if this works
+        sky_sub_value = ring_sky(im_ds[:, :, j], 50, 15, nw=True) # Idk if this works
         im_ds[:, :, j] -= sky_sub_value
 
     if noconv:
@@ -1159,29 +1160,37 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         rem = 3 # remove 3 pixels
         # Need a mutable object for `clip_also`.
         temp_psf_hi = np.copy(psf_hi)
-        ferengi_clip_edge(rem, recon, clip_also=temp_psf_hi, norm=True)
-        psf_hi = temp_psf_hi # Update psf_hi with clipped version
+        psf_hi = ferengi_clip_edge(rem, recon, clip_also=temp_psf_hi, norm=True) # TODO: What even is the point of this?
+        # psf_hi = temp_psf_hi # Update psf_hi with clipped version
 
         # Normalise reconstructed PSF
         recon /= np.sum(recon)
 
         # Convolve the high redshift image with the transformation PSF and add noise
         # This part needs to handle multi-band images if nok is False
-        temp_im_ds_conv = np.zeros_like(np.squeeze(im_ds, axis=-1))
-        print(temp_im_ds_conv.shape)
-        print(im_ds.shape)
-        # for j in range(nbands):
-        #     temp_im_ds_conv[:, :, j] = ferengi_convolve_plus_noise(np.squeeze(im_ds[:, :, j] / thi, axis=-1), psf_t, sky, thi,
-        #                                                           border_clip=3, extend=False) # extend=False means crop borders
+        # temp_im_ds_conv = np.zeros_like(im_ds)
+        plt.imshow(psf_t[:, :])
+        plt.savefig("here.png")
+        temp_im_ds_conv = list()
+        for j in range(nbands):
+            # temp_im_ds_conv[:, :, j] = ferengi_convolve_plus_noise(im_ds[:, :, j] / thi, psf_t, sky, thi,
+            #                                                       border_clip=3, extend=True) # extend=False means crop borders
+            temp_im_ds_conv.append(ferengi_convolve_plus_noise(im_ds[:, :, j] / thi, psf_t, sky, thi,
+                                                                  border_clip=3, extend=False)) # extend=False means crop borders, though is true in ferengi.pro?
+        
 
-        # im_ds = temp_im_ds_conv
+        temp_im_ds_conv = np.array(temp_im_ds_conv)
+        temp_im_ds_conv = np.moveaxis(temp_im_ds_conv, 0, -1)
+        im_ds = temp_im_ds_conv
 
 
     # Write output FITS files
     print(np.shape(im_ds))
-    im_ds = np.squeeze(im_ds, axis=-1)
-    for j in range(nbands):
-        fits.writeto(f"{im_out_file}_{j}", im_ds[:, :, j], overwrite=True)
+    # im_ds = np.squeeze(im_ds, axis=-1)
+    # for j in range(nbands):
+    #     fits.writeto(f"{im_out_file}_{j}", im_ds[:, :, j], overwrite=True)
+    im_ds = np.moveaxis(im_ds, -1, 0)
+    fits.writeto(f"{im_out_file}", im_ds, overwrite=True)
     fits.writeto(psf_out_file, recon, overwrite=True)
 
     print("FERENGI process completed.")
