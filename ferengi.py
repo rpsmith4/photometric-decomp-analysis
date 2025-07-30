@@ -4,6 +4,7 @@ from scipy.optimize import curve_fit
 from astropy.io import fits
 from astropy.cosmology import FlatLambdaCDM
 import matplotlib.pyplot as plt
+import kcorrect.kcorrect
 
 # Define cosmology for luminosity distance calculations
 cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
@@ -991,15 +992,34 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             z_tmp_lo = np.full(ngood, zlo)
             z_tmp_hi = np.full(ngood, zhi)
 
-            # Call KCORRECT (placeholder)
-            k_dummy, rmatrix, zvals, wavel, vmatrix, coeffs = kcorrect_placeholder(
-                maggies_for_k, ivar, z_tmp_lo, filterlist=filter_lo
-            )
+            # Call KCORRECT 
+            responses_in = ['sdss_g0', 'sdss_r0', 'sdss_i0', 'sdss_z0']  # TODO: Maybe not the best implementation, but works for now
+            if "i" in filter_lo:
+                responses_in = ['sdss_g0', 'sdss_r0', 'sdss_i0', 'sdss_z0'] 
+            else:
+                responses_in = ['sdss_g0', 'sdss_r0', 'sdss_z0']
+
+            maggies_for_k = np.moveaxis(maggies_for_k, -1, 0)
+            ivar = np.moveaxis(ivar, -1, 0)
+
+            kc = kcorrect.kcorrect.Kcorrect(responses=responses_in)
+            coeffs = kc.fit_coeffs(redshift=z_tmp_lo, maggies=maggies_for_k, ivar=ivar)           
+            k = kc.kcorrect(redshift=z_tmp_lo, coeffs=coeffs)
+            maggies_reconstructed = kc.reconstruct(redshift=z_tmp_lo, coeffs=coeffs)
+
+            maggies_for_k = np.moveaxis(maggies_for_k, -1, 0) # Go back to ferengi's weird indices
+            maggies_reconstructed = np.moveaxis(maggies_reconstructed, -1, 0)
+            ivar = np.moveaxis(ivar, -1, 0)
+
+            # k_dummy, rmatrix, zvals, wavel, vmatrix, coeffs = kcorrect_placeholder(
+            #     maggies_for_k, ivar, z_tmp_lo, filterlist=filter_lo
+            # )
+
 
             # Reconstruct magnitudes at high redshift (placeholder)
-            maggies_reconstructed = k_reconstruct_maggies_placeholder(
-                coeffs, z_tmp_hi, maggies_for_k, vmatrix=vmatrix, lambda_wavel=wavel, filterlist=filter_hi
-            )
+            # maggies_reconstructed = k_reconstruct_maggies_placeholder(
+            #     coeffs, z_tmp_hi, maggies_for_k, vmatrix=vmatrix, lambda_wavel=wavel, filterlist=filter_hi
+            # )
 
             # Store K-corrected maggies back into im_ds
             # This requires careful re-mapping from the 1D 'good' indices back to the 2D im_ds.
@@ -1060,7 +1080,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             # If multi-band, the 'bg' seems to be derived from the downscaled image of the best-fit filter.
             bg = im_ds[:, :, filt_i] / (1. + zhi) # From the best-fit filter
             im_ds = im_ds[:, :, filt_i] / (1. + zhi) 
-            im_ds = np.squeeze(im_ds, axis=-1)
+            # im_ds = np.squeeze(im_ds, axis=-1)
             # If K-correction was applied, `im_ds` has the K-corrected values already.
         
         im_ds = maggies2cts(im_ds, thi, zphi)
@@ -1091,26 +1111,22 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         
         if idx_outliers[0].size > 0:
             # Flatten for line fit
-            bg_flat = bg.flatten()
-            im_ds_flat = im_ds.flatten()
+            fit_coeffs = robust_linefit(np.abs(bg[idx_outliers]), np.abs(im_ds[idx_outliers]))
             
-            fit_coeffs = robust_linefit(np.abs(bg_flat[idx_outliers]), np.abs(im_ds_flat[idx_outliers]))
-            
-            delta = np.abs(im_ds_flat[idx_outliers]) - (fit_coeffs[0] + fit_coeffs[1] * np.abs(bg_flat[idx_outliers]))
+            delta = np.abs(im_ds[idx_outliers]) - (fit_coeffs[0] + fit_coeffs[1] * np.abs(bg[idx_outliers]))
             
             m_delta, sig_delta, nrej_delta = resistant_mean(delta, 3)
             sig_delta *= np.sqrt(delta.size - 1 - nrej_delta)
             
-            idx1 = np.where(delta / sig_delta > 50)[0]
-            if idx1.size > 0:
+            idx1 = np.where(delta / sig_delta > 50)
+            if idx1[0].size > 0:
                 # Replace these extreme outliers with median from the original med_val
                 # Need to map idx_outliers[idx1] back to the 3D array.
                 med_val_flat = med_val.flatten() # Assuming med_val was calculated per band
-                im_ds_flat[idx_outliers[idx1]] = med_val_flat[idx_outliers[idx1]]
-                im_ds = im_ds_flat.reshape(im_ds.shape)
+                im_ds[idx_outliers[idx1]] = med_val_flat[idx_outliers[idx1]]
+                im_ds = im_ds.reshape(im_ds.shape)
 
     # Subtract sky again after K-correction and cleaning (if not already done)
-    im_ds = np.squeeze(im_ds, axis=-1)
     sky_sub_value = ring_sky(im_ds, 50, 15, nw=True) # Idk if this works
     im_ds -= sky_sub_value
 
@@ -1166,7 +1182,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         # temp_im_ds_conv = np.zeros_like(im_ds)
         temp_im_ds_conv = list()
         # im_ds = np.squeeze(im_ds, axis=-1)
-        im_ds = ferengi_convolve_plus_noise(im_ds[:, :] / thi, psf_t, sky, thi,
+        im_ds = ferengi_convolve_plus_noise(im_ds / thi, psf_t, sky, thi,
                                                                 border_clip=3, extend=True) # extend=False means crop borders, though is true in ferengi.pro?
     
     # Write output FITS files
