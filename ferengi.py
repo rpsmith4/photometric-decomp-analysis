@@ -1015,9 +1015,6 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
                 # reshaped_maggies_rec = np.zeros_like(im_ds.flatten())
                 reshaped_maggies_rec = np.zeros_like(im_ds)
                 s = np.shape(im_ds)
-                # good = (good[1] + 1) + (good[0]) * s[0]
-                # for band_idx in range(nbands):
-                #     reshaped_maggies_rec[good + band_idx * (im_ds[:,:,0].size)] = maggies_reconstructed[band_idx, :]
                 for band_idx in range(nbands):
                     reshaped_maggies_rec[:, :,band_idx][good] = maggies_reconstructed[band_idx, :]
                 
@@ -1050,7 +1047,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
                 # Apply the k-corrected values to all bands at the `good` pixel locations
                 # This is a very strong assumption about `maggies_reconstructed` structure.
                 for band_idx in range(nbands):
-                    im_ds[reshaped_good[0], reshaped_good[1], band_idx] = maggies_reconstructed[band_idx, :] / (1. + zhi)
+                    im_ds[:, :, band_idx][good] = maggies_reconstructed[band_idx, :] / (1. + zhi)
                 # for band_idx in range(nbands):
                 #     im_ds[:, :, band_idx][good] = maggies_reconstructed[band_idx, :] / (1. + zhi)
                 
