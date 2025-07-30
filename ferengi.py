@@ -153,7 +153,7 @@ def edge_index(a, rx, ry):
     """
     Creates an index of a ring with width 1 around the center at radius rx and ry.
     """
-    sz_x, sz_y = a.shape
+    sz_y, sz_x = a.shape
     px = 0 if sz_x % 2 else 0.5
     py = 0 if sz_y % 2 else 0.5
 
@@ -169,8 +169,8 @@ def edge_index(a, rx, ry):
     # Condition for elements on the "edges" of the specified rectangle
     mask = ( (b == rx) & (c <= ry) ) | ( (c == ry) & (b <= rx) )
     
-    indices = np.where(mask.flatten())[0]
-    
+    indices = np.where(mask.flatten())
+
     if len(indices) == 0:
         return np.array([-1])
     
@@ -499,8 +499,8 @@ def ferengi_clip_edge(npix_clip, im, auto_frac=2, clip_also=None, norm=False):
     Clips the outer pixels of an image based on noise characteristics.
     """
     sz = np.array(im.shape)
-    rx = int(sz[0] / 2 / auto_frac)
-    ry = int(sz[1] / 2 / auto_frac)
+    rx = int(sz[1] / 2 / auto_frac)
+    ry = int(sz[0] / 2 / auto_frac)
     
     sig_vals = [0.0]
     r_vals = [0]
