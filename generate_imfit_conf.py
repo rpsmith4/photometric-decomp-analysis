@@ -666,7 +666,7 @@ def main(args):
                 for img_file in img_files:
                     band = img_file[-6] # Yes I know this is not the best way
                     # outputs[band] = None
-                    if not(f"2_sersic_{band}.dat" in files) or args.overwrite:
+                    if not(f"{args.fit_type}_{band}.dat" in files) or args.overwrite:
                         print(f"Generating config for {img_file}")
                         img = fits.getdata(img_file)
 
@@ -697,8 +697,8 @@ def main(args):
                         p.join()
 
                     for band in model_desc.keys():
-                        if not(f"2_sersic_{band}.dat" in files) or args.overwrite:
-                            with open(os.path.join(Path(root), f"2_sersic_{band}.dat"), "w") as f:
+                        if not(f"{args.fit_type}_{band}.dat" in files) or args.overwrite:
+                            with open(os.path.join(Path(root), f"{args.fit_type}_{band}.dat"), "w") as f:
                                 f.write(model_desc[band])
 
     else:
@@ -709,7 +709,7 @@ def main(args):
         for img_file in img_files:
             band = img_file[-6] # Yes I know this is not the best way
             files = os.listdir(".")
-            if not(f"2_sersic_{band}.dat" in files) or args.overwrite:
+            if not(f"{args.fit_type}_{band}.dat" in files) or args.overwrite:
                 print(f"Generating configs for {img_file}")
                 img = fits.getdata(img_file)
 
