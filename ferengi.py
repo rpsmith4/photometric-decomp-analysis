@@ -1062,12 +1062,11 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         else:
             # If multi-band, the 'bg' seems to be derived from the downscaled image of the best-fit filter.
             bg = im_ds[:, :, filt_i] / (1. + zhi) # From the best-fit filter
+            im_ds = im_ds[:, :, filt_i] / (1. + zhi) 
+            im_ds = np.squeeze(im_ds, axis=-1)
             # If K-correction was applied, `im_ds` has the K-corrected values already.
-
-        # Convert image back to cts
-        for j in range(nbands):
-            im_ds[:, :, j] = maggies2cts(im_ds[:, :, j], thi, zphi)
         
+        im_ds = maggies2cts(im_ds, thi, zphi)
         if not nok: # Only if K-correction was attempted
             bg = maggies2cts(bg, thi, zphi) # Convert background too
 
@@ -1075,21 +1074,20 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
 
     # Remove infinite pixels: replace with median (3x3)
     # This loop applies to all bands if multi-band
-    for j in range(nbands):
-        med_val = median_filter(im_ds[:, :, j], size=3, mode='nearest')
-        idx_inf = np.where(~np.isfinite(im_ds[:, :, j]))
-        if idx_inf[0].size > 0:
-            im_ds[idx_inf[0], idx_inf[1], j] = med_val[idx_inf[0], idx_inf[1]]
+    med_val = median_filter(im_ds, size=3, mode='nearest')
+    idx_inf = np.where(~np.isfinite(im_ds))
+    if idx_inf[0].size > 0:
+        im_ds[idx_inf[0], idx_inf[1]] = med_val[idx_inf[0], idx_inf[1]]
 
-        # Replace 0-value pixels with median (3x3)
-        idx_zero = np.where(im_ds[:, :, j] == 0)
-        if idx_zero[0].size > 0:
-            im_ds[idx_zero[0], idx_zero[1], j] = med_val[idx_zero[0], idx_zero[1]]
+    # Replace 0-value pixels with median (3x3)
+    idx_zero = np.where(im_ds == 0)
+    if idx_zero[0].size > 0:
+        im_ds[idx_zero[0], idx_zero[1]] = med_val[idx_zero[0], idx_zero[1]]
     
     if not nok:
         # Check for large outliers after K-correction for multi-band images
         # This part of the IDL code is to clean extreme residuals.
-        m_im_ds, sig_im_ds, nrej_im_ds = resistant_mean(im_ds.flatten(), 3)
+        m_im_ds, sig_im_ds, nrej_im_ds = resistant_mean(im_ds.flatten(), 3) # TODO: Check if this is okay
         sig_im_ds *= np.sqrt(im_ds.size - 1 - nrej_im_ds)
         
         idx_outliers = np.where(np.abs(im_ds) > 10 * sig_im_ds)
@@ -1115,9 +1113,9 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
                 im_ds = im_ds_flat.reshape(im_ds.shape)
 
     # Subtract sky again after K-correction and cleaning (if not already done)
-    for j in range(nbands):
-        sky_sub_value = ring_sky(im_ds[:, :, j], 50, 15, nw=True) # Idk if this works
-        im_ds[:, :, j] -= sky_sub_value
+    im_ds = np.squeeze(im_ds, axis=-1)
+    sky_sub_value = ring_sky(im_ds, 50, 15, nw=True) # Idk if this works
+    im_ds -= sky_sub_value
 
     if noconv:
         im_ds /= thi
@@ -1169,27 +1167,12 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         # Convolve the high redshift image with the transformation PSF and add noise
         # This part needs to handle multi-band images if nok is False
         # temp_im_ds_conv = np.zeros_like(im_ds)
-        plt.imshow(psf_t[:, :])
-        plt.savefig("here.png")
         temp_im_ds_conv = list()
-        for j in range(nbands):
-            # temp_im_ds_conv[:, :, j] = ferengi_convolve_plus_noise(im_ds[:, :, j] / thi, psf_t, sky, thi,
-            #                                                       border_clip=3, extend=True) # extend=False means crop borders
-            temp_im_ds_conv.append(ferengi_convolve_plus_noise(im_ds[:, :, j] / thi, psf_t, sky, thi,
-                                                                  border_clip=3, extend=False)) # extend=False means crop borders, though is true in ferengi.pro?
-        
-
-        temp_im_ds_conv = np.array(temp_im_ds_conv)
-        temp_im_ds_conv = np.moveaxis(temp_im_ds_conv, 0, -1)
-        im_ds = temp_im_ds_conv
-
-
+        # im_ds = np.squeeze(im_ds, axis=-1)
+        im_ds = ferengi_convolve_plus_noise(im_ds[:, :] / thi, psf_t, sky, thi,
+                                                                border_clip=3, extend=True) # extend=False means crop borders, though is true in ferengi.pro?
+    
     # Write output FITS files
-    print(np.shape(im_ds))
-    # im_ds = np.squeeze(im_ds, axis=-1)
-    # for j in range(nbands):
-    #     fits.writeto(f"{im_out_file}_{j}", im_ds[:, :, j], overwrite=True)
-    im_ds = np.moveaxis(im_ds, -1, 0)
     fits.writeto(f"{im_out_file}", im_ds, overwrite=True)
     fits.writeto(psf_out_file, recon, overwrite=True)
 
