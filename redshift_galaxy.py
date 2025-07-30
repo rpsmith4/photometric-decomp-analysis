@@ -79,25 +79,25 @@ def main(im, psf, sky):
     # imerr = np.random.poisson(lam=lam, size=im.shape) # nanomaggies
     # imerr = ferengi.maggies2cts(imerr, expt=1, zp = 22.5)
     imerr = np.zeros_like(im) # Poisson Noise alread added
-    # psflo = psf
-    # psfhi = psf[0] # Using just the g band psf
     psflo = psf
-    psfhi = psf # Using just the g band psf
+    psfhi = psf[:, :, 0] # Using just the g band psf
+    # psflo = psf
+    # psfhi = psf # Using just the g band psf
     # erro0_mag = np.array([0, 0, 0, 0])
     erro0_mag = np.array([0.02, 0.02, 0.02, 0.03]) # From SDSS
     filter_lo = ["g", "r", "i", "z"]
-    filter_lo = ["g"]
+    # filter_lo = ["g"]
     lambda_lo = np.array([4640, 6580, 8060, 9000]) # Taken from Wikipedia
     # lambda_lo = [4640]
-    lambda_lo = 4640
-    zlo = 0.03 # TODO: Figure out issues with zlo < ~0.3
+    # lambda_lo = 4640
+    zlo = 0.03 # TODO: Figure out issues with zlo < ~0.03
     zhi = 0.5
-    lambda_hi = lambda_lo
+    lambda_hi = 4640
     scllo = pixscale.value
     zplo = [22.5, 22.5, 22.5, 22.5] # magnitudes
-    zplo = 22.5 # magnitudes
+    # zplo = 22.5 # magnitudes
     tlo = [1, 1, 1, 1] 
-    tlo = 1 
+    # tlo = 1 
     filter_hi = filter_lo
     sclhi = pixscale.value
     zphi = 22.5
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     # im = im.reshape(im.shape[1], im.shape[2], len(bands))
     # In the shape of (x, y, bands)
 
-    im = fits.open(p + f"TNG167392_E_SDSS_g.fits")[0].data
+    # im = fits.open(p + f"TNG167392_E_SDSS_g.fits")[0].data
 
     psf = list()
     for band in bands:
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     psf = np.array(psf)
     psf = np.moveaxis(psf, 0, -1)
     # In the shape of (x, y, bands)
-    psf = fits.open(p + f"psf_patched_g.fits")[0].data
+    # psf = fits.open(p + f"psf_patched_g.fits")[0].data
 
     
     rng = np.random.default_rng()
