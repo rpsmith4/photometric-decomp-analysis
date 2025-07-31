@@ -974,8 +974,6 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
 
             # Setup array with minimum errors for SDSS
             err0 = (err0_mag[np.newaxis, :].T @ np.ones(np.size(maggies_for_k[0, :]))[:, np.newaxis].T).T
-            print(err0.shape)
-            print(err_for_k.shape)
             #err0 = err0_mag[:, np.newaxis] # Ensure err0_mag is (nbands, 1)
             # The original IDL code's `err0_mag#(fltarr(n_elements(maggies[0, *]))+1)`
             # is equivalent to broadcasting err0_mag across the second dimension.
@@ -1024,9 +1022,6 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             ivar = np.moveaxis(ivar, -1, 0)
 
             kc = kcorrect.kcorrect.Kcorrect(responses=responses_in)
-            print(ivar.shape)
-            print(z_tmp_lo.shape)
-            print(maggies_for_k.shape)
             ivar = ivar.T
             coeffs = kc.fit_coeffs(redshift=z_tmp_lo, maggies=maggies_for_k, ivar=ivar)           
             k = kc.kcorrect(redshift=z_tmp_lo, coeffs=coeffs)
