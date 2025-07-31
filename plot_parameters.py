@@ -142,35 +142,35 @@ def quantities_plot(all_functions):
             host_I_e = nmgy2ABmag((host_I_e * pixscale).value)
 
 
-            ax = plt.subplot(2, 3, 1)
-            plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
-            plt.ylabel("Count")
+            # ax = plt.subplot(2, 3, 1)
+            # plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
+            # plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
+            # plt.ylabel("Count")
 
-            plt.subplot(2, 3, 2)
+            ax = plt.subplot(2, 2, 1)
             plt.hist(host_ax_ratio, histtype='step', color=band_colors[band], label=band)
             plt.xlabel("Axis ratio (b/a)")
             plt.ylabel("Count")
 
-            plt.subplot(2, 3, 3)
+            plt.subplot(2, 2, 2)
             plt.hist(host_I_e, histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"Half light intensity $I_e$ (AB Mag / arcsec)")
             plt.ylabel("Count")
 
-            plt.subplot(2, 3, 4)
+            plt.subplot(2, 2, 3)
             plt.hist(host_r_e, histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"Half light radius $r_e$ (kpc)")
             plt.ylabel("Count")
 
-            plt.subplot(2, 3, 5)
+            plt.subplot(2, 2, 4)
             plt.hist(host_n, histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"Sersic Index $n$")
             plt.ylabel("Count")
 
-            plt.subplot(2, 3, 6)
-            plt.hist(np.array(host_flux_ratio), histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
-            plt.ylabel("Count")
+            # plt.subplot(2, 3, 6)
+            # plt.hist(np.array(host_flux_ratio), histtype='step', color=band_colors[band], label=band)
+            # plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
+            # plt.ylabel("Count")
 
         # ax.legend(bbox_to_anchor=(1.15, 1.05))
         ax.legend(loc="upper left")
@@ -195,39 +195,63 @@ def quantities_plot(all_functions):
             polar_r_e = (np.tan(polar_r_e * pixscale) * d).to(u.kpc)
             polar_I_e = nmgy2ABmag((polar_I_e * pixscale).value)
 
-            plt.subplot(2, 3, 1)
-            plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
-            plt.ylabel("Count")
+            # plt.subplot(2, 3, 1)
+            # plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
+            # plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
+            # plt.ylabel("Count")
 
-            plt.subplot(2, 3, 2)
+            ax = plt.subplot(2, 2, 1)
             plt.hist(polar_ax_ratio, histtype='step', color=band_colors[band], label=band)
             plt.xlabel("Axis ratio (b/a)")
             plt.ylabel("Count")
 
-            plt.subplot(2, 3, 3)
+            plt.subplot(2, 2, 2)
             plt.hist(polar_I_e, histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"Half light intensity $I_e$ (AB Mag / arcsec)")
             plt.ylabel("Count")
 
-            plt.subplot(2, 3, 4)
+            plt.subplot(2, 2, 3)
             plt.hist(polar_r_e, histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"Half light radius $r_e$ (kpc)")
             plt.ylabel("Count")
 
-            ax = plt.subplot(2, 3, 5)
+            plt.subplot(2, 2, 4)
             l = plt.hist(polar_n, histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"Sersic Index $n$")
             plt.ylabel("Count")
 
-            plt.subplot(2, 3, 6)
-            plt.hist(np.array(polar_flux_ratio), histtype='step', color=band_colors[band], label=band)
+            # plt.subplot(2, 3, 6)
+            # plt.hist(np.array(polar_flux_ratio), histtype='step', color=band_colors[band], label=band)
+            # plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
+            # plt.ylabel("Count")
+
+        # ax.legend(bbox_to_anchor=(1.15, 1.05))
+        ax.legend(loc="upper left")
+        plt.tight_layout()
+        plt.savefig(os.path.join(Path(args.o), "polar.png"))
+
+        fig = plt.figure(figsize=(8, 12))
+        for band in "griz":
+            df_band = df[df["band"] == band].copy()
+            flux_ratio = df_band[df_band["label"] == "Host"]["flux_ratio"]
+            host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
+            polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
+            diff_PA = host_PA - polar_PA
+            diff_PA = np.abs(diff_PA)
+            ax = plt.subplot(2, 1, 1)
+            plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
+            plt.ylabel("Count")
+
+            plt.subplot(2, 1, 2)
+            plt.hist(np.array(flux_ratio), histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
             plt.ylabel("Count")
 
-        ax.legend(bbox_to_anchor=(1.15, 1.05))
+
+        ax.legend(loc="upper left")
         plt.tight_layout()
-        plt.savefig(os.path.join(Path(args.o), "polar.png"))
+        plt.savefig(os.path.join(Path(args.o), "extra.png"))
 
     elif args.plot_type == "compare_type":
         for galaxy_type in ["ring", "bulge", "halo"]:
