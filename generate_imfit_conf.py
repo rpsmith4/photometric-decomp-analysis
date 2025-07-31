@@ -396,16 +396,21 @@ def init_guess_1_sersic_1_gauss_ring(img, two_sersic_fit_params, pol_str_type, m
     
     bounds_host = bounds_dict[pol_str_type]["host"]
     host_PA = host_sersic["PA"]
-    host.PA.setValue(host_PA, [host_PA + bounds_host["PA_bounds"][0], host_PA + bounds_host["PA_bounds"][1]]) 
+    # host.PA.setValue(host_PA, [host_PA + bounds_host["PA_bounds"][0], host_PA + bounds_host["PA_bounds"][1]]) 
+    host.PA.setValue(host_PA, fixed=True) 
 
     e = host_sersic["ell"]
-    host.ell.setValue(e, np.clip(np.array([(e + bounds_host["ell_bounds"][0]), e + (bounds_host["ell_bounds"][1])]), 0, 0.75))
+    # host.ell.setValue(e, np.clip(np.array([(e + bounds_host["ell_bounds"][0]), e + (bounds_host["ell_bounds"][1])]), 0, 0.75))
+    host.ell.setValue(e, fixed=True)
     I_e = host_sersic["I_e"]
-    host.I_e.setValue(I_e, [I_e * bounds_host["I_e_factor"][0], I_e * bounds_host["I_e_factor"][1]]) 
+    # host.I_e.setValue(I_e, [I_e * bounds_host["I_e_factor"][0], I_e * bounds_host["I_e_factor"][1]]) 
+    host.I_e.setValue(I_e, fixed=True) 
     r_e = host_sersic["r_e"]
-    host.r_e.setValue(r_e, [r_e * bounds_host["r_e_factor"][0], r_e * bounds_host["r_e_factor"][1]]) # Maybe get an azimuthal average
+    # host.r_e.setValue(r_e, [r_e * bounds_host["r_e_factor"][0], r_e * bounds_host["r_e_factor"][1]]) # Maybe get an azimuthal average
+    host.r_e.setValue(r_e, fixed=True) # Maybe get an azimuthal average
     n = host_sersic["n"]
-    host.n.setValue(n, [0, 10]) # Maybe keep as is
+    # host.n.setValue(n, [0, 10]) # Maybe keep as is
+    host.n.setValue(n, fixed=True) # Maybe keep as is
 
     # host_model.addFunction(host)
     model.addFunction(host)
@@ -420,7 +425,8 @@ def init_guess_1_sersic_1_gauss_ring(img, two_sersic_fit_params, pol_str_type, m
     polar_sersic = functions[1]["parameters"]
 
     polar_PA = polar_sersic["PA"]
-    polar.PA.setValue(polar_PA, [polar_PA + bounds_host["PA_bounds"][0], polar_PA + bounds_host["PA_bounds"][1]])
+    # polar.PA.setValue(polar_PA, [polar_PA + bounds_host["PA_bounds"][0], polar_PA + bounds_host["PA_bounds"][1]])
+    polar.PA.setValue(polar_PA, fixed=True)
 
     '''
     img_rot_polar = scipy.ndimage.rotate(img, angle=polar_PA + 90)
@@ -438,14 +444,18 @@ def init_guess_1_sersic_1_gauss_ring(img, two_sersic_fit_params, pol_str_type, m
         e = 0.2
     '''
     e = polar_sersic["ell"]
-    polar.ell.setValue(e, np.clip(np.array([(e + bounds_polar["ell_bounds"][0]), (e + bounds_polar["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+    # polar.ell.setValue(e, np.clip(np.array([(e + bounds_polar["ell_bounds"][0]), (e + bounds_polar["ell_bounds"][1])]), 0, 0.75)) # May overestimate
+    polar.ell.setValue(e, fixed=True) # May overestimate
     # polar.n.setValue(3, np.clip(np.array([(n + bounds_polar["n_bounds"][0]), (n + bounds_polar["n_bounds"][1])]), 0, 10))# Likely to underestimate
     # polar.A.setValue(n, [0, 10]) # Maybe leave as is
     A = polar_sersic["I_e"] * 2
-    polar.A.setValue(A, [A * bounds_polar["A_factor"][0], A * bounds_polar["A_factor"][1]]) # Likely to underestimate, probably very dim
+    # polar.A.setValue(A, [A * bounds_polar["A_factor"][0], A * bounds_polar["A_factor"][1]]) # Likely to underestimate, probably very dim
+    polar.A.setValue(A) # Likely to underestimate, probably very dim
     R = polar_sersic["r_e"] * 2
-    polar.R_ring.setValue(R, [R * bounds_polar["R_factor"][0], R * bounds_polar["R_factor"][1]]) # Likely to underestimate, maybe get azimuthal average
-    polar.sigma_r.setValue(10, [10 + bounds_polar["sigma_r_bounds"][0], 10 + bounds_polar["sigma_r_bounds"][1]]) # Maybe get some azimuthal average or something
+    # polar.R_ring.setValue(R, [R * bounds_polar["R_factor"][0], R * bounds_polar["R_factor"][1]]) # Likely to underestimate, maybe get azimuthal average
+    polar.R_ring.setValue(R) # Likely to underestimate, maybe get azimuthal average
+    # polar.sigma_r.setValue(10, [10 + bounds_polar["sigma_r_bounds"][0], 10 + bounds_polar["sigma_r_bounds"][1]]) # Maybe get some azimuthal average or something
+    polar.sigma_r.setValue(15) # Maybe get some azimuthal average or something
 
     # polar_model.addFunction(polar)
     '''
