@@ -115,7 +115,7 @@ if __name__ == "__main__":
     # args = parser.parse_args()
 
     # args.p = Path(args.p)
-    p = "/home/ryans/Documents/Photometric Decomp/Outputs/TNG50/PolarRing/TNG167392/"
+    p = "/mnt/c/users/coope/PycharmProjects/LSB Analysis/ferengiTest/PolarRing/TNG167392/"
     im = list()
     bands = "griz"
     for band in bands:
