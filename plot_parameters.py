@@ -112,6 +112,7 @@ def quantities_plot(all_functions):
     df = df.groupby(by="Galaxy", group_keys=True)[df.columns].apply(lambda x: x)
     df = Table.from_pandas(df)
     df = df[df["Distance"] != -1]
+    df = df[df["flux_ratio"] != -1]
     fig = plt.figure()
     band_colors = {
         "g": "g",
@@ -119,8 +120,6 @@ def quantities_plot(all_functions):
         "i" : "firebrick",
         "z" : "blueviolet"
     }
-    # d = np.array(df["Distance"])
-    # TODO: Convert nmgy to AB magnitudes/arcsecond 
     if args.plot_type == "compare_structure":
         fig = plt.figure(figsize=(16, 8))
         plt.suptitle("Host")
@@ -143,7 +142,7 @@ def quantities_plot(all_functions):
             host_I_e = nmgy2ABmag((host_I_e * pixscale).value)
 
 
-            plt.subplot(2, 3, 1)
+            ax = plt.subplot(2, 3, 1)
             plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
             plt.ylabel("Count")
@@ -168,12 +167,13 @@ def quantities_plot(all_functions):
             plt.xlabel(r"Sersic Index $n$")
             plt.ylabel("Count")
 
-            ax = plt.subplot(2, 3, 6)
+            plt.subplot(2, 3, 6)
             plt.hist(np.array(host_flux_ratio), histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
             plt.ylabel("Count")
 
-        ax.legend(bbox_to_anchor=(1.15, 1.05))
+        # ax.legend(bbox_to_anchor=(1.15, 1.05))
+        ax.legend(loc="upper left")
         plt.tight_layout()
         plt.savefig(os.path.join(Path(args.o), "host.png"))
 
@@ -182,7 +182,8 @@ def quantities_plot(all_functions):
         for band in "griz":
             df_band = df[df["band"] == band].copy()
             polar_ax_ratio = df_band[df_band["label"] == "Polar"]["b/a"]
-            polar_I_e = df_band[df_band["label"] == "Polar"]["parameters.I_e"] * u.nmgy
+            polar_I_e = df_band[df_band["label"] == "Polar"]["parameters.I_e"] * u.nmgy / u.pix
+            polar_flux_ratio = df_band[df_band["label"] == "Polar"]["flux_ratio"]
             polar_r_e = df_band[df_band["label"] == "Polar"]["parameters.r_e"] * u.pix
             polar_n = df_band[df_band["label"] == "Polar"]["parameters.n"]
             d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
@@ -192,6 +193,7 @@ def quantities_plot(all_functions):
             diff_PA = np.abs(diff_PA)
 
             polar_r_e = (np.tan(polar_r_e * pixscale) * d).to(u.kpc)
+            polar_I_e = nmgy2ABmag((polar_I_e * pixscale).value)
 
             plt.subplot(2, 3, 1)
             plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
@@ -205,7 +207,7 @@ def quantities_plot(all_functions):
 
             plt.subplot(2, 3, 3)
             plt.hist(polar_I_e, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"Half light intensity $I_e$ (nanomaggies)")
+            plt.xlabel(r"Half light intensity $I_e$ (AB Mag / arcsec)")
             plt.ylabel("Count")
 
             plt.subplot(2, 3, 4)
@@ -217,6 +219,12 @@ def quantities_plot(all_functions):
             l = plt.hist(polar_n, histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"Sersic Index $n$")
             plt.ylabel("Count")
+
+            plt.subplot(2, 3, 6)
+            plt.hist(np.array(polar_flux_ratio), histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
+            plt.ylabel("Count")
+
         ax.legend(bbox_to_anchor=(1.15, 1.05))
         plt.tight_layout()
         plt.savefig(os.path.join(Path(args.o), "polar.png"))
@@ -224,52 +232,71 @@ def quantities_plot(all_functions):
     elif args.plot_type == "compare_type":
         for galaxy_type in ["ring", "bulge", "halo"]:
             fig = plt.figure(figsize=(16, 8))
-            plt.suptitle(f"Host (Polar {galaxy_type})")
-            for band in "griz":
-                df_type = df[df["Galaxy_type"] == galaxy_type].copy()
-                df_band = df_type[df_type["band"] == band]
-                host_ax_ratio = df_band[df_band["label"] == "Host"]["b/a"]
-                host_I_e = df_band[df_band["label"] == "Host"]["parameters.I_e"] * u.nmgy
-                host_r_e = df_band[df_band["label"] == "Host"]["parameters.r_e"] * u.pix
-                host_n = df_band[df_band["label"] == "Host"]["parameters.n"]
-                d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
-                host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
-                polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
-                diff_PA = host_PA - polar_PA
-                diff_PA = np.abs(diff_PA)
+            # plt.suptitle(f"Host (Polar {galaxy_type})")
+            for structure in ["Host", "Polar"]:
+                for band in "griz":
+                    df_type = df[df["Galaxy_type"] == galaxy_type].copy()
+                    df_band = df_type[df_type["band"] == band]
+                    ax_ratio = df_band[df_band["label"] == structure]["b/a"]
+                    I_e = df_band[df_band["label"] == structure]["parameters.I_e"] * u.nmgy
+                    flux_ratio = df_band[df_band["label"] == "Host"]["flux_ratio"]
+                    r_e = df_band[df_band["label"] == structure]["parameters.r_e"] * u.pix
+                    n = df_band[df_band["label"] == structure]["parameters.n"]
+                    d = df_band[df_band["label"] == structure]["Distance"] * u.Mpc
 
-                pixscale = 0.262 * u.arcsec / u.pix
+                    host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
+                    polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
+                    diff_PA = host_PA - polar_PA
+                    diff_PA = np.abs(diff_PA)
 
-                host_r_e = (np.tan(host_r_e * pixscale) * d).to(u.kpc)
+                    pixscale = 0.262 * u.arcsec / u.pix
+
+                    r_e = (np.tan(r_e * pixscale) * d).to(u.kpc)
+                    I_e = nmgy2ABmag((I_e * pixscale).value)
+
+                    if structure == "Host":
+                        label = band
+                        ls = "-"
+                    else:
+                        label = None
+                        ls = "--"
+                    
+
+                    ax = plt.subplot(2, 3, 1)
+                    plt.hist(diff_PA, histtype='step', color=band_colors[band], label=label, ls=ls)
+                    plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
+                    plt.ylabel("Count")
+
+                    plt.subplot(2, 3, 2)
+                    plt.hist(ax_ratio, histtype='step', color=band_colors[band], label=label, ls=ls)
+                    plt.xlabel("Axis ratio (b/a)")
+                    plt.ylabel("Count")
+
+                    plt.subplot(2, 3, 3)
+                    plt.hist(I_e, histtype='step', color=band_colors[band], label=label, ls=ls)
+                    plt.xlabel(r"Half light intensity $I_e$ (AB Mag / arcsec)")
+                    plt.ylabel("Count")
+
+                    plt.subplot(2, 3, 4)
+                    plt.hist(r_e, histtype='step', color=band_colors[band], label=label, ls=ls)
+                    plt.xlabel(r"Half light radius $r_e$ (kpc)")
+                    plt.ylabel("Count")
+
+                    plt.subplot(2, 3, 5)
+                    plt.hist(n, histtype='step', color=band_colors[band], label=label, ls=ls)
+                    plt.xlabel(r"Sersic Index $n$")
+                    plt.ylabel("Count")
+
+                    plt.subplot(2, 3, 6)
+                    plt.hist(np.array(flux_ratio), histtype='step', color=band_colors[band], label=label, ls=ls)
+                    plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
+                    plt.ylabel("Count")
 
 
-                plt.subplot(2, 3, 1)
-                plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
-                plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
-                plt.ylabel("Count")
-
-                plt.subplot(2, 3, 2)
-                plt.hist(host_ax_ratio, histtype='step', color=band_colors[band], label=band)
-                plt.xlabel("Axis ratio (b/a)")
-                plt.ylabel("Count")
-
-                plt.subplot(2, 3, 3)
-                plt.hist(host_I_e, histtype='step', color=band_colors[band], label=band)
-                plt.xlabel(r"Half light intensity $I_e$ (nanomaggies)")
-                plt.ylabel("Count")
-
-                plt.subplot(2, 3, 4)
-                plt.hist(host_r_e, histtype='step', color=band_colors[band], label=band)
-                plt.xlabel(r"Half light radius $r_e$ (kpc)")
-                plt.ylabel("Count")
-
-                ax = plt.subplot(2, 3, 5)
-                plt.hist(host_n, histtype='step', color=band_colors[band], label=band)
-                plt.xlabel(r"Sersic Index $n$")
-                plt.ylabel("Count")
-            ax.legend(bbox_to_anchor=(1.15, 1.05))
-            plt.tight_layout()
-            plt.savefig(os.path.join(Path(args.o), f"host_{galaxy_type}.png"))
+                # ax.legend(bbox_to_anchor=(1.15, 1.05))
+                ax.legend(loc="upper left")
+                plt.tight_layout()
+                plt.savefig(os.path.join(Path(args.o), f"host_{galaxy_type}.png"))
     return None
 
 def get_functions_from_files(root, galaxy_type, table=None):
@@ -279,14 +306,16 @@ def get_functions_from_files(root, galaxy_type, table=None):
     global total_bad_fit
     global bound_sticking
     # print(model_files)
-    analysis_path = "/home/ryans/Documents/Photometric Decomp/Analysis/"
-    f = open(analysis_path + "exclude.txt", "r")
-    gals_to_exclude = f.readlines()
-    gals_to_exclude = [gal_to_exclude.strip("\n") for gal_to_exclude in gals_to_exclude]
+    if not args.dont_exclude:
+        analysis_path = "/home/ryans/Documents/Photometric Decomp/Analysis/"
+        f = open(analysis_path + "exclude.txt", "r")
+        gals_to_exclude = f.readlines()
+        gals_to_exclude = [gal_to_exclude.strip("\n") for gal_to_exclude in gals_to_exclude]
     files = os.listdir(root)
     for model_file in model_files:
-        if any(gal_to_exclude in model_file for gal_to_exclude in gals_to_exclude):
-            continue
+        if not args.dont_exclude:
+            if any(gal_to_exclude in model_file for gal_to_exclude in gals_to_exclude):
+                continue
         functions, chi_sq, chi_sq_red, status, status_message = parse_results(model_file, os.path.basename(root), galaxy_type, table)
         root = Path(root).resolve()
         img_file = f"image_{functions[0]['band']}.fits"
@@ -360,11 +389,13 @@ def main(args):
                     "Polar_Tilted Bulges": "bulge",
                     "Polar_Tilted Halo": "halo"
                 }
+                galaxy_type = None
                 for folder in ["Polar Rings", "Polar_Tilted Bulges", "Polar_Tilted Halo"]: # Attempt to autodetect type
                     if folder in root:
                         galaxy_type = folder_type_dict[folder]
                 # model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
-                all_functions = get_functions_from_files(Path(root).resolve(), galaxy_type, table)
+                if not(galaxy_type == None):
+                    all_functions = get_functions_from_files(Path(root).resolve(), galaxy_type, table)
     else:
         # model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
         all_functions = get_functions_from_files(root=Path(p).resolve(), galaxy_type=None, table=table)
@@ -409,6 +440,7 @@ if __name__ == "__main__":
     parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
     parser.add_argument("--mask", help="Use mask on the original image", action="store_true")
     parser.add_argument("--plot_type", help="Type of plots to make", choices=["compare_structure", "compare_type"], default="compare_structure")
+    parser.add_argument("--dont_exclude", help="Don't exclude galaxies in the 'exclude.txt' file", action="store_true")
     parser.add_argument("-v", help="Show chi-sq warnings for fits", action="store_true")
     parser.add_argument("-vv", help="Show chi-sq and parameter bounds warnings for fits", action="store_true")
     parser.add_argument("-vvv", help="Show chi-sq and parameter bounds (specific) warnings for fits", action="store_true")
