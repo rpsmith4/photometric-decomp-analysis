@@ -34,7 +34,12 @@ IMAN_DIR = os.path.expanduser("~/Documents/iman_new")
 sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
 import make_model_ima_imfit
 
+from get_flux_ratios import get_flux_ratios
+
 # warnings.filterwarnings("ignore")
+
+def nmgy2ABmag(nmgy):
+    return 22.5 - 2.5 * np.log10(nmgy)
 
 def parse_results(file, galaxy_name, galaxy_type, table=None):
     model = pyimfit.parse_config_file(file)
@@ -89,6 +94,12 @@ def parse_results(file, galaxy_name, galaxy_type, table=None):
         e = func_dict["parameters"]["ell"]
         axis_ratio = np.sqrt(-1*(np.square(e) - 1)) # b/a ratio
         func_dict["b/a"] = axis_ratio
+        flux_ratios = get_flux_ratios(model_file=file)
+        if func_dict["label"] == "Host":
+            func_dict["flux_ratio"] = flux_ratios["Host"]
+        elif func_dict["label"] == "Polar":
+            func_dict["flux_ratio"] = flux_ratios["Polar"]
+
         functions.append(func_dict)
     
     return functions, chi_sq, chi_sq_red, status, status_message
@@ -116,9 +127,10 @@ def quantities_plot(all_functions):
         for band in "griz":
             df_band = df[df["band"] == band].copy()
             host_ax_ratio = df_band[df_band["label"] == "Host"]["b/a"]
-            host_I_e = df_band[df_band["label"] == "Host"]["parameters.I_e"] * u.nmgy
+            host_I_e = df_band[df_band["label"] == "Host"]["parameters.I_e"] * u.nmgy / u.pix
             host_r_e = df_band[df_band["label"] == "Host"]["parameters.r_e"] * u.pix
             host_n = df_band[df_band["label"] == "Host"]["parameters.n"]
+            host_flux_ratio = df_band[df_band["label"] == "Host"]["flux_ratio"]
             d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
             host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
             polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
@@ -128,6 +140,7 @@ def quantities_plot(all_functions):
             pixscale = 0.262 * u.arcsec / u.pix
 
             host_r_e = (np.tan(host_r_e * pixscale) * d).to(u.kpc)
+            host_I_e = nmgy2ABmag((host_I_e * pixscale).value)
 
 
             plt.subplot(2, 3, 1)
@@ -142,7 +155,7 @@ def quantities_plot(all_functions):
 
             plt.subplot(2, 3, 3)
             plt.hist(host_I_e, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"Half light intensity $I_e$ (nanomaggies)")
+            plt.xlabel(r"Half light intensity $I_e$ (AB Mag / arcsec)")
             plt.ylabel("Count")
 
             plt.subplot(2, 3, 4)
@@ -150,10 +163,16 @@ def quantities_plot(all_functions):
             plt.xlabel(r"Half light radius $r_e$ (kpc)")
             plt.ylabel("Count")
 
-            ax = plt.subplot(2, 3, 5)
+            plt.subplot(2, 3, 5)
             plt.hist(host_n, histtype='step', color=band_colors[band], label=band)
             plt.xlabel(r"Sersic Index $n$")
             plt.ylabel("Count")
+
+            ax = plt.subplot(2, 3, 6)
+            plt.hist(np.array(host_flux_ratio), histtype='step', color=band_colors[band], label=band)
+            plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
+            plt.ylabel("Count")
+
         ax.legend(bbox_to_anchor=(1.15, 1.05))
         plt.tight_layout()
         plt.savefig(os.path.join(Path(args.o), "host.png"))
@@ -199,15 +218,9 @@ def quantities_plot(all_functions):
             plt.xlabel(r"Sersic Index $n$")
             plt.ylabel("Count")
         ax.legend(bbox_to_anchor=(1.15, 1.05))
-        # ax_leg = plt.subplot(2,3,6)
-        # ax_leg.legend(handles=[l[-1][0]])
         plt.tight_layout()
         plt.savefig(os.path.join(Path(args.o), "polar.png"))
-        
-        #     for function in functions:
-        #         if function["label"] == "Host":
-        #             print("")
-        #             # host_PAs.append(function["PA"])
+
     elif args.plot_type == "compare_type":
         for galaxy_type in ["ring", "bulge", "halo"]:
             fig = plt.figure(figsize=(16, 8))
@@ -266,8 +279,14 @@ def get_functions_from_files(root, galaxy_type, table=None):
     global total_bad_fit
     global bound_sticking
     # print(model_files)
+    analysis_path = "/home/ryans/Documents/Photometric Decomp/Analysis/"
+    f = open(analysis_path + "exclude.txt", "r")
+    gals_to_exclude = f.readlines()
+    gals_to_exclude = [gal_to_exclude.strip("\n") for gal_to_exclude in gals_to_exclude]
     files = os.listdir(root)
     for model_file in model_files:
+        if any(gal_to_exclude in model_file for gal_to_exclude in gals_to_exclude):
+            continue
         functions, chi_sq, chi_sq_red, status, status_message = parse_results(model_file, os.path.basename(root), galaxy_type, table)
         root = Path(root).resolve()
         img_file = f"image_{functions[0]['band']}.fits"
@@ -297,6 +316,8 @@ def get_functions_from_files(root, galaxy_type, table=None):
         except Exception as e:
             print(f"Failed for {Path(img_file)}")
             print(e)
+
+
         all_functions.extend(functions)
         total_fit += 1
         if chi_sq_red > threshold or chi_sq_red != chi_sq_red:
