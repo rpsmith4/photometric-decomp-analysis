@@ -169,9 +169,9 @@ def edge_index(a, rx, ry):
     # Condition for elements on the "edges" of the specified rectangle
     mask = ( (b == rx) & (c <= ry) ) | ( (c == ry) & (b <= rx) )
     
-    indices = np.where(mask.flatten())
+    indices = np.where(mask.flatten())[0]
 
-    if len(indices) == 0:
+    if np.size(indices) == 0:
         return np.array([-1])
     
     return indices
@@ -512,7 +512,7 @@ def ferengi_clip_edge(npix_clip, im, auto_frac=2, clip_also=None, norm=False):
         
         # Reshape im and i to 1D arrays for easy indexing
         im_flat = im.flatten()
-        
+
         mn, sg, nr = resistant_mean(im_flat[i], 3)
         sg *= np.sqrt(len(i) - 1 - nr) # IDL's specific sigma calculation
         
@@ -547,7 +547,7 @@ def ferengi_clip_edge(npix_clip, im, auto_frac=2, clip_also=None, norm=False):
         if clip_also is not None:
             # Need to ensure clip_also is a mutable array like numpy array, not just a keyword flag
             clip_also[:] = clip_also[npix_clip:sz[0]-npix_clip, npix_clip:sz[1]-npix_clip]
-        im[:] = im[npix_clip:sz[0]-npix_clip, npix_clip:sz[1]-npix_clip]
+        im[:] = im[npix_clip:sz[1]-npix_clip, npix_clip:sz[0]-npix_clip]
     
     if norm:
         if clip_also is not None:
@@ -867,7 +867,9 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         # Weight the closest filters in rest-frame more (this logic is complex from IDL)
         # For simplicity, and until a full K-correct implementation, we will use a simplified weighting.
         # This part of the code is highly dependent on the KCORRECT library.
-        
+        # (Moved to the part that actually applies the weights)
+
+
         # Initial downscale for the first band
         im_ds = ferengi_downscale(im[:, :, 0], zlo, zhi, scllo, sclhi, nofluxscl=noflux, evo=evo)
         
@@ -927,7 +929,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         
         # Select pixels for K-correction
         good = np.where((nhi >= 3) & (np.abs(nsig[:, :, filt_i]) > siglim))
-        goodsize = np.size(good[0]) + np.size(good[1])
+        goodsize = np.size(good[0])
         if goodsize == 0:
             print('less than 3 filters have high sigma pixels')
             good = np.where((nhi >= 2) & (np.abs(nsig[:, :, filt_i]) > siglim))
@@ -939,7 +941,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             good = np.where((nhi >= 0) & (np.abs(nsig[:, :, filt_i]) > siglim)) # All pixels if no high sigma
         
         good1 = np.where((np.abs(nsig[:, :, filt_i]) > 0.25) & (np.abs(nsig[:, :, filt_i]) <= siglim))
-        good1size = np.size(good1[0]) + np.size(good1[1])
+        good1size = np.size(good1[0])
         if good1size > 0:
             # Select only 50% of these pixels
             if good1size > 1: # random_indices expects len > 0
@@ -970,22 +972,40 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             err_for_k[~np.isfinite(err_for_k)] = 99999
             err_for_k = np.minimum(err_for_k, 99999) # Clip large errors
 
-            # Setup array with minimum errors
-            err0 = err0_mag[:, np.newaxis] # Ensure err0_mag is (nbands, 1)
+            # Setup array with minimum errors for SDSS
+            err0 = (err0_mag[np.newaxis, :].T @ np.ones(np.size(maggies_for_k[0, :]))[:, np.newaxis].T).T
+            print(err0.shape)
+            print(err_for_k.shape)
+            #err0 = err0_mag[:, np.newaxis] # Ensure err0_mag is (nbands, 1)
             # The original IDL code's `err0_mag#(fltarr(n_elements(maggies[0, *]))+1)`
             # is equivalent to broadcasting err0_mag across the second dimension.
             err0_expanded = np.tile(err0, (1, ngood))
 
             # Weights (from IDL example, needs specific implementation from the source)
             # For simplicity, using a uniform weight if specific logic is not clear or implemented.
-            weight = np.ones(nbands)[:, np.newaxis] # Default uniform weights
+            dz1 = np.abs(lambda_hi - lambda_lo)
+            if hasattr(dz1, '__iter__'):  # check if is iterable before applying weights
+                ord = np.argsort(dz1)
+                weight = np.ones(nbands)
+                if dz1[ord[0]] == 0:
+                    if nbands == 2: weight[ord] = [10, 4]
+                    if nbands == 3: weight[ord] = [10, 4, 4]
+                    if nbands >= 4: weight[ord] = np.concatenate(([10, 4, 4], np.ones(nbands - 3)))
+                else:
+                    if nbands == 2: weight[ord] = np.array([10, 8])
+                    if nbands == 3 or nbands == 4: weight[ord] = np.concatenate(([10, 8], np.zeros(nbands - 2) + 4))
+                    if nbands > 4: weight[ord] = np.concatenate(([10, 8, 4, 4], np.ones(nbands - 4)))
+            weight = (weight[np.newaxis, :].T @ np.ones(np.size(maggies_for_k[0, :]))[:, np.newaxis].T).T
+            #weight = np.ones(nbands)[:, np.newaxis] # Default uniform weights
             # The complex weighting logic from IDL source (lines 216-218) should be re-implemented
             # here if accuracy is critical and KCORRECT requires it.
 
             # Add image errors and minimum errors in quadrature
-            err_combined = np.sqrt(err0_expanded**2 + err_for_k**2) / weight
+            err_for_k = err_for_k.T
+            err_combined = np.sqrt(err0**2 + err_for_k**2) / weight
 
             # Convert errors to inverse variance for KCORRECT
+            maggies_for_k = maggies_for_k.T
             ivar = (2.5 / np.log(10) / err_combined / np.array(maggies_for_k))**2
             ivar[~np.isfinite(ivar)] = np.max(ivar[np.isfinite(ivar)]) if np.any(np.isfinite(ivar)) else 1.0 # Handle inf/nan
 
@@ -999,10 +1019,15 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             else:
                 responses_in = ['sdss_g0', 'sdss_r0', 'sdss_z0']
 
+            maggies_for_k = maggies_for_k.T
             maggies_for_k = np.moveaxis(maggies_for_k, -1, 0)
             ivar = np.moveaxis(ivar, -1, 0)
 
             kc = kcorrect.kcorrect.Kcorrect(responses=responses_in)
+            print(ivar.shape)
+            print(z_tmp_lo.shape)
+            print(maggies_for_k.shape)
+            ivar = ivar.T
             coeffs = kc.fit_coeffs(redshift=z_tmp_lo, maggies=maggies_for_k, ivar=ivar)           
             k = kc.kcorrect(redshift=z_tmp_lo, coeffs=coeffs)
             maggies_reconstructed = kc.reconstruct(redshift=z_tmp_lo, coeffs=coeffs)
@@ -1071,21 +1096,21 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
                 # for band_idx in range(nbands):
                 #     im_ds[:, :, band_idx][good] = maggies_reconstructed[band_idx, :] / (1. + zhi)
                 
-        # Background: choose closest in redshift-space (this logic also from original)
-        # Using the original image before K-correction to determine background.
-        # This seems to be a separate path depending on `nok`.
-        if nok: # This block is actually for nok, which means single band
-            bg = im_ds / (1. + zhi) # Already processed in `im_nok`
-        else:
-            # If multi-band, the 'bg' seems to be derived from the downscaled image of the best-fit filter.
-            bg = im_ds[:, :, filt_i] / (1. + zhi) # From the best-fit filter
-            im_ds = im_ds[:, :, filt_i] / (1. + zhi) 
-            # im_ds = np.squeeze(im_ds, axis=-1)
-            # If K-correction was applied, `im_ds` has the K-corrected values already.
-        
-        im_ds = maggies2cts(im_ds, thi, zphi)
-        if not nok: # Only if K-correction was attempted
-            bg = maggies2cts(bg, thi, zphi) # Convert background too
+    # Background: choose closest in redshift-space (this logic also from original)
+    # Using the original image before K-correction to determine background.
+    # This seems to be a separate path depending on `nok`.
+    if nok: # This block is actually for nok, which means single band
+        bg = im_ds / (1. + zhi) # Already processed in `im_nok`
+    else:
+        # If multi-band, the 'bg' seems to be derived from the downscaled image of the best-fit filter.
+        bg = im_ds[:, :, filt_i] / (1. + zhi) # From the best-fit filter
+        im_ds = im_ds[:, :, filt_i] / (1. + zhi)
+        # im_ds = np.squeeze(im_ds, axis=-1)
+        # If K-correction was applied, `im_ds` has the K-corrected values already.
+
+    im_ds = maggies2cts(im_ds, thi, zphi)
+    if not nok: # Only if K-correction was attempted
+        bg = maggies2cts(bg, thi, zphi) # Convert background too
 
     # im_ds = im[..., np.newaxis]
 
@@ -1104,7 +1129,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
     if not nok:
         # Check for large outliers after K-correction for multi-band images
         # This part of the IDL code is to clean extreme residuals.
-        m_im_ds, sig_im_ds, nrej_im_ds = resistant_mean(im_ds.flatten(), 3) # TODO: Check if this is okay
+        m_im_ds, sig_im_ds, nrej_im_ds = resistant_mean(im_ds, 3)
         sig_im_ds *= np.sqrt(im_ds.size - 1 - nrej_im_ds)
         
         idx_outliers = np.where(np.abs(im_ds) > 10 * sig_im_ds)
