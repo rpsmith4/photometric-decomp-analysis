@@ -1203,7 +1203,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         temp_im_ds_conv = list()
         # im_ds = np.squeeze(im_ds, axis=-1)
         im_ds = ferengi_convolve_plus_noise(im_ds / thi, psf_t, sky, thi,
-                                                                border_clip=3, extend=True) # extend=False means crop borders, though is true in ferengi.pro?
+                                                                border_clip=3, extend=False) # extend=False means crop borders, though is true in ferengi.pro?
     
     # Write output FITS files
     fits.writeto(f"{im_out_file}", im_ds, overwrite=True)
