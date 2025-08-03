@@ -113,7 +113,7 @@ def main(im, psf, sky, out_bands, galaxy_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     help="Artificially redshift TNG50 simulation galaxies with FERENGI.")
+                                     description="Artificially redshift TNG50 simulation galaxies with FERENGI.")
     parser.add_argument("-p", help="Path to folder containing fits simulation images", default=".")
     parser.add_argument("-b", help="Output bands", nargs="+", choices=["g", "r", "i", "z"], default=["g", "r", "i", "z"])
     args = parser.parse_args()
