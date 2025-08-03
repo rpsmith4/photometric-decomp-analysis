@@ -5,6 +5,7 @@ from pathlib import Path
 from astropy.io import fits
 import astropy.units as u
 import matplotlib.pyplot as plt
+import os
 
 # INPUTS:
 #   sky = high redshift sky background image
@@ -64,7 +65,7 @@ def simunits2cts(simim, pixarea):
     simim = simim * 10 ** 6 * 10 ** (-23) * pixarea # MJy/sr to ergs/s/cm**2/Hz (fnu) /pixel?
     return ferengi.maggies2cts(ferengi.fnu2maggies(simim), expt=3000000, zp=22.5) # fnu/pixel -> maggies/pixel -> cnts/pixel
 
-def main(im, psf, sky):
+def main(im, psf, sky, out_bands, galaxy_name):
     # 1 pixel is 100 pc 
     pixscale = 0.262 * u.arcsecond
     pixarea = pixscale ** 2
@@ -76,70 +77,70 @@ def main(im, psf, sky):
     sky = ferengi.maggies2cts(sky * 10 ** (-9), expt=1, zp=22.5) # sky is in nmgy
     # sky = np.zeros_like(sky)
     # lam = 0.000799898 
-    # imerr = np.random.poisson(lam=lam, size=im.shape) # nanomaggies
+    # imerr = np.random.poisson(lam=lam, size=im.shape) # nanomaggies # Already added from SKIRT
     # imerr = ferengi.maggies2cts(imerr, expt=1, zp = 22.5)
     imerr = np.zeros_like(im) # Poisson Noise alread added
     psflo = psf
     psfhi = psf[:, :, 0] # Using just the g band psf
-    # psflo = psf
-    # psfhi = psf # Using just the g band psf
     # erro0_mag = np.array([0, 0, 0, 0])
     erro0_mag = np.array([0.02, 0.02, 0.02, 0.03]) # From SDSS
     filter_lo = ["g", "r", "i", "z"]
-    # filter_lo = ["g"]
     lambda_lo = np.array([4640, 6580, 8060, 9000]) # Taken from Wikipedia
-    # lambda_lo = [4640]
-    # lambda_lo = 4640
+
     zlo = 0.03 # TODO: Figure out issues with zlo < ~0.03
     zhi = 0.5
-    lambda_hi = 4640
     scllo = pixscale.value
     zplo = [22.5, 22.5, 22.5, 22.5] # magnitudes
-    # zplo = 22.5 # magnitudes
-    tlo = [1, 1, 1, 1] 
-    # tlo = 1 
+    tlo = [1, 1, 1, 1]
     filter_hi = filter_lo
     sclhi = pixscale.value
     zphi = 22.5
     thi = 1
 
-    im_out_file = "output.fits"
-    psf_out_file = "output_psf.fits"
+    band_wav = {
+        "g": 4640,
+        "r": 6580,
+        "i": 8060,
+        "z": 9000
+    } # Taken from Wikipedia, Angstroms
 
-    # TODO: Currently produces weird looking images, need to check indices of some parts of the code
-    ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=False)
+    for band in out_bands:
+        filter_hi = band
+        lambda_hi = band_wav[band]
+        im_out_file = f"{galaxy_name}_{band}_redshift.fits"
+        psf_out_file = f"{galaxy_name}_psf_{band}_recon.fits"
+        # TODO: Currently produces weird looking images, need to check indices of some parts of the code
+        ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hello")
-    # parser.add_argument("-p", help="Path to fits simulation image", default=".")
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser(
+    # ... other options ...
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-p", help="Path to folder containing fits simulation images", default=".")
+    parser.add_argument("-b", help="Output band (Allowed: g,r,i, and/or z)", default="g")
+    args = parser.parse_args()
+    args.p = Path(args.p)
+    galaxy_name = os.path.basename(args.p)
 
-    # args.p = Path(args.p)
-    p = "/mnt/c/users/coope/PycharmProjects/LSB Analysis/ferengiTest/PolarRing/TNG167392/"
     im = list()
     bands = "griz"
     for band in bands:
-        im.append(fits.open(p + f"TNG167392_E_SDSS_{band}.fits")[0].data)
+        im.append(fits.getdata(os.path.join(args.p, f"{galaxy_name}_E_SDSS_{band}.fits")))
     im = np.array(im)
     im = np.moveaxis(im, 0, -1)
-    # im = im.reshape(im.shape[1], im.shape[2], len(bands))
     # In the shape of (x, y, bands)
-
-    # im = fits.open(p + f"TNG167392_E_SDSS_g.fits")[0].data
 
     psf = list()
     for band in bands:
-        # psf.append(fits.open(p + f"psf_core_{band}.fits")[0].data)
-        psf.append(fits.open(p + f"psf_patched_g.fits")[0].data)
+        psf.append(fits.getdata(os.path.join(args.p, f"psf_patched_{band}.fits")))
     psf = np.array(psf)
     psf = np.moveaxis(psf, 0, -1)
     # In the shape of (x, y, bands)
-    # psf = fits.open(p + f"psf_patched_g.fits")[0].data
-
     
     rng = np.random.default_rng()
     mu = 0
     stddev = np.sqrt(4.00737e-06) # Taken from a DESI image
     sky = rng.normal(mu, stddev, size=np.shape(im)[:2]) # nmgy
-
-    main(im, psf, sky)
+    os.chdir(args.p)
+    main(im, psf, sky, out_bands=args.b, galaxy_name=galaxy_name)
