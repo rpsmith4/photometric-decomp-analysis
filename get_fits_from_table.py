@@ -29,17 +29,14 @@ def main(args):
         
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Hello")
+    parser = argparse.ArgumentParser(description="Read an excel spreadsheet and download the galaxies inside. Also does not download duplicate galaxies that may be under a different name.")
     parser.add_argument("-i", help="Input spreadsheet")
     parser.add_argument("-o", help="Output directory for files")
     parser.add_argument("--dr", help="Data Release (dr9 or dr10)", default="dr10")
     parser.add_argument("--factor", help="Factor by which to multiply the R26 isphote radius by", default=3)
     parser.add_argument("--bands", help="Bands to download", default="griz")
-    parser.add_argument("--fits", help="Download the FITS file", action="store_true")
-    parser.add_argument("--mask", help="Estimates and creates a mask", action="store_true")
-    parser.add_argument("--psf", help="Downloads the core PSF and estimates and extended PSF", action="store_true")
-    parser.add_argument("--wm", help="Downloads the inverse variance map (weight map)", action="store_true")
-    parser.add_argument("--jpg", help="Downloads a jpg image cutout", action="store_true")
+    parser.add_argument("--files", nargs="+", choices=["fits", "mask", "psf", "wm", "jpg"],
+                        help="Files to download. 'fits' for FITS image file, 'mask' to generate a mask with SExtractor (FITS image must exist), 'psf' for the core and estimated extended PSF, 'wm' for inverse-variance (weight) map (must be used with 'fits'), and 'jpg' for a coadded JPG image.", default=["fits", "mask", "psf", "wm", "jpg"])
     parser.add_argument("--no_make_folder", help="Decide whether to make separate folders for each galaxy", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing fits files", action="store_true")
 

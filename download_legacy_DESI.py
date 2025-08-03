@@ -3,11 +3,6 @@
 import subprocess
 import math
 from time import time, sleep
-import urllib.request
-import sys
-import os
-import glob
-import shutil
 import argparse
 import numpy as np
 from io import BytesIO
@@ -49,7 +44,7 @@ def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9
                 "size": 2*RR,
                 "layer": "ls-" + dr,
                 "pixscale": 0.262,
-                "invvar": True
+                "invvar": ("wm" in file_types)
             }
             try:
                 hdu = fits.open(get_data(url_new, params))
@@ -146,6 +141,9 @@ def main(names, RA, DEC, R, bands='grz', pixscale=0.262, dr='dr9', file_types=["
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Download from Legacysurvey")
+    parser = argparse.ArgumentParser(
+        description="Download from DESI Legacy Survey",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("ra", help="Right ascension [deg]", type=float)
     parser.add_argument("dec", help="Declination [deg]", type=float)
     parser.add_argument("width", help="Width of the image [arcmin]", type=float)

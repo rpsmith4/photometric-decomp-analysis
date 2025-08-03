@@ -1,11 +1,6 @@
-import glob
-import matplotlib.pyplot as plt
 import numpy as np
-import os
-import math
 
 from astropy.convolution import convolve
-from astropy.io import fits
 
 from photutils.background import Background2D, MedianBackground
 from photutils.segmentation import detect_sources, make_2dgaussian_kernel, SourceCatalog, deblend_sources

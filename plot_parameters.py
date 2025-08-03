@@ -3,39 +3,24 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 import os
-import math
 
-from astropy.convolution import convolve
 from astropy.io import fits
 from astropy.constants import c
 from astropy.table import Table
 
-from photutils.background import Background2D, MedianBackground
-from photutils.segmentation import detect_sources, make_2dgaussian_kernel, SourceCatalog, deblend_sources
-
-from scipy.ndimage import rotate
-import scipy.integrate as integrate
-import scipy
 import pyimfit
 import pandas as pd
 
 import argparse
 from pathlib import Path
 
-from photutils.isophote import EllipseGeometry
-from photutils.aperture import EllipticalAperture
-from photutils.isophote import Ellipse
-from photutils.isophote import build_ellipse_model
-
 import astropy.units as u
-import warnings
+import subprocess
 
 import sys
 IMAN_DIR = os.path.expanduser("~/Documents/iman_new")
 sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
 import make_model_ima_imfit
-
-from get_flux import get_flux
 
 # warnings.filterwarnings("ignore")
 
@@ -43,6 +28,33 @@ from get_flux import get_flux
 # Range should be -19 to -23 for abs mag
 def flux2ABmag(flux):
     return 22.5 - 2.5 * np.log10(flux)
+
+def get_flux(model_file):
+    result = subprocess.run(["makeimage", f"{model_file}", "--print-fluxes"], capture_output=True)
+    # print(result.stdout.decode("utf-8"))
+
+    lines = result.stdout.decode("utf-8").split("\n")
+    flux_ratios = {}
+    flux = {}
+    for line in lines:
+        line = line.split(" ")
+        line = list(filter(None, line))
+
+        if "Host" in line:
+            flux_ratios["Host"] = float(line[3])
+            flux["Host"] = float(line[1])
+            if float(line[3]) != float(line[3]):
+                print(f"Nan flux ratio for {model_file}")
+        elif "Polar" in line:
+            flux_ratios["Polar"] = float(line[3])
+            flux["Polar"] = float(line[1])
+    if flux_ratios == {}:
+        print(f"Unable to determine flux ratios for {model_file}")
+        flux_ratios = {
+            "Host": -1,
+            "Polar": -1
+        }
+    return flux_ratios, flux
 
 def parse_results(file, galaxy_name, galaxy_type, table=None):
     model = pyimfit.parse_config_file(file)
@@ -64,8 +76,6 @@ def parse_results(file, galaxy_name, galaxy_type, table=None):
                     uncs[func_label][func_param] = float(unc) # Extremely janky way to get the uncertainties
                 except:
                     uncs[func_label][func_param] = None
-    # print(status)
-    # print(status_message)
     chi_sq = float(lines[7].split(" ")[-1])
     chi_sq_red = float(lines[8].split(" ")[-1])
     functions = []
@@ -82,7 +92,8 @@ def parse_results(file, galaxy_name, galaxy_type, table=None):
         func_dict["band"] = band
         func_dict["Galaxy"] = galaxy_name
         func_dict["Galaxy_type"] = galaxy_type
-        # TODO: Get other parameters here (or somewhere somehow)
+        
+        # Gets other parameters from result
         if table:
             H_0 = 70.8 * u.km / u.s / u.Mpc
             z = table["GALAXY" == galaxy_name]["Z_LEDA"]
@@ -110,9 +121,8 @@ def parse_results(file, galaxy_name, galaxy_type, table=None):
     return functions, chi_sq, chi_sq_red, status, status_message
 
 def quantities_plot(all_functions):
-    # TODO: Will have to account for the different types of fits at some point
-    # print(all_functions)
-    # df = pd.DataFrame(all_functions)
+    # TODO: Will probably have to account for the different types of fits at some point, can only really handle
+    # 2 sersic models at the moment
     df = pd.json_normalize(all_functions)
     df = df.groupby(by="Galaxy", group_keys=True)[df.columns].apply(lambda x: x)
     df = Table.from_pandas(df)
@@ -534,11 +544,9 @@ def main(args):
                 for folder in ["Polar Rings", "Polar_Tilted Bulges", "Polar_Tilted Halo"]: # Attempt to autodetect type
                     if folder in root:
                         galaxy_type = folder_type_dict[folder]
-                # model_files = sorted(glob.glob(os.path.join(Path(root), "?_fit_params.txt")))
                 if not(galaxy_type == None):
                     all_functions = get_functions_from_files(Path(root).resolve(), galaxy_type, table)
     else:
-        # model_files = sorted(glob.glob(os.path.join(p, "?_fit_params.txt")))
         all_functions = get_functions_from_files(root=Path(p).resolve(), galaxy_type=None, table=table)
 
     print(f"Total fit: {total_fit}")
@@ -547,25 +555,6 @@ def main(args):
 
     if args.plot_stats:
         quantities_plot(all_functions)
-
-def _warning(
-    message,
-    category = UserWarning,
-    filename = '',
-    lineno = -1,
-    file = '',
-    line = -1):
-    if UserWarning:
-        print(f"{message}")
-    else:
-        print(f"{category}: {message} at {lineno}")
-
-warnings.showwarning = _warning
-# class customWarning(Warning):
-#     def __init__(self, message):
-#         self.message = message
-#     def __str__(self):
-#         return repr(self.message)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hello")

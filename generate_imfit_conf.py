@@ -1,8 +1,6 @@
 import glob
-import matplotlib.pyplot as plt
 import numpy as np
 import os
-import math
 
 from astropy.convolution import convolve
 from astropy.io import fits
@@ -10,8 +8,6 @@ from astropy.io import fits
 from photutils.background import Background2D, MedianBackground
 from photutils.segmentation import detect_sources, make_2dgaussian_kernel, SourceCatalog, deblend_sources
 
-from scipy.ndimage import rotate
-import scipy.integrate as integrate
 import scipy
 import pyimfit
 
@@ -23,10 +19,6 @@ from photutils.aperture import EllipticalAperture
 from photutils.isophote import Ellipse
 from photutils.isophote import build_ellipse_model
 
-import astropy.units as u
-
-import itertools
-from threading import Thread
 import multiprocessing as mp
 import warnings
 warnings.filterwarnings("ignore")
@@ -747,7 +739,7 @@ def main(args):
                         f.write(model_desc[band])
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Hello")
+    parser = argparse.ArgumentParser(description="Attempt to generate initial guess and bounds and write to an IMFIT config file")
     parser.add_argument("-p", help="Path to file/folder containing galaxy FITS")
     parser.add_argument("--overwrite", help="Overwrite existing config files", action="store_true")
     parser.add_argument("--mask", help="Use the mask to guess initial values", action="store_true")

@@ -109,16 +109,13 @@ def main(im, psf, sky, out_bands, galaxy_name):
         lambda_hi = band_wav[band]
         im_out_file = f"{galaxy_name}_{band}_redshift.fits"
         psf_out_file = f"{galaxy_name}_psf_{band}_recon.fits"
-        # TODO: Currently produces weird looking images, need to check indices of some parts of the code
         ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=False)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Hello")
-    parser = argparse.ArgumentParser(
-    # ... other options ...
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     help="Artificially redshift TNG50 simulation galaxies with FERENGI.")
     parser.add_argument("-p", help="Path to folder containing fits simulation images", default=".")
-    parser.add_argument("-b", help="Output band (Allowed: g,r,i, and/or z)", default="g")
+    parser.add_argument("-b", help="Output bands", nargs="+", choices=["g", "r", "i", "z"], default=["g", "r", "i", "z"])
     args = parser.parse_args()
     args.p = Path(args.p)
     galaxy_name = os.path.basename(args.p)
