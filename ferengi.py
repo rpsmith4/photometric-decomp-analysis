@@ -1129,7 +1129,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         
         idx_outliers = np.where(np.abs(im_ds) > 10 * sig_im_ds)
         
-        if idx_outliers[0].size > 0:
+        if idx_outliers[0].size >= 2:
             # Flatten for line fit
             fit_coeffs = robust_linefit(np.abs(bg[idx_outliers]), np.abs(im_ds[idx_outliers]))
             
