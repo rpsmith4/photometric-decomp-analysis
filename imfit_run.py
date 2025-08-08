@@ -27,6 +27,7 @@ def run_imfit(args, band):
     if args.invvar or args.all:
         command.extend(["--noise", f"image_{band}_invvar.fits", "--errors-are-weights"])
     if args.nm:
+        # command.extend(["--nm", "--bootstrap 50", "--save-bootstrap", f"bootstrap_{band}.dat"])
         command.extend(["--nm"])
     if args.de:
         command.extend(["--de"])

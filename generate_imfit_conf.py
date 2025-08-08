@@ -93,7 +93,6 @@ def get_PA2_and_table(img): # Probably better
     shape = img.shape
     x0 = shape[0]/2
     y0 = shape[1]/2
-    I_e = np.max(img)/2
 
     #model_image = build_ellipse_model(data.shape, isolist)
     #residual = data - model_image
@@ -511,7 +510,7 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
         "bulge" : {
             "host": {
                 "PA_bounds": [-10, 10],
-                "ell_bounds": [-0.3, 0.4], # Possibly underestimated due to external dust/whatever
+                "ell_bounds": [-0.1, 0.7], # Possibly underestimated due to external dust/whatever
                 "n_bounds": [-1, 5], # Possibly underestimated
                 "I_e_factor": [1/10, 5], # May be underestimated except in the case that the host PA is perfect
                 "r_e_factor": [1/2, 5] # Same as above
@@ -556,7 +555,7 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
 
     img_rot_host = scipy.ndimage.rotate(img, angle=host_PA + 90)
     rad_slc = img_rot_host[int(img_rot_host.shape[0]/2), int(img_rot_host.shape[0]/2):]
-    S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size)))
+    S = rad_slc * 2 * np.pi * (np.arange(int(rad_slc.size))) # dr = 1
     B = np.cumsum(S)
     B_e = B[-1]/2
     r_e = np.argmin(np.abs(B - B_e)) # num of pixels from center
