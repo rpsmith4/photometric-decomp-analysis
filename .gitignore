@@ -1,2 +1,5 @@
 *.fits
+*.fit
 *.pyc
+*.png
+*.ipynb
