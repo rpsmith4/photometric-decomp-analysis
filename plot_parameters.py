@@ -106,7 +106,8 @@ def parse_results(file, galaxy_name, galaxy_type, table=None):
             func_dict["Distance"] = -1
             
         e = func_dict["parameters"]["ell"]
-        axis_ratio = np.sqrt(-1*(np.square(e) - 1)) # b/a ratio
+        # axis_ratio = np.sqrt(-1*(np.square(e) - 1)) # b/a ratio # THIS IS WRONG I THOUGH IT WAS ECCENTRICITY BUT ITS ELLIPCTICITY
+        axis_ratio = -1*(e - 1)# f=1-b/a
         func_dict["b/a"] = axis_ratio
         flux_ratios, flux = get_flux(model_file=file)
         if func_dict["label"] == "Host":
@@ -136,137 +137,151 @@ def quantities_plot(all_functions):
         "z" : "blueviolet"
     }
     if args.plot_type == "compare_structure":
-        fig = plt.figure(figsize=(16, 8))
-        plt.suptitle("Host")
-        for band in "griz":
-            df_band = df[df["band"] == band].copy()
-            host_ax_ratio = df_band[df_band["label"] == "Host"]["b/a"]
-            host_I_e = df_band[df_band["label"] == "Host"]["parameters.I_e"] * u.nmgy / u.pix
-            host_r_e = df_band[df_band["label"] == "Host"]["parameters.r_e"] * u.pix
-            host_n = df_band[df_band["label"] == "Host"]["parameters.n"]
-            host_flux_ratio = df_band[df_band["label"] == "Host"]["flux_ratio"]
-            d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
-            host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
-            polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
-            diff_PA = host_PA - polar_PA
-            diff_PA = np.abs(diff_PA)
+        for structure in ["Host", "Polar"]:
+            plt.rc('axes', labelsize=16)
+            plt.rc('legend', fontsize=14)
+            plt.rc('figure', titlesize=20)
+            plt.rc('xtick', labelsize=14)
+            plt.rc('ytick', labelsize=14)
+            fig = plt.figure(figsize=(16, 8))
+            gs = gridspec.GridSpec(2, 4)
+            gs.update(wspace=0.5)
+            plt.suptitle(f"{structure} Component Properties", y=0.93)
+            for band in "griz":
+                df_band = df[df["band"] == band]
+                ax_ratio = df_band[df_band["label"] == structure]["b/a"]
+                I_e = df_band[df_band["label"] == structure]["parameters.I_e"] * u.nmgy
+                flux_ratio = df_band[df_band["label"] == "Host"]["flux_ratio"]
+                flux = df_band[df_band["label"] == structure]["flux"]
+                r_e = df_band[df_band["label"] == structure]["parameters.r_e"] * u.pix
+                n = df_band[df_band["label"] == structure]["parameters.n"]
+                d = df_band[df_band["label"] == structure]["Distance"] * u.Mpc
 
-            pixscale = 0.262 * u.arcsec / u.pix
+                pixscale = 0.262 * u.arcsec / u.pix
 
-            host_r_e = (np.tan(host_r_e * pixscale) * d).to(u.kpc)
-            host_I_e = flux2ABmag((host_I_e * pixscale).value)
+                r_e = np.squeeze(np.array(r_e[d != -1]), axis=0) * u.pix # For some reason increases the dimension by one
+                r_e = (np.tan(r_e * pixscale) * d).to(u.kpc).value
+                I_e = flux2ABmag((I_e * pixscale).value)
+                flux = np.squeeze(np.array(flux[d != -1]), axis=0) # For some reason increases the dimension by one
+                app_mag = flux2ABmag(flux) # Apparent Magnitude
+                abs_mag = app_mag - 5 * np.log10((d.to(u.pc).value/10))
 
+                ls = "-"
+                label = band
+                color = band_colors[band]
 
-            # ax = plt.subplot(2, 3, 1)
-            # plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
-            # plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
-            # plt.ylabel("Count")
+                # ax = plt.subplot(2, 3, 1)
+                # plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
+                # plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
+                # plt.ylabel("Count")
 
-            ax = plt.subplot(2, 2, 1)
-            plt.hist(host_ax_ratio, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel("Axis ratio (b/a)")
-            plt.ylabel("Count")
+                # ax = plt.subplot(2, 2, 1)
+                # plt.hist(ax_ratio, histtype='step', color=band_colors[band], label=band)
+                # plt.xlabel("Axis ratio (b/a)")
+                # plt.ylabel("Count")
 
-            plt.subplot(2, 2, 2)
-            plt.hist(host_I_e, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"Half light intensity $I_e$ (AB Mag / arcsec)")
-            plt.ylabel("Count")
+                # plt.subplot(2, 2, 2)
+                # plt.hist(I_e, histtype='step', color=band_colors[band], label=band)
+                # plt.xlabel(r"Half light intensity $I_e$ (AB Mag / arcsec)")
+                # plt.ylabel("Count")
 
-            plt.subplot(2, 2, 3)
-            plt.hist(host_r_e, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"Half light radius $r_e$ (kpc)")
-            plt.ylabel("Count")
+                # plt.subplot(2, 2, 3)
+                # plt.hist(r_e, histtype='step', color=band_colors[band], label=band)
+                # plt.xlabel(r"Half light radius $r_e$ (kpc)")
+                # plt.ylabel("Count")
 
-            plt.subplot(2, 2, 4)
-            plt.hist(host_n, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"Sersic Index $n$")
-            plt.ylabel("Count")
+                # plt.subplot(2, 2, 4)
+                # plt.hist(n, histtype='step', color=band_colors[band], label=band)
+                # plt.xlabel(r"Sersic Index $n$")
+                # plt.ylabel("Count")
 
-            # plt.subplot(2, 3, 6)
-            # plt.hist(np.array(host_flux_ratio), histtype='step', color=band_colors[band], label=band)
-            # plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
-            # plt.ylabel("Count")
+                # plt.subplot(2, 3, 6)
+                # plt.hist(np.array(flux_ratio), histtype='step', color=band_colors[band], label=band)
+                # plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
+                # plt.ylabel("Count")
 
-        # ax.legend(bbox_to_anchor=(1.15, 1.05))
-        ax.legend(loc="upper left")
-        plt.tight_layout()
-        plt.savefig(os.path.join(Path(args.o), "host.png"))
+                ngalaxies = np.size(ax_ratio)
+                ax1 = plt.subplot(gs[0, :2])
+                bins = np.arange(0, 1 + 0.05, 0.05)
+                ax_ratio_binned, bins = np.histogram(ax_ratio, bins=bins)
+                plt.stairs(ax_ratio_binned/ngalaxies, edges=bins, color=color, label=label, ls=ls, linewidth=2)
+                plt.xlabel("Axis ratio (b/a)")
+                plt.ylabel("Fraction of Sample")
 
-        fig = plt.figure(figsize=(16, 8))
-        plt.suptitle("Polar")
-        for band in "griz":
-            df_band = df[df["band"] == band].copy()
-            polar_ax_ratio = df_band[df_band["label"] == "Polar"]["b/a"]
-            polar_I_e = df_band[df_band["label"] == "Polar"]["parameters.I_e"] * u.nmgy / u.pix
-            polar_flux_ratio = df_band[df_band["label"] == "Polar"]["flux_ratio"]
-            polar_r_e = df_band[df_band["label"] == "Polar"]["parameters.r_e"] * u.pix
-            polar_n = df_band[df_band["label"] == "Polar"]["parameters.n"]
-            d = df_band[df_band["label"] == "Host"]["Distance"] * u.Mpc
-            host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
-            polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
-            diff_PA = host_PA - polar_PA
-            diff_PA = np.abs(diff_PA)
+                ax2 = plt.subplot(gs[0, 2:])
+                bins = np.arange(0, 8 + 0.5, 0.5)
+                n_binned, bins = np.histogram(n, bins=bins)
+                plt.stairs(n_binned/ngalaxies, edges=bins, color=color, label=label, ls=ls, linewidth=2)
+                plt.xlabel(r"Sersic Index $n$")
+                plt.ylabel("Fraction of Sample")
 
-            polar_r_e = (np.tan(polar_r_e * pixscale) * d).to(u.kpc)
-            polar_I_e = flux2ABmag((polar_I_e * pixscale).value)
+                ngalaxies = np.size(r_e) # May be different due to removing the d=-1 cases here
+                if structure == "Polar":
+                    ax3 = plt.subplot(gs[1, 1:3])
+                    bins = np.arange(-23, -13 + 1, 1)
+                    abs_mag_binned, bins = np.histogram(abs_mag, bins=bins)
+                    plt.stairs(abs_mag_binned/ngalaxies, edges=bins, color=color, label=label, ls=ls, linewidth=2)
+                    plt.xlabel(r"Absolute Magnitude")
+                    plt.ylabel("Fraction of Sample")
 
-            # plt.subplot(2, 3, 1)
-            # plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
-            # plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
-            # plt.ylabel("Count")
+                elif structure == "Host":
+                    ax3 = plt.subplot(gs[1, :2])
+                    bins = np.arange(-23, -13 + 1, 1)
+                    abs_mag_binned, bins = np.histogram(abs_mag, bins=bins)
+                    plt.stairs(abs_mag_binned/ngalaxies, edges=bins, color=color, label=label, ls=ls, linewidth=2)
+                    plt.xlabel(r"Absolute Magnitude")
+                    plt.ylabel("Fraction of Sample")
+                    
+                    ax4 = plt.subplot(gs[1, 2:])
+                    bins = np.arange(0, 11 + 0.5, 0.5)
+                    r_e_binned, bins = np.histogram(r_e, bins=bins)
+                    plt.stairs(r_e_binned/ngalaxies, edges=bins, color=color, label=label, ls=ls, linewidth=2)
+                    plt.xlabel(r"Effective Radius $r_e$ (kpc)")
+                    plt.ylabel("Fraction of Sample")
 
-            ax = plt.subplot(2, 2, 1)
-            plt.hist(polar_ax_ratio, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel("Axis ratio (b/a)")
-            plt.ylabel("Count")
+            # ax.legend(bbox_to_anchor=(1.15, 1.05))
+            ax1.legend(loc="upper left")
+            plt.tight_layout()
+            plt.savefig(os.path.join(Path(args.o), f"{structure}_plot.png"))
 
-            plt.subplot(2, 2, 2)
-            plt.hist(polar_I_e, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"Half light intensity $I_e$ (AB Mag / arcsec)")
-            plt.ylabel("Count")
-
-            plt.subplot(2, 2, 3)
-            plt.hist(polar_r_e, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"Half light radius $r_e$ (kpc)")
-            plt.ylabel("Count")
-
-            plt.subplot(2, 2, 4)
-            l = plt.hist(polar_n, histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"Sersic Index $n$")
-            plt.ylabel("Count")
-
-            # plt.subplot(2, 3, 6)
-            # plt.hist(np.array(polar_flux_ratio), histtype='step', color=band_colors[band], label=band)
-            # plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
-            # plt.ylabel("Count")
-
-        # ax.legend(bbox_to_anchor=(1.15, 1.05))
-        ax.legend(loc="upper left")
-        plt.tight_layout()
-        plt.savefig(os.path.join(Path(args.o), "polar.png"))
-
+        plt.rc('axes', labelsize=24)
+        plt.rc('legend', fontsize=18)
+        plt.rc('figure', titlesize=28)
+        plt.rc('xtick', labelsize=20)
+        plt.rc('ytick', labelsize=20)
         fig = plt.figure(figsize=(8, 12))
+        plt.suptitle(f"Host and Polar Comparisons")
         for band in "griz":
-            df_band = df[df["band"] == band].copy()
+            df_band = df[df["band"] == band]
             flux_ratio = df_band[df_band["label"] == "Host"]["flux_ratio"]
             host_PA = df_band[df_band["label"] == "Host"]["parameters.PA"]
             polar_PA = df_band[df_band["label"] == "Polar"]["parameters.PA"]
             diff_PA = host_PA - polar_PA
             diff_PA = np.abs(diff_PA)
-            ax = plt.subplot(2, 1, 1)
-            plt.hist(diff_PA, histtype='step', color=band_colors[band], label=band)
+
+            ls = "-"
+            label = band
+            color = band_colors[band]
+
+            ngalaxies = np.size(host_PA)
+            ax1 = plt.subplot(2, 1, 1)
+            bins = np.arange(0, 180 + 15, 15)
+            diff_PA_binned, bins = np.histogram(diff_PA, bins=bins)
+            plt.stairs(diff_PA_binned/ngalaxies, edges=bins, color=color, label=label, ls=ls, linewidth=3)
             plt.xlabel(r"$PA_{host} - PA_{polar}$ (deg)")
-            plt.ylabel("Count")
+            plt.ylabel("Fraction of Sample")
 
-            plt.subplot(2, 1, 2)
-            plt.hist(np.array(flux_ratio), histtype='step', color=band_colors[band], label=band)
-            plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
-            plt.ylabel("Count")
+            ax2 = plt.subplot(2, 1, 2)
+            bins = np.arange(0, 1 + 0.1, 0.1)
+            flux_ratio_binned, bins = np.histogram(np.array(flux_ratio), bins=bins)
+            plt.stairs(flux_ratio_binned/ngalaxies, edges=bins, color=color, label=label, ls=ls, linewidth=3)
+            plt.xlabel(r"Flux Ratio $f_{Host}/f_{Total}$")
+            plt.ylabel("Fraction of Sample")
 
 
-        ax.legend(loc="upper left")
+        ax1.legend(loc="upper left")
         plt.tight_layout()
-        plt.savefig(os.path.join(Path(args.o), "extra.png"))
+        plt.savefig(os.path.join(Path(args.o), "extra_overall.png"))
 
     elif args.plot_type == "compare_type":
         from matplotlib.ticker import MaxNLocator
@@ -284,14 +299,13 @@ def quantities_plot(all_functions):
             plt.rc('figure', titlesize=20)
             plt.rc('xtick', labelsize=14)
             plt.rc('ytick', labelsize=14)
-            fig = plt.figure(figsize=(12, 8))
+            fig = plt.figure(figsize=(16, 8))
             gs = gridspec.GridSpec(2, 4)
             gs.update(wspace=0.5)
             plt.suptitle(f"{structure} Component Properties", y=0.93)
             for galaxy_type in ["ring", "bulge", "halo"]:
                 # for band in "griz":
                 for band in "g":
-
                     df_type = df[df["Galaxy_type"] == galaxy_type].copy()
                     df_band = df_type[df_type["band"] == band]
                     ax_ratio = df_band[df_band["label"] == structure]["b/a"]
@@ -403,7 +417,7 @@ def quantities_plot(all_functions):
                         # for ax in [ax1, ax2, ax3, ax4]:
                         #     ax.set_yticks(np.arange(0, 1 + 1/5, 1/5))
 
-            ax1.legend(loc="upper left")
+            ax1.legend(loc="upper right")
             plt.tight_layout()
             plt.savefig(os.path.join(Path(args.o), f"{structure}_type_compare.png"))
 
@@ -442,12 +456,12 @@ def quantities_plot(all_functions):
                 bins = np.arange(0, 1 + 0.1, 0.1)
                 flux_ratio_binned, bins = np.histogram(np.array(flux_ratio), bins=bins)
                 plt.stairs(flux_ratio_binned/ngalaxies, edges=bins, color=color, label=label, ls=ls, linewidth=3)
-                plt.xlabel(r"Flux Ratio $f_{Host}/f_{Polar}$")
+                plt.xlabel(r"Flux Ratio $f_{Host}/f_{Total}$")
                 plt.ylabel("Fraction of Sample")
 
         ax1.legend(loc="upper left")
         plt.tight_layout()
-        plt.savefig(os.path.join(Path(args.o), "extra.png"))
+        plt.savefig(os.path.join(Path(args.o), "extra_compare_type.png"))
     return None
 
 def get_functions_from_files(root, galaxy_type, table=None):
