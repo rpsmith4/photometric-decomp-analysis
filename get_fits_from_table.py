@@ -29,7 +29,9 @@ def main(args):
         
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Read an excel spreadsheet and download the galaxies inside. Also does not download duplicate galaxies that may be under a different name.")
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Read an excel spreadsheet and download the galaxies inside. Also does not download duplicate galaxies that may be under a different name.")
     parser.add_argument("-i", help="Input spreadsheet")
     parser.add_argument("-o", help="Output directory for files")
     parser.add_argument("--dr", help="Data Release (dr9 or dr10)", default="dr10")

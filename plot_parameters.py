@@ -571,7 +571,9 @@ def main(args):
         quantities_plot(all_functions)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Hello")
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Generate plots of the outputs of fits")
     parser.add_argument("-p", help="Path to file/folder containing models", default=".")
     parser.add_argument("--type", help="Type of polar structure", choices=["ring", "bulge", "halo"])
     parser.add_argument("-r", help="Recursively go into subfolders (assumes that fits data is at the end of the filetree)", action="store_true")

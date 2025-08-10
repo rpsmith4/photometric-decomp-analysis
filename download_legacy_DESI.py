@@ -140,7 +140,6 @@ def main(names, RA, DEC, R, bands='grz', pixscale=0.262, dr='dr9', file_types=["
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Download from Legacysurvey")
     parser = argparse.ArgumentParser(
         description="Download from DESI Legacy Survey",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)

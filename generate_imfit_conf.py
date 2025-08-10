@@ -738,7 +738,9 @@ def main(args):
                         f.write(model_desc[band])
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Attempt to generate initial guess and bounds and write to an IMFIT config file")
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Attempt to generate initial guess and bounds and write to an IMFIT config file")
     parser.add_argument("-p", help="Path to file/folder containing galaxy FITS")
     parser.add_argument("--overwrite", help="Overwrite existing config files", action="store_true")
     parser.add_argument("--mask", help="Use the mask to guess initial values", action="store_true")

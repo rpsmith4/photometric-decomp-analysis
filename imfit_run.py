@@ -87,7 +87,10 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Run IMFIT on a sample of galaxies."
+    )
     
     parser.add_argument("-p", help="Path to folder containing galaxies")
     parser.add_argument("-r", help="Recursively go into subfolders to find", action="store_true")
