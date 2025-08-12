@@ -594,7 +594,10 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     # Perform the scaling. Use spline interpolation (order=3) for better quality.
     # The output `zoomed_im` will be scaled by the square of the zoom factor if `mode='nearest'`.
     # For flux conservation, we should divide by the square of the zoom factors to get total flux.
-    zoomed_im = zoom(im_lo, (actual_zoom_x, actual_zoom_y), order=1)
+    zoomed_im = zoom(im_lo, (actual_zoom_x, actual_zoom_y), order=3)
+    zoomed_im = zoomed_im / np.sum(zoomed_im) * np.sum(im_lo) # make sure that sum(im_lo) = sum(zoomed_im)
+    
+    zoomed_im[zoomed_im == np.nan] = 0
     
     # Adjust for total flux if the interpolation method does not inherently conserve it.
     # If FREBIN /total means summing up pixel values, then a simple zoom followed by multiplication
