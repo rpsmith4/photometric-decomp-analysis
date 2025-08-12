@@ -1215,6 +1215,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
     im_ds = im_ds * thi # FERENGI outputs in cts/second whereas the input is in cts
     # Write output FITS files
     im_ds = np.squeeze(redshift_galaxy.cts2simunits(np.expand_dims(im_ds, axis=-1), 1.6134381299258355e-12, [thi]), axis=-1)
+    # TODO: Convert image output to nmgy
     fits.writeto(f"{im_out_file}", im_ds, overwrite=True)
     fits.writeto(psf_out_file, recon, overwrite=True)
 

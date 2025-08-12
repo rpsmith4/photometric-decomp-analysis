@@ -61,25 +61,40 @@ import os
 #         float in units [seconds]
 
 # TODO: Figure out how to get MJy/sr -> counts/pixel
-def simunits2cts(simim, pixarea):
-    simim = simim * 10 ** 6 * 10 ** (-23) * pixarea # MJy/sr to ergs/s/cm**2/Hz (fnu) /pixel?
-    return ferengi.maggies2cts(ferengi.fnu2maggies(simim), expt=3000000, zp=22.5) # fnu/pixel -> maggies/pixel -> cnts/pixel
+def simunits2cts(simim, pixarea, expt):
+    simim = simim * 10 ** 6 * 10 ** (-23) * pixarea # MJy/sr to ergs/s/cm**2/Hz(fnu) /pixel
+    for k in range(np.shape(simim)[-1]):
+        simim[:, :, k] = ferengi.maggies2cts(ferengi.fnu2maggies(simim[:, :, k]), expt=expt[k], zp=22.5)
+    return simim # fnu/pixel -> maggies/pixel -> cnts/pixel
+
+def cts2simunits(im, pixarea, expt):
+    for k in range(np.shape(im)[-1]):
+        im[:, :, k] = ferengi.maggies2fnu(ferengi.cts2maggies(im[:, :, k], expt=expt[k], zp=22.5))
+    im = im / (10 ** 6 * 10 ** (-23)) / pixarea
+    return im 
 
 def main(im, psf, sky, out_bands, galaxy_name):
     # 1 pixel is 100 pc 
+    # TODO: Figure out the "distance" to the object in the SKIRT image
     pixscale = 0.262 * u.arcsecond
     pixarea = pixscale ** 2
     pixarea = pixarea.to(u.sr).value
+    print(pixarea)
+    scllo = pixscale.value * 2
+    sclhi = pixscale.value
 
-    im = simunits2cts(im, pixarea) 
+    tlo = [1, 1, 1, 1]
+    tlo = [t/100 for t in tlo]
     # TODO: Figure out what the exposure time should be
     # for the sky as well as the simulated image
+
+    im = simunits2cts(im, pixarea, tlo) 
+
     sky = ferengi.maggies2cts(sky * 10 ** (-9), expt=1, zp=22.5) # sky is in nmgy
-    # sky = np.zeros_like(sky)
-    # lam = 0.000799898 
-    # imerr = np.random.poisson(lam=lam, size=im.shape) # nanomaggies # Already added from SKIRT
-    # imerr = ferengi.maggies2cts(imerr, expt=1, zp = 22.5)
+    sky = np.zeros_like(sky) # TODO: Should actually be in ctns/second, come back to
+
     imerr = np.zeros_like(im) # Poisson Noise alread added
+
     psflo = psf
     psfhi = psf[:, :, 0] # Using just the g band psf
     # erro0_mag = np.array([0, 0, 0, 0])
@@ -87,15 +102,14 @@ def main(im, psf, sky, out_bands, galaxy_name):
     filter_lo = ["g", "r", "i", "z"]
     lambda_lo = np.array([4640, 6580, 8060, 9000]) # Taken from Wikipedia
 
-    zlo = 0.03 # TODO: Figure out issues with zlo < ~0.03
+    zlo = 0.03 # TODO: Figure out issues with zlo < ~0.03 # Seems to be that the PSF is being downscaled way too much (becomes empty)
+    # In part due to the scllo pixel scale being too small, so magnification (and resulting image) is smaller
     zhi = 0.5
-    scllo = pixscale.value
+
     zplo = [22.5, 22.5, 22.5, 22.5] # magnitudes
-    tlo = [1, 1, 1, 1]
-    filter_hi = filter_lo
-    sclhi = pixscale.value
     zphi = 22.5
-    thi = 1
+    thi = 200 # Based vaguely off of DESI images
+    # thi = 10000000
 
     band_wav = {
         "g": 4640,
@@ -138,6 +152,7 @@ if __name__ == "__main__":
     rng = np.random.default_rng()
     mu = 0
     stddev = np.sqrt(4.00737e-06) # Taken from a DESI image
-    sky = rng.normal(mu, stddev, size=np.shape(im)[:2]) # nmgy
+    sky_shape = (np.shape(im)[0]*3, np.shape(im)[1]*3)
+    sky = rng.normal(mu, stddev, size=sky_shape) # nmgy
     os.chdir(args.p)
     main(im, psf, sky, out_bands=args.b, galaxy_name=galaxy_name)
