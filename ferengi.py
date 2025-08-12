@@ -1145,8 +1145,12 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             if idx1[0].size > 0:
                 # Replace these extreme outliers with median from the original med_val
                 # Need to map idx_outliers[idx1] back to the 3D array.
-                med_val_flat = med_val.flatten() # Assuming med_val was calculated per band
-                im_ds[idx_outliers[idx1]] = med_val_flat[idx_outliers[idx1]]
+                # med_val_flat = med_val.flatten() # Assuming med_val was calculated per band
+                idx_x = idx_outliers[0][idx1[0]]
+                idx_y = idx_outliers[1][idx1[0]]
+                idxs = (idx_x, idx_y)
+                # im_ds[idx_outliers[idx1[0], idx1[0]]] = med_val[idx_outliers[idx1[0], idx1[0]]] # idx is just a tupe of (x,)
+                im_ds[idxs] = med_val[idxs] 
                 im_ds = im_ds.reshape(im_ds.shape)
 
     # Subtract sky again after K-correction and cleaning (if not already done)
