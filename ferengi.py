@@ -5,6 +5,7 @@ from astropy.io import fits
 from astropy.cosmology import FlatLambdaCDM
 import matplotlib.pyplot as plt
 import kcorrect.kcorrect
+import redshift_galaxy
 
 # Define cosmology for luminosity distance calculations
 cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
@@ -1211,8 +1212,9 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         # im_ds = np.squeeze(im_ds, axis=-1)
         im_ds = ferengi_convolve_plus_noise(im_ds / thi, psf_t, sky, thi,
                                                                 border_clip=3, extend=False) # extend=False means crop borders, though is true in ferengi.pro?
-    
+    im_ds = im_ds * thi # FERENGI outputs in cts/second whereas the input is in cts
     # Write output FITS files
+    im_ds = np.squeeze(redshift_galaxy.cts2simunits(np.expand_dims(im_ds, axis=-1), 1.6134381299258355e-12, [thi]), axis=-1)
     fits.writeto(f"{im_out_file}", im_ds, overwrite=True)
     fits.writeto(psf_out_file, recon, overwrite=True)
 
