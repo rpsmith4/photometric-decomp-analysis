@@ -94,10 +94,18 @@ Used to artificially redshift galaxy images that are output from TNG50 (and post
 
 Can be used by running:
 
-```python3 -p path/to/TNG50data/ -b g r i z```
+```python3 -p path/to/TNG50data/ -b g r i z -t SDSS```
+
+To run the redshift code on all the SDSS type images with all bands for every galaxy in the directory.
+
+Can also use:
+
+```python3 -p path/to/TNG50data/TNGxxxxxx_E_SDSS* -b g r i z -t SDSS```
+
+To run the code on a particular galaxy. The "*" wildcard is needed at the end to ensure that all of the bands are loaded into the script.
 
 > [!WARNING]
-> This script is also mostly a work in progress. The recursive running features of the other scripts will be implemented soon, as well as some more options. Assumes currently that you are using the SDSS TNG50 outputs at the moment. 
+> This script is also mostly a work in progress. Currently does not work in the case of using less than all of the g, r, i, and z bands (due to the way I made all the input parameters assume that I was using all 4 bands). Assumes currently that you are using the SDSS TNG50 outputs at the moment. 
 
 > [!WARNING]
 > Does not currently work for an input redshift of less than 0.03. Also the image is very noisy unless a ridiculously large input exposure is used.

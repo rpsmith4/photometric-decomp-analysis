@@ -6,6 +6,7 @@ from astropy.io import fits
 import astropy.units as u
 import matplotlib.pyplot as plt
 import os
+import glob
 
 # INPUTS:
 #   sky = high redshift sky background image
@@ -79,7 +80,6 @@ def main(im, psf, sky, out_bands, galaxy_name):
     pixscale = 0.262 * u.arcsecond
     pixarea = pixscale ** 2
     pixarea = pixarea.to(u.sr).value
-    print(pixarea)
     scllo = pixscale.value * 2
     sclhi = pixscale.value
 
@@ -91,7 +91,10 @@ def main(im, psf, sky, out_bands, galaxy_name):
     im = simunits2cts(im, pixarea, tlo) 
 
     sky = ferengi.maggies2cts(sky * 10 ** (-9), expt=1, zp=22.5) # sky is in nmgy
-    sky = np.zeros_like(sky) # TODO: Should actually be in ctns/second, come back to
+    sky = np.zeros_like(sky) 
+
+    thi = 200 # Based vaguely off of DESI images
+    sky = sky/thi # cnts / second
 
     imerr = np.zeros_like(im) # Poisson Noise alread added
 
@@ -108,8 +111,6 @@ def main(im, psf, sky, out_bands, galaxy_name):
 
     zplo = [22.5, 22.5, 22.5, 22.5] # magnitudes
     zphi = 22.5
-    thi = 200 # Based vaguely off of DESI images
-    # thi = 10000000
 
     band_wav = {
         "g": 4640,
@@ -128,31 +129,47 @@ def main(im, psf, sky, out_bands, galaxy_name):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="Artificially redshift TNG50 simulation galaxies with FERENGI.")
-    parser.add_argument("-p", help="Path to folder containing fits simulation images", default=".")
+    parser.add_argument("-p", nargs="+", help="Path to folder containing fits simulation images", default=".")
+    parser.add_argument("-o", help="Output of high-redshift PSFs and FITs images", default=".")
     parser.add_argument("-b", help="Output bands", nargs="+", choices=["g", "r", "i", "z"], default=["g", "r", "i", "z"])
+    parser.add_argument("-t", help="Type of SKIRT output to use", choices=["SDSS"], default="SDSS")
     args = parser.parse_args()
-    args.p = Path(args.p)
-    galaxy_name = os.path.basename(args.p)
+    ps = [Path(p).resolve() for p in args.p]
 
-    im = list()
-    bands = "griz"
-    for band in bands:
-        im.append(fits.getdata(os.path.join(args.p, f"{galaxy_name}_E_SDSS_{band}.fits")))
-    im = np.array(im)
-    im = np.moveaxis(im, 0, -1)
-    # In the shape of (x, y, bands)
+    if not any(os.path.isdir(p) for p in ps):
+        galaxy_names = [p.name for p in ps]
+        ps = [p.parent for p in ps]
+    else:
+        if args.t == "SDSS":
+            galaxy_names = glob.glob(f"*SDSS*[{"".join(args.b)}]*", root_dir=ps[0])
+
+    o = Path(args.o).resolve()
+    os.chdir(o)
 
     psf = list()
-    for band in bands:
-        psf.append(fits.getdata(os.path.join(args.p, f"psf_patched_{band}.fits")))
+    for band in args.b:
+        psf.append(fits.getdata(os.path.join(ps[0], f"psf_patched_{band}.fits"))) # Assume everything is in the same parent directory
     psf = np.array(psf)
     psf = np.moveaxis(psf, 0, -1)
     # In the shape of (x, y, bands)
-    
+
     rng = np.random.default_rng()
     mu = 0
     stddev = np.sqrt(4.00737e-06) # Taken from a DESI image
-    sky_shape = (np.shape(im)[0]*3, np.shape(im)[1]*3)
-    sky = rng.normal(mu, stddev, size=sky_shape) # nmgy
-    os.chdir(args.p)
-    main(im, psf, sky, out_bands=args.b, galaxy_name=galaxy_name)
+
+    if args.t == "SDSS":
+        galaxy_names = set([galaxy_name.split('_')[0] for galaxy_name in galaxy_names])
+
+    for galaxy_name in galaxy_names:
+        im = list()
+        for band in args.b:
+            im.append(fits.getdata(os.path.join(ps[0], f"{galaxy_name}_E_SDSS_{band}.fits"))) # Assume everything is in the same parent directory
+        im = np.array(im)
+        im = np.moveaxis(im, 0, -1)
+        # In the shape of (x, y, bands)
+
+        sky_shape = (np.shape(im)[0]*3, np.shape(im)[1]*3) # Adjust as needed to make the code not error out if the sky is too small
+        sky = rng.normal(mu, stddev, size=sky_shape) # nmgy
+
+        print(f"Performing redshift on {galaxy_name}")
+        main(im, psf, sky, out_bands=args.b, galaxy_name=galaxy_name)
