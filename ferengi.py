@@ -596,7 +596,8 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     # The output `zoomed_im` will be scaled by the square of the zoom factor if `mode='nearest'`.
     # For flux conservation, we should divide by the square of the zoom factors to get total flux.
     zoomed_im = zoom(im_lo, (actual_zoom_x, actual_zoom_y), order=3)
-    zoomed_im = zoomed_im / np.sum(zoomed_im) * np.sum(im_lo) # make sure that sum(im_lo) = sum(zoomed_im)
+    with np.errstate(divide='ignore'):
+        zoomed_im = zoomed_im / np.sum(zoomed_im) * np.sum(im_lo) # make sure that sum(im_lo) = sum(zoomed_im)
     
     zoomed_im[zoomed_im == np.nan] = 0
     
@@ -797,7 +798,7 @@ def ferengi_convolve_plus_noise(im, psf, sky, exptime, nonoise=False, border_cli
         # Convert noise back to counts/sec (rate)
         noise_rate = noise_counts / exptime
         
-        out += sky_clipped + noise_rate
+        out += sky_clipped #+ noise_rate # Don't need Poisson Noise since it's already been added
 
     return out
 
@@ -885,11 +886,11 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             im_ds = np.stack(temp_im_ds_list, axis=2)
 
         # Subtract sky (example: using ring_sky)
-        for j in range(nbands):
+        # for j in range(nbands):
             # This is a placeholder for `ring_sky`, which needs full implementation.
             # Assuming it returns a scalar sky value for simplicity.
-            sky_sub_value = ring_sky(im_ds[:, :, j], 50, 15, nw=True)
-            im_ds[:, :, j] -= sky_sub_value
+            # sky_sub_value = ring_sky(im_ds[:, :, j], 50, 15, nw=True)
+            # im_ds[:, :, j] -= sky_sub_value # Not really needed since this is a simulated image
         
         # Downscale error image
         imerr_ds = ferengi_downscale(imerr[:, :, 0], zlo, zhi, scllo, sclhi, nofluxscl=noflux, evo=evo)
@@ -932,6 +933,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             nhi[hi_pixels] += 1
         
         # Select pixels for K-correction
+        '''
         good = np.where((nhi >= 3) & (np.abs(nsig[:, :, filt_i]) > siglim))
         goodsize = np.size(good[0])
         if goodsize == 0:
@@ -981,7 +983,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             #err0 = err0_mag[:, np.newaxis] # Ensure err0_mag is (nbands, 1)
             # The original IDL code's `err0_mag#(fltarr(n_elements(maggies[0, *]))+1)`
             # is equivalent to broadcasting err0_mag across the second dimension.
-            err0_expanded = np.tile(err0, (1, ngood))
+            # err0_expanded = np.tile(err0, (1, ngood))
 
             # Weights (from IDL example, needs specific implementation from the source)
             # For simplicity, using a uniform weight if specific logic is not clear or implemented.
@@ -1094,7 +1096,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
                     im_ds[:, :, band_idx][good] = maggies_reconstructed[band_idx, :] / (1. + zhi)
                 # for band_idx in range(nbands):
                 #     im_ds[:, :, band_idx][good] = maggies_reconstructed[band_idx, :] / (1. + zhi)
-                
+    '''
     # Background: choose closest in redshift-space (this logic also from original)
     # Using the original image before K-correction to determine background.
     # This seems to be a separate path depending on `nok`.
@@ -1155,8 +1157,9 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
                 im_ds = im_ds.reshape(im_ds.shape)
 
     # Subtract sky again after K-correction and cleaning (if not already done)
-    sky_sub_value = ring_sky(im_ds, 50, 15, nw=True) # Idk if this works
-    im_ds -= sky_sub_value
+    # Not reallty necessary since this is a simulated image
+    # sky_sub_value = ring_sky(im_ds, 50, 15, nw=True) # Idk if this works
+    # im_ds -= sky_sub_value
 
     if noconv:
         im_ds /= thi
@@ -1183,7 +1186,8 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         pad_y_psf = psf_t.shape[1] // 2
         psf_lo_padded = np.pad(psf_lo, ((pad_x_psf, pad_x_psf), (pad_y_psf, pad_y_psf)), 'constant')
         
-        recon_raw = convolve(psf_lo_padded, psf_t / np.sum(psf_t), mode='constant', cval=0.0)
+        ''' Disabling getting the reconned PSF for now
+        recon_raw = convolve(psf_lo_padded, psf_t / np.sum(psf_t), mode='constant', cval=0.0) # Disabled for the time being
         
         # Crop recon_raw back to a reasonable size, typically similar to psf_lo or psf_t
         # The exact cropping depends on the desired output size.
@@ -1204,6 +1208,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
 
         # Normalise reconstructed PSF
         recon /= np.sum(recon)
+        '''
 
         # Convolve the high redshift image with the transformation PSF and add noise
         # This part needs to handle multi-band images if nok is False
@@ -1211,12 +1216,13 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         temp_im_ds_conv = list()
         # im_ds = np.squeeze(im_ds, axis=-1)
         im_ds = ferengi_convolve_plus_noise(im_ds / thi, psf_t, sky, thi,
-                                                                border_clip=3, extend=False) # extend=False means crop borders, though is true in ferengi.pro?
+                                                                border_clip=3, extend=False, nonoise=False) # extend=False means crop borders, though is true in ferengi.pro?
     im_ds = im_ds * thi # FERENGI outputs in cts/second whereas the input is in cts
     # Write output FITS files
     im_ds = np.squeeze(redshift_galaxy.cts2simunits(np.expand_dims(im_ds, axis=-1), 1.6134381299258355e-12, [thi]), axis=-1)
-    # TODO: Convert image output to nmgy
+
+    im_ds = cts2maggies(im_ds, thi, 22.5) * 10 ** 9 # nmgy
     fits.writeto(f"{im_out_file}", im_ds, overwrite=True)
-    fits.writeto(psf_out_file, recon, overwrite=True)
+    # fits.writeto(psf_out_file, recon, overwrite=True)
 
     print("FERENGI process completed.")
