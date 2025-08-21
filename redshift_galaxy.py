@@ -7,6 +7,7 @@ import astropy.units as u
 import matplotlib.pyplot as plt
 import os
 import glob
+import multiprocessing as mp
 
 # INPUTS:
 #   sky = high redshift sky background image
@@ -68,6 +69,12 @@ def simunits2cts(simim, pixarea, expt):
         simim[:, :, k] = ferengi.maggies2cts(ferengi.fnu2maggies(simim[:, :, k]), expt=expt[k], zp=22.5)
     return simim # fnu/pixel -> maggies/pixel -> cnts/pixel
 
+def simunits2maggies(simim, pixarea):
+    simim = simim * 10 ** 6 * 10 ** (-23) * pixarea # MJy/sr to ergs/s/cm**2/Hz(fnu) /pixel
+    for k in range(np.shape(simim)[-1]):
+        simim[:, :, k] = ferengi.fnu2maggies(simim[:, :, k])
+    return simim # fnu/pixel -> maggies/pixel -> cnts/pixel
+
 def cts2simunits(im, pixarea, expt):
     for k in range(np.shape(im)[-1]):
         im[:, :, k] = ferengi.maggies2fnu(ferengi.cts2maggies(im[:, :, k], expt=expt[k], zp=22.5))
@@ -80,20 +87,24 @@ def main(im, psf, sky, out_bands, galaxy_name):
     pixscale = 0.262 * u.arcsecond
     pixarea = pixscale ** 2
     pixarea = pixarea.to(u.sr).value
-    scllo = pixscale.value * 2
+    scllo = pixscale.value  * 100
     sclhi = pixscale.value
 
     tlo = [1, 1, 1, 1]
     tlo = [t/100 for t in tlo]
+    # tlo = [200000] * 4
     # TODO: Figure out what the exposure time should be
     # for the sky as well as the simulated image
 
+    im = im * 10**5 # Needed to get the order of magnitude right 
+    # print(simunits2maggies(im, pixarea))
     im = simunits2cts(im, pixarea, tlo) 
 
-    sky = ferengi.maggies2cts(sky * 10 ** (-9), expt=1, zp=22.5) # sky is in nmgy
-    sky = np.zeros_like(sky) 
+    # sky = np.zeros_like(sky) 
 
     thi = 200 # Based vaguely off of DESI images
+    # thi = 200000 # Based vaguely off of DESI images
+    sky = ferengi.maggies2cts(sky * 10 ** (-9), expt=thi, zp=22.5) # sky is in nmgy
     sky = sky/thi # cnts / second
 
     imerr = np.zeros_like(im) # Poisson Noise alread added
@@ -105,9 +116,10 @@ def main(im, psf, sky, out_bands, galaxy_name):
     filter_lo = ["g", "r", "i", "z"]
     lambda_lo = np.array([4640, 6580, 8060, 9000]) # Taken from Wikipedia
 
-    zlo = 0.03 # TODO: Figure out issues with zlo < ~0.03 # Seems to be that the PSF is being downscaled way too much (becomes empty)
+    zlo = 0.0003 # TODO: Figure out issues with zlo < ~0.03 # Seems to be that the PSF is being downscaled way too much (becomes empty)
     # In part due to the scllo pixel scale being too small, so magnification (and resulting image) is smaller
-    zhi = 0.5
+    zhi = 0.05
+    # zhi = 0.2
 
     zplo = [22.5, 22.5, 22.5, 22.5] # magnitudes
     zphi = 22.5
@@ -122,8 +134,8 @@ def main(im, psf, sky, out_bands, galaxy_name):
     for band in out_bands:
         filter_hi = band
         lambda_hi = band_wav[band]
-        im_out_file = f"{galaxy_name}_{band}_redshift.fits"
-        psf_out_file = f"{galaxy_name}_psf_{band}_recon.fits"
+        im_out_file = f"{galaxy_name}_{band}_z={zhi}.fits"
+        psf_out_file = f"{galaxy_name}_psf_{band}_recon_z={zhi}.fits"
         ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=False)
 
 if __name__ == "__main__":
@@ -131,8 +143,10 @@ if __name__ == "__main__":
                                      description="Artificially redshift TNG50 simulation galaxies with FERENGI.")
     parser.add_argument("-p", nargs="+", help="Path to folder containing fits simulation images", default=".")
     parser.add_argument("-o", help="Output of high-redshift PSFs and FITs images", default=".")
+    parser.add_argument("-ib", help="Input bands", nargs="+", choices=["g", "r", "i", "z"], default=["g", "r", "i", "z"])
     parser.add_argument("-b", help="Output bands", nargs="+", choices=["g", "r", "i", "z"], default=["g", "r", "i", "z"])
     parser.add_argument("-t", help="Type of SKIRT output to use", choices=["SDSS"], default="SDSS")
+    parser.add_argument("-n", help="Number of parallel redshifts", default=1, type=int)
     args = parser.parse_args()
     ps = [Path(p).resolve() for p in args.p]
 
@@ -147,7 +161,7 @@ if __name__ == "__main__":
     os.chdir(o)
 
     psf = list()
-    for band in args.b:
+    for band in args.ib:
         psf.append(fits.getdata(os.path.join(ps[0], f"psf_patched_{band}.fits"))) # Assume everything is in the same parent directory
     psf = np.array(psf)
     psf = np.moveaxis(psf, 0, -1)
@@ -155,14 +169,14 @@ if __name__ == "__main__":
 
     rng = np.random.default_rng()
     mu = 0
-    stddev = np.sqrt(4.00737e-06) # Taken from a DESI image
+    stddev = np.sqrt(0.0166606) # Taken from a DESI image
 
     if args.t == "SDSS":
         galaxy_names = set([galaxy_name.split('_')[0] for galaxy_name in galaxy_names])
 
-    for galaxy_name in galaxy_names:
+    def func(galaxy_name):
         im = list()
-        for band in args.b:
+        for band in args.ib:
             im.append(fits.getdata(os.path.join(ps[0], f"{galaxy_name}_E_SDSS_{band}.fits"))) # Assume everything is in the same parent directory
         im = np.array(im)
         im = np.moveaxis(im, 0, -1)
@@ -173,3 +187,7 @@ if __name__ == "__main__":
 
         print(f"Performing redshift on {galaxy_name}")
         main(im, psf, sky, out_bands=args.b, galaxy_name=galaxy_name)
+
+    pool = mp.Pool(processes=args.n)
+    pool.map(func, galaxy_names)
+    
