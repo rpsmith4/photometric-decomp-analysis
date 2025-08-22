@@ -139,7 +139,7 @@ def redshift(im, psf, sky, out_bands, galaxy_name):
         lambda_hi = band_wav[band]
         im_out_file = f"{galaxy_name}_{band}_z={zhi}.fits"
         psf_out_file = f"{galaxy_name}_psf_{band}_recon_z={zhi}.fits"
-        ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=True)
+        ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=False)
 
 def get_image_and_run(galaxy_name, ps, psf_path, out_path):
     # TODO: Come back and make this take input and output bands as an arugment (not really important right now)
