@@ -1,11 +1,14 @@
 import numpy as np
-from scipy.ndimage import convolve, median_filter, zoom
+from scipy.ndimage import median_filter, zoom, convolve
+# from scipy.signal import convolve
 from scipy.optimize import curve_fit
 from astropy.io import fits
 from astropy.cosmology import FlatLambdaCDM
 import matplotlib.pyplot as plt
 import kcorrect.kcorrect
 import redshift_galaxy
+import astropy
+import os
 
 # Define cosmology for luminosity distance calculations
 cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
@@ -369,7 +372,7 @@ def ferengi_make_psf_same(psf1, psf2):
         psf2 = small_padded
     else:
         psf1 = small_padded
-
+    
 
 def ferengi_psf_centre(psf0):
     """
@@ -659,7 +662,6 @@ def ferengi_odd_n_square(psf0, centre=None):
         
         # Initial guess for the Gaussian fit
         initial_guess = (psf.max(), current_sz_x/2, current_sz_y/2, current_sz_x/4, current_sz_y/4, 0, psf.min())
-        
         try:
             popt, _ = curve_fit(gaussian_2d_fit, (x_coords, y_coords), psf.ravel(), p0=initial_guess)
             centroid_x, centroid_y = popt[1], popt[2]
@@ -769,13 +771,18 @@ def ferengi_convolve_plus_noise(im, psf, sky, exptime, nonoise=False, border_cli
     pad_x = sz_psf[0] // 2
     pad_y = sz_psf[1] // 2
     
-    im_padded = np.pad(im, ((pad_x, pad_x), (pad_y, pad_y)), 'constant', constant_values=0)
 
     # Convolve with the PSF (normalized)
     # The `convolve` function in scipy.ndimage handles padding if `mode` is set to 'constant'
     # and `cval` to 0, or 'same' mode which crops output to input size.
     # The IDL CONVOLVE by default handles borders by zero-padding.
-    out = convolve(im_padded, psf / np.sum(psf), mode='constant', cval=0.0)
+
+    # print(np.shape(im_padded))
+    # print(np.shape(psf))
+    # out = convolve(im_padded, psf / np.sum(psf), mode='constant', cval=0.0)
+    im_padded = np.pad(im, ((pad_x, pad_x), (pad_y, pad_y)), 'constant', constant_values=0)
+    out = astropy.convolution.convolve(im_padded, psf, boundary="fill", fill_value=0)
+    # out = convolve(im_padded, psf / np.sum(psf), mode='same')
 
     # Remove the excess border if extend is not set
     if not extend:
@@ -1222,7 +1229,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
     im_ds = np.squeeze(redshift_galaxy.cts2simunits(np.expand_dims(im_ds, axis=-1), 1.6134381299258355e-12, [thi]), axis=-1)
 
     im_ds = cts2maggies(im_ds, thi, 22.5) * 10 ** 9 # nmgy
-    fits.writeto(f"{im_out_file}", im_ds, overwrite=True)
+    fits.writeto(im_out_file, im_ds, overwrite=True)
     # fits.writeto(psf_out_file, recon, overwrite=True)
 
-    print("FERENGI process completed.")
+    print(f"FERENGI process completed. ({im_out_file})")
