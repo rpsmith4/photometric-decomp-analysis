@@ -90,7 +90,11 @@ def redshift(im, psf, sky, out_bands, galaxy_name):
     pixscale = 0.262 * u.arcsecond
     pixarea = pixscale ** 2
     pixarea = pixarea.to(u.sr).value
+    scllo = pixscale.value * 1000
     scllo = pixscale.value * 100
+    pixarea_lo = pixarea * 1000**2
+    pixarea_lo = pixarea
+    # scllo = pixscale.value 
     sclhi = pixscale.value
 
     tlo = [1, 1, 1, 1]
@@ -101,7 +105,7 @@ def redshift(im, psf, sky, out_bands, galaxy_name):
 
     im = im * 10**6 # Needed to get the order of magnitude right 
     # print(simunits2maggies(im, pixarea))
-    im = simunits2cts(im, pixarea, tlo) 
+    im = simunits2cts(im, pixarea_lo, tlo) 
 
     # sky = np.zeros_like(sky) 
 
@@ -121,25 +125,37 @@ def redshift(im, psf, sky, out_bands, galaxy_name):
 
     zlo = 0.0003 # TODO: Figure out issues with low zlo # Seems to be that the PSF is being downscaled way too much (becomes empty)
     # In part due to the scllo pixel scale being too small, so magnification (and resulting image) is smaller
-    zhi = 0.05
-    # zhi = 0.2
 
     zplo = [22.5, 22.5, 22.5, 22.5] # magnitudes
     zphi = 22.5
 
-    band_wav = {
-        "g": 4640,
-        "r": 6580,
-        "i": 8060,
-        "z": 9000
-    } # Taken from Wikipedia, Angstroms
+    # band_wav = {
+    #     "g": 4640,
+    #     "r": 6580,
+    #     "i": 8060,
+    #     "z": 9000
+    # } # Taken from Wikipedia, Angstroms
 
-    for band in out_bands:
-        filter_hi = band
-        lambda_hi = band_wav[band]
-        im_out_file = f"{galaxy_name}_{band}_z={zhi}.fits"
-        psf_out_file = f"{galaxy_name}_psf_{band}_recon_z={zhi}.fits"
-        ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=False)
+    band_wav = {
+        "g": 4686,
+        "r": 6165,
+        "i": 7481,
+        "z": 8931
+    } #http://astro.vaporia.com/start/sdss.html, Angstroms
+
+    try:
+        os.mkdir(galaxy_name)
+    except:
+        pass
+    os.chdir(galaxy_name)
+    for zhi in [0.05, 0.1, 0.15, 0.2, 1.0]:
+        for band in out_bands:
+            filter_hi = band
+            lambda_hi = band_wav[band]
+            im_out_file = f"{galaxy_name}_{band}_z={zhi}.fits"
+            psf_out_file = f"{galaxy_name}_psf_{band}_recon_z={zhi}.fits"
+            ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=True)
+    os.chdir("../")
 
 def get_image_and_run(galaxy_name, ps, psf_path, out_path):
     # TODO: Come back and make this take input and output bands as an arugment (not really important right now)
@@ -160,7 +176,11 @@ def get_image_and_run(galaxy_name, ps, psf_path, out_path):
 
         psf = list()
         for band in "griz":
-            psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_{band}.fits"))) # Assume everything is in the same parent directory
+            # psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_{band}.fits"))) # Assume everything is in the same parent directory
+            if band != "z":
+                psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_{band}.fits"))) # Assume everything is in the same parent directory
+            else:
+                psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_i.fits"))) # Assume everything is in the same parent directory
         psf = np.array(psf)
         psf = np.moveaxis(psf, 0, -1)
         # In the shape of (x, y, bands)
@@ -170,6 +190,7 @@ def get_image_and_run(galaxy_name, ps, psf_path, out_path):
         redshift(im, psf, sky, out_bands=["g", "r", "i", "z"], galaxy_name=galaxy_name)
     except MemoryError as e:
         print("Memory Error!")
+        print(e)
         return -1
     except Exception as e:
         print(e)
@@ -208,6 +229,7 @@ if __name__ == "__main__":
     # for galaxy in galaxy_names:
     #     func(galaxy)
     part = partial(get_image_and_run, ps=ps, psf_path=psf_path, out_path=o)
+    galaxy_names = [list(galaxy_names)[0]]
     with MPIPoolExecutor() as pool:
         pool.map(part, galaxy_names)
 
