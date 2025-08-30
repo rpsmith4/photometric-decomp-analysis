@@ -1113,7 +1113,6 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         # If multi-band, the 'bg' seems to be derived from the downscaled image of the best-fit filter.
         bg = im_ds[:, :, filt_i] / (1. + zhi) # From the best-fit filter
         im_ds = im_ds[:, :, filt_i] / (1. + zhi)
-        # im_ds = np.squeeze(im_ds, axis=-1)
         # If K-correction was applied, `im_ds` has the K-corrected values already.
 
     im_ds = maggies2cts(im_ds, thi, zphi)
@@ -1179,6 +1178,8 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         if sz_im_ds[0] > sz_sky[0] or sz_im_ds[1] > sz_sky[1]:
             raise ValueError('Sky image not big enough for downscaled galaxy.')
 
+        # Disabling the transformation PSF
+        '''
         # Calculate the transformation PSF
         psf_hi = psfhi
         psf_t = ferengi_transformation_psf(psf_lo, psf_hi, zlo, zhi, scllo, sclhi, same_size=True)
@@ -1192,9 +1193,11 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         pad_x_psf = psf_t.shape[0] // 2
         pad_y_psf = psf_t.shape[1] // 2
         psf_lo_padded = np.pad(psf_lo, ((pad_x_psf, pad_x_psf), (pad_y_psf, pad_y_psf)), 'constant')
+        '''
         
-        ''' Disabling getting the reconned PSF for now
+        '''# Disabling getting the reconned PSF for now
         recon_raw = convolve(psf_lo_padded, psf_t / np.sum(psf_t), mode='constant', cval=0.0) # Disabled for the time being
+        
         
         # Crop recon_raw back to a reasonable size, typically similar to psf_lo or psf_t
         # The exact cropping depends on the desired output size.
@@ -1222,14 +1225,19 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         # temp_im_ds_conv = np.zeros_like(im_ds)
         temp_im_ds_conv = list()
         # im_ds = np.squeeze(im_ds, axis=-1)
-        im_ds = ferengi_convolve_plus_noise(im_ds / thi, psf_t, sky, thi,
+        # im_ds = ferengi_convolve_plus_noise(im_ds / thi, psf_t, sky, thi,
+        #                                                         border_clip=3, extend=False, nonoise=False) # extend=False means crop borders, though is true in ferengi.pro?
+        
+        # Maybe I should just assume the PSF is alread at high redshift?
+        im_ds = ferengi_convolve_plus_noise(im_ds / thi, ferengi_odd_n_square(psf_lo), sky, thi,
                                                                 border_clip=3, extend=False, nonoise=False) # extend=False means crop borders, though is true in ferengi.pro?
     im_ds = im_ds * thi # FERENGI outputs in cts/second whereas the input is in cts
     # Write output FITS files
-    im_ds = np.squeeze(redshift_galaxy.cts2simunits(np.expand_dims(im_ds, axis=-1), 1.6134381299258355e-12, [thi]), axis=-1)
+    # im_ds = np.squeeze(redshift_galaxy.cts2simunits(np.expand_dims(im_ds, axis=-1), 1.6134381299258355e-12, [thi]), axis=-1) # Actually a mistake to leave this in but it gets me to the right order of magnitude, and is linear so it's fine for now
 
-    im_ds = cts2maggies(im_ds, thi, 22.5) * 10 ** 9 # nmgy
+    im_ds = cts2maggies(im_ds, thi, 22.5) * 10 ** 9 /100 # nmgy (With fudge factor)
     fits.writeto(im_out_file, im_ds, overwrite=True)
     # fits.writeto(psf_out_file, recon, overwrite=True)
+    # fits.writeto(psf_out_file, psf_lo, overwrite=True)
 
     print(f"FERENGI process completed. ({im_out_file})")
