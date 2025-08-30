@@ -98,7 +98,9 @@ def redshift(im, psf, sky, out_bands, galaxy_name):
     sclhi = pixscale.value
 
     tlo = [1, 1, 1, 1]
+    tlo = [1, 1, 1, 1, 1]
     tlo = [t/100 for t in tlo]
+    
     # tlo = [200000] * 4
     # TODO: Figure out what the exposure time should be
     # for the sky as well as the simulated image
@@ -114,19 +116,22 @@ def redshift(im, psf, sky, out_bands, galaxy_name):
     sky = ferengi.maggies2cts(sky * 10 ** (-9), expt=thi, zp=22.5) # sky is in nmgy
     sky = sky/thi # cnts / second
 
+    sky = np.zeros_like(sky)
+
     imerr = np.zeros_like(im) # Poisson Noise alread added
 
     psflo = psf
-    psfhi = psf[:, :, 0] # Using just the g band psf
     # erro0_mag = np.array([0, 0, 0, 0])
-    erro0_mag = np.array([0.02, 0.02, 0.02, 0.03]) # From SDSS
-    filter_lo = ["g", "r", "i", "z"]
+    erro0_mag = np.array([0.05, 0.02, 0.02, 0.02, 0.03]) # From SDSS
+    filter_lo = ["u", "g", "r", "i", "z"]
     lambda_lo = np.array([4640, 6580, 8060, 9000]) # Taken from Wikipedia
+    lambda_lo = np.array([3551, 4686, 6166, 7480, 8932]) # Taken from https://www.sdss4.org/instruments/camera/
 
     zlo = 0.0003 # TODO: Figure out issues with low zlo # Seems to be that the PSF is being downscaled way too much (becomes empty)
     # In part due to the scllo pixel scale being too small, so magnification (and resulting image) is smaller
 
     zplo = [22.5, 22.5, 22.5, 22.5] # magnitudes
+    zplo = [22.5, 22.5, 22.5, 22.5, 22.5] # magnitudes
     zphi = 22.5
 
     # band_wav = {
@@ -143,26 +148,36 @@ def redshift(im, psf, sky, out_bands, galaxy_name):
         "z": 8931
     } #http://astro.vaporia.com/start/sdss.html, Angstroms
 
-    try:
-        os.mkdir(galaxy_name)
-    except:
-        pass
-    os.chdir(galaxy_name)
-    for zhi in [0.05, 0.1, 0.15, 0.2, 1.0]:
-        for band in out_bands:
+    band_wav = {
+        "u": 3551,
+        "g": 4686,
+        "r": 6166,
+        "i": 7480,
+        "z": 8932
+    } #https://www.sdss4.org/instruments/camera/, Angstroms
+
+    # try:
+    #     os.mkdir(galaxy_name)
+    # except:
+    #     pass
+    # os.chdir(galaxy_name)
+    for zhi in [0.05, 0.1, 0.15, 0.2]:
+        for k,band in enumerate(out_bands):
             filter_hi = band
             lambda_hi = band_wav[band]
             im_out_file = f"{galaxy_name}_{band}_z={zhi}.fits"
             psf_out_file = f"{galaxy_name}_psf_{band}_recon_z={zhi}.fits"
-            ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=True)
-    os.chdir("../")
+            psfhi = psflo[:, :, k]
+            ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=False)
+    # os.chdir("../")
 
-def get_image_and_run(galaxy_name, ps, psf_path, out_path):
+def load_data_and_run(galaxy_name, p, psf_path, out_path):
     # TODO: Come back and make this take input and output bands as an arugment (not really important right now)
+    p = os.path.join(p, galaxy_name)
     try:
         im = list()
-        for band in "griz":
-            im.append(fits.getdata(os.path.join(ps[0], f"{galaxy_name}_E_SDSS_{band}.fits"))) # Assume everything is in the same parent directory
+        for band in "ugriz":
+            im.append(fits.getdata(os.path.join(p, f"{galaxy_name}_E_SDSS_{band}.fits"))) # Assume everything is in the same parent directory
         im = np.array(im)
         im = np.moveaxis(im, 0, -1)
         # In the shape of (x, y, bands)
@@ -175,35 +190,28 @@ def get_image_and_run(galaxy_name, ps, psf_path, out_path):
         sky = rng.normal(mu, stddev, size=sky_shape) # nmgy
 
         psf = list()
-        for band in "griz":
+        for band in "ugriz":
             # psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_{band}.fits"))) # Assume everything is in the same parent directory
-            if band != "z":
-                psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_{band}.fits"))) # Assume everything is in the same parent directory
+            if band != "z" and band != "u":
+                psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_{band}.fits"))) 
             else:
-                psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_i.fits"))) # Assume everything is in the same parent directory
+                psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_g.fits"))) 
         psf = np.array(psf)
         psf = np.moveaxis(psf, 0, -1)
-        # In the shape of (x, y, bands)
+        # In the shape of (x, y, bands)func
 
         print(f"Performing redshift on {galaxy_name}")
-        os.chdir(out_path)
+        os.chdir(p)
         redshift(im, psf, sky, out_bands=["g", "r", "i", "z"], galaxy_name=galaxy_name)
     except MemoryError as e:
         print("Memory Error!")
         print(e)
         return -1
-    except Exception as e:
-        print(e)
-        return -1
-    
-
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank() # get your process ID
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description="Artificially redshift TNG50 simulation galaxies with FERENGI.")
-    parser.add_argument("-p", nargs="+", help="Path to folder containing fits simulation images", default=".")
+    parser.add_argument("-p", help="Path to folder containing fits simulation images", default=".")
     parser.add_argument("--psf", help="Path to folder containing PSF images", default=".")
     parser.add_argument("-o", help="Output of high-redshift PSFs and FITs images", default=".")
     parser.add_argument("-ib", help="Input bands", nargs="+", choices=["g", "r", "i", "z"], default=["g", "r", "i", "z"])
@@ -211,26 +219,24 @@ if __name__ == "__main__":
     parser.add_argument("-t", help="Type of SKIRT output to use", choices=["SDSS"], default="SDSS")
     parser.add_argument("-n", help="Number of parallel redshifts", default=1, type=int)
     args = parser.parse_args()
-    ps = [Path(p).resolve() for p in args.p]
+
+    p = Path(args.p).resolve() 
     psf_path = Path(args.psf).resolve()
 
-    if not any(os.path.isdir(p) for p in ps):
-        galaxy_names = [p.name for p in ps]
-        ps = [p.parent for p in ps]
-    else:
-        if args.t == "SDSS":
-            galaxy_names = glob.glob(f"*SDSS*[{"".join(args.b)}]*", root_dir=ps[0])
+    galaxy_names = []
+
+    structure = os.walk(p)
+    for root, dirs, files in structure:
+        if not(files == []):
+            galaxy_name = os.path.basename(root)
+            galaxy_names.append(galaxy_name)
 
     o = Path(args.o).resolve()
 
-    if args.t == "SDSS":
-        galaxy_names = set([galaxy_name.split('_')[0] for galaxy_name in galaxy_names])
-
     # for galaxy in galaxy_names:
-    #     func(galaxy)
-    part = partial(get_image_and_run, ps=ps, psf_path=psf_path, out_path=o)
-    galaxy_names = [list(galaxy_names)[0]]
-    with MPIPoolExecutor() as pool:
+    #     load_data_and_run(galaxy_name, p, psf_path, o)
+    part = partial(load_data_and_run, p=p, psf_path=psf_path, out_path=o)
+    with MPIPoolExecutor(max_workers=args.n) as pool:
         pool.map(part, galaxy_names)
 
     # pool = mp.Pool(processes=args.n)
