@@ -96,7 +96,7 @@ def parse_results(file, galaxy_name, galaxy_type, table=None):
         # Gets other parameters from result
         if table:
             H_0 = 70.8 * u.km / u.s / u.Mpc
-            z = table["GALAXY" == galaxy_name]["Z_LEDA"]
+            z = table[table["GALAXY"] == galaxy_name]["Z_LEDA"]
             if z == -1:
                 func_dict["Distance"] = -1 # SGA sets z to -1 if z is not measured
             else:
