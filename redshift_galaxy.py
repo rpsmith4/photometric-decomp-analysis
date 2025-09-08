@@ -116,7 +116,6 @@ def redshift(im, psf, sky, out_bands, galaxy_name):
     sky = ferengi.maggies2cts(sky * 10 ** (-9), expt=thi, zp=22.5) # sky is in nmgy
     sky = sky/thi # cnts / second
 
-    sky = np.zeros_like(sky)
 
     imerr = np.zeros_like(im) # Poisson Noise alread added
 
@@ -184,10 +183,11 @@ def load_data_and_run(galaxy_name, p, psf_path, out_path):
 
         rng = np.random.default_rng()
         mu = 0
-        stddev = np.sqrt(0.0166606) # Taken from a DESI image
+        stddevs = np.array([0.00247579, 0.00247579, 0.0037597, 0.0074736, 0.0108026]) # Taken from a DESI image; u, g, r, i, and z band
 
         sky_shape = (np.shape(im)[0]*3, np.shape(im)[1]*3) # Adjust as needed to make the code not error out if the sky is too small
-        sky = rng.normal(mu, stddev, size=sky_shape) # nmgy
+        sky = rng.normal(mu, stddevs, size=(sky_shape[0], sky_shape[1], 5)) # nmgy
+        sky = 100*sky # Needed to make it even visible (may have to change thi or something)
 
         psf = list()
         for band in "ugriz":
@@ -205,6 +205,9 @@ def load_data_and_run(galaxy_name, p, psf_path, out_path):
         redshift(im, psf, sky, out_bands=["g", "r", "i", "z"], galaxy_name=galaxy_name)
     except MemoryError as e:
         print("Memory Error!")
+        print(e)
+        return -1
+    except Exception as e:
         print(e)
         return -1
 

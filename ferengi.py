@@ -1229,7 +1229,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         #                                                         border_clip=3, extend=False, nonoise=False) # extend=False means crop borders, though is true in ferengi.pro?
         
         # Maybe I should just assume the PSF is alread at high redshift?
-        im_ds = ferengi_convolve_plus_noise(im_ds / thi, ferengi_odd_n_square(psf_lo), sky, thi,
+        im_ds = ferengi_convolve_plus_noise(im_ds / thi, ferengi_odd_n_square(psf_lo), sky[:, :, filt_i], thi,
                                                                 border_clip=3, extend=False, nonoise=False) # extend=False means crop borders, though is true in ferengi.pro?
     im_ds = im_ds * thi # FERENGI outputs in cts/second whereas the input is in cts
     # Write output FITS files
