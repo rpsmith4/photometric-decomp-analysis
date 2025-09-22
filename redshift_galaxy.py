@@ -84,7 +84,7 @@ def cts2simunits(im, pixarea, expt):
     im = im / (10 ** 6 * 10 ** (-23)) / pixarea
     return im 
 
-def redshift(im, psf, sky, out_bands, galaxy_name):
+def redshift(im, psf, sky, out_bands, galaxy_name, lerp_scheme):
     # 1 pixel is 100 pc 
     # TODO: Figure out the "distance" to the object in the SKIRT image
     pixscale = 0.262 * u.arcsecond
@@ -167,10 +167,10 @@ def redshift(im, psf, sky, out_bands, galaxy_name):
             im_out_file = f"{galaxy_name}_{band}_z={zhi}.fits"
             psf_out_file = f"{galaxy_name}_psf_{band}_recon_z={zhi}.fits"
             psfhi = psflo[:, :, k]
-            ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=False)
+            ferengi.ferengi(sky, im, imerr, psflo, erro0_mag, psfhi, lambda_lo, filter_lo, zlo, scllo, zplo, tlo, lambda_hi, filter_hi, zhi, sclhi, zphi, thi, im_out_file, psf_out_file, noflux=False, evo=None, noconv=False, lerp_scheme=lerp_scheme)
     # os.chdir("../")
 
-def load_data_and_run(galaxy_name, p, psf_path, out_path):
+def load_data_and_run(galaxy_name, p, psf_path, out_path, lerp_scheme):
     # TODO: Come back and make this take input and output bands as an arugment (not really important right now)
     p = os.path.join(p, galaxy_name)
     try:
@@ -201,8 +201,9 @@ def load_data_and_run(galaxy_name, p, psf_path, out_path):
         # In the shape of (x, y, bands)func
 
         print(f"Performing redshift on {galaxy_name}")
-        os.chdir(p)
-        redshift(im, psf, sky, out_bands=["g", "r", "i", "z"], galaxy_name=galaxy_name)
+        Path(os.path.join(out_path, f'{galaxy_name}')).mkdir(exist_ok=True)
+        os.chdir(Path(os.path.join(out_path, f'{galaxy_name}')))
+        redshift(im, psf, sky, out_bands=["g", "r", "i", "z"], galaxy_name=galaxy_name, lerp_scheme=lerp_scheme)
     except MemoryError as e:
         print("Memory Error!")
         print(e)
@@ -216,15 +217,22 @@ if __name__ == "__main__":
                                      description="Artificially redshift TNG50 simulation galaxies with FERENGI.")
     parser.add_argument("-p", help="Path to folder containing fits simulation images", default=".")
     parser.add_argument("--psf", help="Path to folder containing PSF images", default=".")
-    parser.add_argument("-o", help="Output of high-redshift PSFs and FITs images", default=".")
+    parser.add_argument("-o", help="Output of high-redshift PSFs and FITs images", default=None)
     parser.add_argument("-ib", help="Input bands", nargs="+", choices=["g", "r", "i", "z"], default=["g", "r", "i", "z"])
     parser.add_argument("-b", help="Output bands", nargs="+", choices=["g", "r", "i", "z"], default=["g", "r", "i", "z"])
     parser.add_argument("-t", help="Type of SKIRT output to use", choices=["SDSS"], default="SDSS")
     parser.add_argument("-n", help="Number of parallel redshifts", default=1, type=int)
+    parser.add_argument("-l", help="Lerp Scheme", default=0, type=int)
     args = parser.parse_args()
 
     p = Path(args.p).resolve() 
+    if args.o == None:
+        o = p
+    else:
+        o = Path(args.o).resolve()
+
     psf_path = Path(args.psf).resolve()
+    lerp_scheme = args.l
 
     galaxy_names = []
 
@@ -234,10 +242,9 @@ if __name__ == "__main__":
             galaxy_name = os.path.basename(root)
             galaxy_names.append(galaxy_name)
 
-    o = Path(args.o).resolve()
 
     # for galaxy in galaxy_names:
-    #     load_data_and_run(galaxy_name, p, psf_path, o)
+    #     load_data_and_run(galaxy, p, psf_path, o, lerp_scheme)
     part = partial(load_data_and_run, p=p, psf_path=psf_path, out_path=o)
     with MPIPoolExecutor(max_workers=args.n) as pool:
         pool.map(part, galaxy_names)

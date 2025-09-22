@@ -847,7 +847,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             lambda_lo, filter_lo, zlo, scllo, zplo, tlo,
             lambda_hi, filter_hi, zhi, sclhi, zphi, thi,
             im_out_file, psf_out_file,
-            noflux=False, evo=None, noconv=False):
+            noflux=False, evo=None, noconv=False, lerp_scheme=0):
     """
     Applies the effects of redshift to a local galaxy image.
     """
@@ -923,7 +923,27 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         npix = im_ds[:,:,0].size
         
         # Find index of input filter closest to output wavelength
-        zmin_idx = np.argmin(np.abs(lambda_hi / lambda_lo - 1 - zhi))
+        diff = np.abs(lambda_hi / lambda_lo - 1 - zhi)
+        # zmin_idx = np.argmin(diff)
+
+        # Terrible code, I am very tired right now, will fix if this works well 
+        if lerp_scheme == 0: # Regular, pick one band
+            sorted = np.argsort(diff)
+            zmin_idx = sorted[0]
+        if lerp_scheme == 1: # Pick 2 closest bands with weighting 
+            sorted = np.argsort(diff)
+            zmin_idx = sorted[0]
+            zmin_idx_second = sorted[1]
+            dist_sum = diff[zmin_idx] + diff[zmin_idx_second]
+            norm_dists = (diff[zmin_idx]/dist_sum, diff[zmin_idx_second]/dist_sum)
+        if lerp_scheme == 2: # Pick 3 closest bands with weighting 
+            sorted = np.argsort(diff)
+            zmin_idx = sorted[0]
+            zmin_idx_second = sorted[1]
+            zmin_idx_third = sorted[2]
+            dist_sum = diff[zmin_idx] + diff[zmin_idx_second] + diff[zmin_idx_third]
+            norm_dists = (diff[zmin_idx]/dist_sum, diff[zmin_idx_second]/dist_sum, diff[zmin_idx_third]/dist_sum)
+
         filt_i = zmin_idx
 
         # Calculate sigma map and identify "good" pixels
@@ -1112,7 +1132,13 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
     else:
         # If multi-band, the 'bg' seems to be derived from the downscaled image of the best-fit filter.
         bg = im_ds[:, :, filt_i] / (1. + zhi) # From the best-fit filter
-        im_ds = im_ds[:, :, filt_i] / (1. + zhi)
+        # im_ds = im_ds[:, :, filt_i] / (1. + zhi)
+        if lerp_scheme == 0:
+            im_ds = im_ds[:, :, zmin_idx] 
+        if lerp_scheme == 1:
+            im_ds = im_ds[:, :, zmin_idx]*(1-norm_dists[0]) + im_ds[:, :, zmin_idx_second]*(1-norm_dists[1]) 
+        if lerp_scheme == 2:
+            im_ds = im_ds[:, :, zmin_idx]*(1-norm_dists[0]) + im_ds[:, :, zmin_idx_second]*(1-norm_dists[1]) + im_ds[:, :, zmin_idx_third]*(1-norm_dists[2])
         # If K-correction was applied, `im_ds` has the K-corrected values already.
 
     im_ds = maggies2cts(im_ds, thi, zphi)
