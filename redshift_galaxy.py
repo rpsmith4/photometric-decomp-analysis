@@ -192,7 +192,8 @@ def load_data_and_run(galaxy_name, p, psf_path, out_path, lerp_scheme):
         psf = list()
         for band in "ugriz":
             # psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_{band}.fits"))) # Assume everything is in the same parent directory
-            if band != "z" and band != "u":
+            # if band != "z" and band != "u":
+            if band != "u":
                 psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_{band}.fits"))) 
             else:
                 psf.append(fits.getdata(os.path.join(psf_path, f"psf_patched_g.fits"))) 
@@ -245,7 +246,7 @@ if __name__ == "__main__":
 
     # for galaxy in galaxy_names:
     #     load_data_and_run(galaxy, p, psf_path, o, lerp_scheme)
-    part = partial(load_data_and_run, p=p, psf_path=psf_path, out_path=o)
+    part = partial(load_data_and_run, p=p, psf_path=psf_path, out_path=o, lerp_scheme=lerp_scheme)
     with MPIPoolExecutor(max_workers=args.n) as pool:
         pool.map(part, galaxy_names)
 
