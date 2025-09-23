@@ -202,7 +202,7 @@ def load_data_and_run(galaxy_name, p, psf_path, out_path, lerp_scheme):
         # In the shape of (x, y, bands)func
 
         print(f"Performing redshift on {galaxy_name}")
-        Path(os.path.join(out_path, f'{galaxy_name}')).mkdir(exist_ok=True)
+        Path(os.path.join(out_path, f'{galaxy_name}')).mkdir(exist_ok=True, parents=True)
         os.chdir(Path(os.path.join(out_path, f'{galaxy_name}')))
         redshift(im, psf, sky, out_bands=["g", "r", "i", "z"], galaxy_name=galaxy_name, lerp_scheme=lerp_scheme)
     except MemoryError as e:
