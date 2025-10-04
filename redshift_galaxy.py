@@ -11,6 +11,8 @@ import multiprocessing as mp
 from mpi4py import MPI
 from mpi4py.futures import MPIPoolExecutor
 from functools import partial
+from astropy.cosmology import FlatLambdaCDM
+cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
 
 # INPUTS:
 #   sky = high redshift sky background image
@@ -72,6 +74,13 @@ def simunits2cts(simim, pixarea, expt):
         simim[:, :, k] = ferengi.maggies2cts(ferengi.fnu2maggies(simim[:, :, k]), expt=expt[k], zp=22.5)
     return simim # fnu/pixel -> maggies/pixel -> cnts/pixel
 
+def simunits2cts2(simim, pixarea, expt):
+    simim = simim * 10 ** 6 * 3.631e-6 * pixarea # MJy/sr to nmgy /pixel
+    for k in range(np.shape(simim)[-1]):
+        simim[:, :, k] = ferengi.maggies2cts(simim[:,:,k], expt=expt[k], zp=22.5)
+    return simim 
+
+
 def simunits2maggies(simim, pixarea):
     simim = simim * 10 ** 6 * 10 ** (-23) * pixarea # MJy/sr to ergs/s/cm**2/Hz(fnu) /pixel
     for k in range(np.shape(simim)[-1]):
@@ -90,29 +99,29 @@ def redshift(im, psf, sky, out_bands, galaxy_name, lerp_scheme):
     pixscale = 0.262 * u.arcsecond
     pixarea = pixscale ** 2
     pixarea = pixarea.to(u.sr).value
-    scllo = pixscale.value * 1000
-    scllo = pixscale.value * 100
-    pixarea_lo = pixarea * 1000**2
+    # scllo = pixscale.value * 1000
+    # scllo = pixscale.value * 100
+    scllo = np.arctan2(100*u.pc, cosmo.luminosity_distance(0.00003)).to(u.arcsec).value
+    # pixarea_lo = pixarea * 1000**2
     pixarea_lo = pixarea
+    pixscale_lo = scllo * u.arcsecond
+    pixarea_lo = pixscale_lo ** 2
+    pixarea_lo = pixarea_lo.to(u.sr).value
     # scllo = pixscale.value 
     sclhi = pixscale.value
+    # scllo = sclhi
 
     tlo = [1, 1, 1, 1]
     tlo = [1, 1, 1, 1, 1]
     tlo = [t/100 for t in tlo]
-    
-    # tlo = [200000] * 4
-    # TODO: Figure out what the exposure time should be
-    # for the sky as well as the simulated image
 
-    im = im * 10**6 # Needed to get the order of magnitude right 
-    # print(simunits2maggies(im, pixarea))
-    im = simunits2cts(im, pixarea_lo, tlo) 
+    im = im * 10**2 # Needed to get the order of magnitude right 
+    im = simunits2cts2(im, pixarea_lo, tlo) 
+    # im = simunits2cts(im, pixarea_lo, tlo) 
 
     # sky = np.zeros_like(sky) 
 
     thi = 200 # Based vaguely off of DESI images
-    # thi = 200000 # Based vaguely off of DESI images
     sky = ferengi.maggies2cts(sky * 10 ** (-9), expt=thi, zp=22.5) # sky is in nmgy
     sky = sky/thi # cnts / second
 
@@ -126,7 +135,7 @@ def redshift(im, psf, sky, out_bands, galaxy_name, lerp_scheme):
     lambda_lo = np.array([4640, 6580, 8060, 9000]) # Taken from Wikipedia
     lambda_lo = np.array([3551, 4686, 6166, 7480, 8932]) # Taken from https://www.sdss4.org/instruments/camera/
 
-    zlo = 0.0003 # TODO: Figure out issues with low zlo # Seems to be that the PSF is being downscaled way too much (becomes empty)
+    zlo = 0.00003 # TODO: Figure out issues with low zlo # Seems to be that the PSF is being downscaled way too much (becomes empty)
     # In part due to the scllo pixel scale being too small, so magnification (and resulting image) is smaller
 
     zplo = [22.5, 22.5, 22.5, 22.5] # magnitudes
@@ -161,6 +170,7 @@ def redshift(im, psf, sky, out_bands, galaxy_name, lerp_scheme):
     #     pass
     # os.chdir(galaxy_name)
     for zhi in [0.05, 0.1, 0.15, 0.2]:
+    # for zhi in [zlo+0.001]:
         for k,band in enumerate(out_bands):
             filter_hi = band
             lambda_hi = band_wav[band]
@@ -187,7 +197,7 @@ def load_data_and_run(galaxy_name, p, psf_path, out_path, lerp_scheme):
 
         sky_shape = (np.shape(im)[0]*3, np.shape(im)[1]*3) # Adjust as needed to make the code not error out if the sky is too small
         sky = rng.normal(mu, stddevs, size=(sky_shape[0], sky_shape[1], 5)) # nmgy
-        sky = 100*sky # Needed to make it even visible (may have to change thi or something)
+        # sky = 100*sky # Needed to make it even visible (may have to change thi or something)
 
         psf = list()
         for band in "ugriz":

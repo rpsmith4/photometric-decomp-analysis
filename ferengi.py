@@ -1261,7 +1261,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
     # Write output FITS files
     # im_ds = np.squeeze(redshift_galaxy.cts2simunits(np.expand_dims(im_ds, axis=-1), 1.6134381299258355e-12, [thi]), axis=-1) # Actually a mistake to leave this in but it gets me to the right order of magnitude, and is linear so it's fine for now
 
-    im_ds = cts2maggies(im_ds, thi, 22.5) * 10 ** 9 /100 # nmgy (With fudge factor)
+    im_ds = cts2maggies(im_ds, thi, 22.5) * 10 ** 9 # nmgy 
     fits.writeto(im_out_file, im_ds, overwrite=True)
     # fits.writeto(psf_out_file, recon, overwrite=True)
     # fits.writeto(psf_out_file, psf_lo, overwrite=True)
