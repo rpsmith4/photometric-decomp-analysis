@@ -10,6 +10,9 @@ import redshift_galaxy
 import astropy
 import os
 
+# Just checking to ensure that I've actually got the GitHub
+# set up properly to push/pull changes to these files:)
+
 # Define cosmology for luminosity distance calculations
 cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
 # Source:
