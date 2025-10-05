@@ -9,6 +9,7 @@ import kcorrect.kcorrect
 import redshift_galaxy
 import astropy
 import os
+import astropy.units as u
 
 # Define cosmology for luminosity distance calculations
 cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
@@ -572,7 +573,9 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     d_hi = cosmo.luminosity_distance(z_hi).value # in Mpc
 
     # The magnification (size correction)
-    magnification = (d_lo / d_hi * (1. + z_hi)**2 / (1. + z_lo)**2 * p_lo / p_hi)
+    # magnification = (d_lo / d_hi * (1. + z_hi)**2 / (1. + z_lo)**2 * p_lo / p_hi)
+    orig_p_hi = np.arctan2(100*u.pc, cosmo.luminosity_distance(z_hi)).to(u.arcsec).value
+    magnification = orig_p_hi / p_hi
     if upscl:
         magnification = 1. / magnification
 
@@ -598,11 +601,11 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     # Perform the scaling. Use spline interpolation (order=3) for better quality.
     # The output `zoomed_im` will be scaled by the square of the zoom factor if `mode='nearest'`.
     # For flux conservation, we should divide by the square of the zoom factors to get total flux.
-    zoomed_im = zoom(im_lo, (actual_zoom_x, actual_zoom_y), order=3)
-    with np.errstate(divide='ignore'):
-        zoomed_im = zoomed_im / np.sum(zoomed_im) * np.sum(im_lo) # make sure that sum(im_lo) = sum(zoomed_im)
+    zoomed_im = zoom(im_lo, (actual_zoom_x, actual_zoom_y), order=5, mode="nearest")/actual_zoom_x**2
+    # with np.errstate(divide='ignore'):
+    #     zoomed_im = zoomed_im / np.sum(zoomed_im) * np.sum(im_lo) # make sure that sum(im_lo) = sum(zoomed_im)
     
-    zoomed_im[zoomed_im == np.nan] = 0
+    # zoomed_im[zoomed_im == np.nan] = 0
     
     # Adjust for total flux if the interpolation method does not inherently conserve it.
     # If FREBIN /total means summing up pixel values, then a simple zoom followed by multiplication
@@ -612,7 +615,10 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     # But since we're scaling the image itself, the total flux will be conserved by `zoom` if we normalize later.
     # The original IDL code multiplies by flux_ratio * evo_fact.
     
-    return zoomed_im * flux_ratio * evo_fact
+    pixarea = p_hi ** 2 * u.arcsec**2
+    pixarea = pixarea.to(u.sr).value
+    print(pixarea)
+    return zoomed_im * flux_ratio * evo_fact * pixarea
 
 def ferengi_odd_n_square(psf0, centre=None):
     """
@@ -915,8 +921,8 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
                                          np.inf) # Set to inf if original flux is zero
 
         # Convert image from cts to maggies
-        for j in range(nbands):
-            im_ds[:, :, j] = cts2maggies(im_ds[:, :, j], tlo[j], zplo[j])
+        # for j in range(nbands):
+        #     im_ds[:, :, j] = cts2maggies(im_ds[:, :, j], tlo[j], zplo[j])
 
         # K-correction section (using placeholders)
         siglim = 2
@@ -946,6 +952,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
 
         filt_i = zmin_idx
 
+        '''
         # Calculate sigma map and identify "good" pixels
         nsig = np.zeros_like(im_ds)
         nhi = np.zeros(im_ds[:,:,0].shape, dtype=int)
@@ -958,6 +965,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             
             hi_pixels = np.where(np.abs(nsig[:, :, j]) > siglim)
             nhi[hi_pixels] += 1
+        '''
         
         # Select pixels for K-correction
         '''
@@ -1141,7 +1149,7 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             im_ds = im_ds[:, :, zmin_idx]*(1-norm_dists[0]) + im_ds[:, :, zmin_idx_second]*(1-norm_dists[1]) + im_ds[:, :, zmin_idx_third]*(1-norm_dists[2])
         # If K-correction was applied, `im_ds` has the K-corrected values already.
 
-    im_ds = maggies2cts(im_ds, thi, zphi)
+    # im_ds = maggies2cts(im_ds, thi, zphi)
     if not nok: # Only if K-correction was attempted
         bg = maggies2cts(bg, thi, zphi) # Convert background too
 
@@ -1159,34 +1167,34 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
     if idx_zero[0].size > 0:
         im_ds[idx_zero[0], idx_zero[1]] = med_val[idx_zero[0], idx_zero[1]]
     
-    if not nok:
-        # Check for large outliers after K-correction for multi-band images
-        # This part of the IDL code is to clean extreme residuals.
-        m_im_ds, sig_im_ds, nrej_im_ds = resistant_mean(im_ds, 3)
-        sig_im_ds *= np.sqrt(im_ds.size - 1 - nrej_im_ds)
+    # if not nok:
+        # # Check for large outliers after K-correction for multi-band images
+        # # This part of the IDL code is to clean extreme residuals.
+        # m_im_ds, sig_im_ds, nrej_im_ds = resistant_mean(im_ds, 3)
+        # sig_im_ds *= np.sqrt(im_ds.size - 1 - nrej_im_ds)
         
-        idx_outliers = np.where(np.abs(im_ds) > 10 * sig_im_ds)
+        # idx_outliers = np.where(np.abs(im_ds) > 10 * sig_im_ds)
         
-        if idx_outliers[0].size >= 2:
-            # Flatten for line fit
-            fit_coeffs = robust_linefit(np.abs(bg[idx_outliers]), np.abs(im_ds[idx_outliers]))
+        # if idx_outliers[0].size >= 2:
+        #     # Flatten for line fit
+        #     fit_coeffs = robust_linefit(np.abs(bg[idx_outliers]), np.abs(im_ds[idx_outliers]))
             
-            delta = np.abs(im_ds[idx_outliers]) - (fit_coeffs[0] + fit_coeffs[1] * np.abs(bg[idx_outliers]))
+        #     delta = np.abs(im_ds[idx_outliers]) - (fit_coeffs[0] + fit_coeffs[1] * np.abs(bg[idx_outliers]))
             
-            m_delta, sig_delta, nrej_delta = resistant_mean(delta, 3)
-            sig_delta *= np.sqrt(delta.size - 1 - nrej_delta)
+        #     m_delta, sig_delta, nrej_delta = resistant_mean(delta, 3)
+        #     sig_delta *= np.sqrt(delta.size - 1 - nrej_delta)
             
-            idx1 = np.where(delta / sig_delta > 50)
-            if idx1[0].size > 0:
-                # Replace these extreme outliers with median from the original med_val
-                # Need to map idx_outliers[idx1] back to the 3D array.
-                # med_val_flat = med_val.flatten() # Assuming med_val was calculated per band
-                idx_x = idx_outliers[0][idx1[0]]
-                idx_y = idx_outliers[1][idx1[0]]
-                idxs = (idx_x, idx_y)
-                # im_ds[idx_outliers[idx1[0], idx1[0]]] = med_val[idx_outliers[idx1[0], idx1[0]]] # idx is just a tupe of (x,)
-                im_ds[idxs] = med_val[idxs] 
-                im_ds = im_ds.reshape(im_ds.shape)
+        #     idx1 = np.where(delta / sig_delta > 50)
+        #     if idx1[0].size > 0:
+        #         # Replace these extreme outliers with median from the original med_val
+        #         # Need to map idx_outliers[idx1] back to the 3D array.
+        #         # med_val_flat = med_val.flatten() # Assuming med_val was calculated per band
+        #         idx_x = idx_outliers[0][idx1[0]]
+        #         idx_y = idx_outliers[1][idx1[0]]
+        #         idxs = (idx_x, idx_y)
+        #         # im_ds[idx_outliers[idx1[0], idx1[0]]] = med_val[idx_outliers[idx1[0], idx1[0]]] # idx is just a tupe of (x,)
+        #         im_ds[idxs] = med_val[idxs] 
+                # im_ds = im_ds.reshape(im_ds.shape)
 
     # Subtract sky again after K-correction and cleaning (if not already done)
     # Not reallty necessary since this is a simulated image
@@ -1255,13 +1263,13 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         #                                                         border_clip=3, extend=False, nonoise=False) # extend=False means crop borders, though is true in ferengi.pro?
         
         # Maybe I should just assume the PSF is alread at high redshift?
-        im_ds = ferengi_convolve_plus_noise(im_ds / thi, ferengi_odd_n_square(psf_lo), sky[:, :, filt_i], thi,
+        im_ds = ferengi_convolve_plus_noise(im_ds, ferengi_odd_n_square(psf_lo), sky[:, :, filt_i], thi,
                                                                 border_clip=3, extend=False, nonoise=False) # extend=False means crop borders, though is true in ferengi.pro?
-    im_ds = im_ds * thi # FERENGI outputs in cts/second whereas the input is in cts
+    # im_ds = im_ds* thi # FERENGI outputs in cts/second whereas the input is in cts
     # Write output FITS files
     # im_ds = np.squeeze(redshift_galaxy.cts2simunits(np.expand_dims(im_ds, axis=-1), 1.6134381299258355e-12, [thi]), axis=-1) # Actually a mistake to leave this in but it gets me to the right order of magnitude, and is linear so it's fine for now
 
-    im_ds = cts2maggies(im_ds, thi, 22.5) * 10 ** 9 # nmgy 
+    # im_ds = cts2maggies(im_ds, thi, 22.5) * 10 ** 9 # nmgy 
     fits.writeto(im_out_file, im_ds, overwrite=True)
     # fits.writeto(psf_out_file, recon, overwrite=True)
     # fits.writeto(psf_out_file, psf_lo, overwrite=True)

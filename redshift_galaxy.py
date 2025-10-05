@@ -80,6 +80,10 @@ def simunits2cts2(simim, pixarea, expt):
         simim[:, :, k] = ferengi.maggies2cts(simim[:,:,k], expt=expt[k], zp=22.5)
     return simim 
 
+def simunits2maggies2(simim, pixarea):
+    # simim = simim * 10 ** 6 / 3.631e-6 * pixarea # MJy/sr to nmgy /pixel
+    simim = simim * 10 ** 6 / 3.631e-6 # MJy/sr to nmgy /sr
+    return simim 
 
 def simunits2maggies(simim, pixarea):
     simim = simim * 10 ** 6 * 10 ** (-23) * pixarea # MJy/sr to ergs/s/cm**2/Hz(fnu) /pixel
@@ -99,44 +103,42 @@ def redshift(im, psf, sky, out_bands, galaxy_name, lerp_scheme):
     pixscale = 0.262 * u.arcsecond
     pixarea = pixscale ** 2
     pixarea = pixarea.to(u.sr).value
-    # scllo = pixscale.value * 1000
-    # scllo = pixscale.value * 100
-    scllo = np.arctan2(100*u.pc, cosmo.luminosity_distance(0.00003)).to(u.arcsec).value
-    # pixarea_lo = pixarea * 1000**2
-    pixarea_lo = pixarea
+    sclhi = pixscale.value
+
+    zlo = 0.00001 # TODO: Figure out issues with low zlo # Seems to be that the PSF is being downscaled way too much (becomes empty)
+    # In part due to the scllo pixel scale being too small, so magnification (and resulting image) is smaller
+
+    scllo = np.arctan2(100*u.pc, cosmo.luminosity_distance(zlo)).to(u.arcsec).value
     pixscale_lo = scllo * u.arcsecond
     pixarea_lo = pixscale_lo ** 2
     pixarea_lo = pixarea_lo.to(u.sr).value
+    print(pixarea_lo)
+
     # scllo = pixscale.value 
-    sclhi = pixscale.value
     # scllo = sclhi
 
     tlo = [1, 1, 1, 1]
     tlo = [1, 1, 1, 1, 1]
     tlo = [t/100 for t in tlo]
 
-    im = im * 10**2 # Needed to get the order of magnitude right 
-    im = simunits2cts2(im, pixarea_lo, tlo) 
+    im = im * 10**(6) # Needed to get the order of magnitude right 
+    # im = simunits2cts2(im, pixarea_lo, tlo) 
+    im = simunits2maggies2(im, pixarea_lo) 
     # im = simunits2cts(im, pixarea_lo, tlo) 
 
     # sky = np.zeros_like(sky) 
 
     thi = 200 # Based vaguely off of DESI images
-    sky = ferengi.maggies2cts(sky * 10 ** (-9), expt=thi, zp=22.5) # sky is in nmgy
-    sky = sky/thi # cnts / second
 
 
     imerr = np.zeros_like(im) # Poisson Noise alread added
 
     psflo = psf
-    # erro0_mag = np.array([0, 0, 0, 0])
     erro0_mag = np.array([0.05, 0.02, 0.02, 0.02, 0.03]) # From SDSS
     filter_lo = ["u", "g", "r", "i", "z"]
     lambda_lo = np.array([4640, 6580, 8060, 9000]) # Taken from Wikipedia
     lambda_lo = np.array([3551, 4686, 6166, 7480, 8932]) # Taken from https://www.sdss4.org/instruments/camera/
 
-    zlo = 0.00003 # TODO: Figure out issues with low zlo # Seems to be that the PSF is being downscaled way too much (becomes empty)
-    # In part due to the scllo pixel scale being too small, so magnification (and resulting image) is smaller
 
     zplo = [22.5, 22.5, 22.5, 22.5] # magnitudes
     zplo = [22.5, 22.5, 22.5, 22.5, 22.5] # magnitudes
@@ -164,11 +166,7 @@ def redshift(im, psf, sky, out_bands, galaxy_name, lerp_scheme):
         "z": 8932
     } #https://www.sdss4.org/instruments/camera/, Angstroms
 
-    # try:
-    #     os.mkdir(galaxy_name)
-    # except:
-    #     pass
-    # os.chdir(galaxy_name)
+    sky = sky*0
     for zhi in [0.05, 0.1, 0.15, 0.2]:
     # for zhi in [zlo+0.001]:
         for k,band in enumerate(out_bands):
