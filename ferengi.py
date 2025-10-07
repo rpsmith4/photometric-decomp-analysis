@@ -575,14 +575,18 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     # The magnification (size correction)
     # magnification = (d_lo / d_hi * (1. + z_hi)**2 / (1. + z_lo)**2 * p_lo / p_hi)
     orig_p_hi = np.arctan2(100*u.pc, cosmo.luminosity_distance(z_hi)).to(u.arcsec).value
-    magnification = orig_p_hi / p_hi
+    a = (orig_p_hi**2 * u.arcsec**2).to(u.sr)
+    magnification = (orig_p_hi / p_hi)
     if upscl:
         magnification = 1. / magnification
 
     # The flux scaling (surface brightness dimming)
     flux_ratio = 1.0
+    # if not nofluxscl:
+    #     flux_ratio = (d_lo / d_hi)**2
+    # https://iopscience.iop.org/article/10.1088/0004-637X/796/2/102
     if not nofluxscl:
-        flux_ratio = (d_lo / d_hi)**2
+        sb_ratio = 1/(1+z_hi)**4
 
     sz_lo = np.array(im_lo.shape)
     nx_hi = int(np.round(sz_lo[0] * magnification))
@@ -601,7 +605,9 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     # Perform the scaling. Use spline interpolation (order=3) for better quality.
     # The output `zoomed_im` will be scaled by the square of the zoom factor if `mode='nearest'`.
     # For flux conservation, we should divide by the square of the zoom factors to get total flux.
-    zoomed_im = zoom(im_lo, (actual_zoom_x, actual_zoom_y), order=5, mode="nearest")/actual_zoom_x**2
+    # (f1/sr * pixarea_lo + f2/sr * pixarea_lo) * pixareahi / z**2
+    zoomed_im = zoom(im_lo*a*sb_ratio, (actual_zoom_x, actual_zoom_y), order=5, mode="nearest")/actual_zoom_x**2
+    
     # with np.errstate(divide='ignore'):
     #     zoomed_im = zoomed_im / np.sum(zoomed_im) * np.sum(im_lo) # make sure that sum(im_lo) = sum(zoomed_im)
     
@@ -617,8 +623,7 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     
     pixarea = p_hi ** 2 * u.arcsec**2
     pixarea = pixarea.to(u.sr).value
-    print(pixarea)
-    return zoomed_im * flux_ratio * evo_fact * pixarea
+    return zoomed_im * flux_ratio * evo_fact #* pixarea
 
 def ferengi_odd_n_square(psf0, centre=None):
     """

@@ -105,14 +105,13 @@ def redshift(im, psf, sky, out_bands, galaxy_name, lerp_scheme):
     pixarea = pixarea.to(u.sr).value
     sclhi = pixscale.value
 
-    zlo = 0.00001 # TODO: Figure out issues with low zlo # Seems to be that the PSF is being downscaled way too much (becomes empty)
+    zlo = 0 # TODO: Figure out issues with low zlo # Seems to be that the PSF is being downscaled way too much (becomes empty)
     # In part due to the scllo pixel scale being too small, so magnification (and resulting image) is smaller
 
     scllo = np.arctan2(100*u.pc, cosmo.luminosity_distance(zlo)).to(u.arcsec).value
     pixscale_lo = scllo * u.arcsecond
     pixarea_lo = pixscale_lo ** 2
     pixarea_lo = pixarea_lo.to(u.sr).value
-    print(pixarea_lo)
 
     # scllo = pixscale.value 
     # scllo = sclhi
@@ -121,7 +120,7 @@ def redshift(im, psf, sky, out_bands, galaxy_name, lerp_scheme):
     tlo = [1, 1, 1, 1, 1]
     tlo = [t/100 for t in tlo]
 
-    im = im * 10**(6) # Needed to get the order of magnitude right 
+    # im = im * 10**(-1) # Needed to get the order of magnitude right 
     # im = simunits2cts2(im, pixarea_lo, tlo) 
     im = simunits2maggies2(im, pixarea_lo) 
     # im = simunits2cts(im, pixarea_lo, tlo) 
@@ -166,7 +165,7 @@ def redshift(im, psf, sky, out_bands, galaxy_name, lerp_scheme):
         "z": 8932
     } #https://www.sdss4.org/instruments/camera/, Angstroms
 
-    sky = sky*0
+    # sky = sky*0
     for zhi in [0.05, 0.1, 0.15, 0.2]:
     # for zhi in [zlo+0.001]:
         for k,band in enumerate(out_bands):
