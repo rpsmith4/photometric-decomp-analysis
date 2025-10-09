@@ -574,6 +574,7 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
 
     # The magnification (size correction)
     # magnification = (d_lo / d_hi * (1. + z_hi)**2 / (1. + z_lo)**2 * p_lo / p_hi)
+
     orig_p_hi = np.arctan2(100*u.pc, cosmo.luminosity_distance(z_hi)).to(u.arcsec).value
     a = (orig_p_hi**2 * u.arcsec**2).to(u.sr)
     magnification = (orig_p_hi / p_hi)
@@ -606,7 +607,8 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     # The output `zoomed_im` will be scaled by the square of the zoom factor if `mode='nearest'`.
     # For flux conservation, we should divide by the square of the zoom factors to get total flux.
     # (f1/sr * pixarea_lo + f2/sr * pixarea_lo) * pixareahi / z**2
-    zoomed_im = zoom(im_lo*a*sb_ratio, (actual_zoom_x, actual_zoom_y), order=5, mode="nearest")/actual_zoom_x**2
+    im_lo = im_lo * u.nmgy/u.sr
+    zoomed_im = zoom(im_lo*a*sb_ratio, (actual_zoom_x, actual_zoom_y), order=1, mode="nearest")/actual_zoom_x**2
     
     # with np.errstate(divide='ignore'):
     #     zoomed_im = zoomed_im / np.sum(zoomed_im) * np.sum(im_lo) # make sure that sum(im_lo) = sum(zoomed_im)
@@ -621,9 +623,7 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     # But since we're scaling the image itself, the total flux will be conserved by `zoom` if we normalize later.
     # The original IDL code multiplies by flux_ratio * evo_fact.
     
-    pixarea = p_hi ** 2 * u.arcsec**2
-    pixarea = pixarea.to(u.sr).value
-    return zoomed_im * flux_ratio * evo_fact #* pixarea
+    return zoomed_im #* evo_fact 
 
 def ferengi_odd_n_square(psf0, centre=None):
     """
