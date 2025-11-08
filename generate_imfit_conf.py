@@ -562,7 +562,7 @@ def init_guess_2_sersic(img, pol_str_type, model_desc, band):
     I_e = rad_slc[r_e]
     if I_e < 0:
         I_e = -1 * I_e # Occasionaly negative due to sky subtractions, though magnitude matters more
-    e = np.average(table["ellipticity"][:r_e +1])
+    e = np.average(table["ellipticity"][:r_e +1]) # Not the correct index! I don't know how this works
     if e != e: # Sometimes is Nan for some reason
         e = 0.2
 
