@@ -1,5 +1,7 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 from PyQt6 import uic
 import os
 from pathlib import Path
@@ -28,6 +30,9 @@ class MainWindow(QDialog):
         self.ui.rbutton.clicked.connect(lambda: self.set_band("r"))
         self.ui.ibutton.clicked.connect(lambda: self.set_band("i"))
         self.ui.zbutton.clicked.connect(lambda: self.set_band("z"))
+        self.ui.markfitted.clicked.connect(lambda: self.markgalaxy("fitted"))
+        self.ui.markreturn.clicked.connect(lambda: self.markgalaxy("return"))
+        self.ui.markunable.clicked.connect(lambda: self.markgalaxy("unable"))
 
         self.ui.opends9button.clicked.connect(self.open_ds9)
         self.ui.nextgalbutton.clicked.connect(self.next_galaxy)
@@ -41,6 +46,12 @@ class MainWindow(QDialog):
         self.galaxylist = self.ui.galaxylist
         self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
         self.galaxylist.itemSelectionChanged.connect(self.changegal)
+
+        self.colors = {
+            "fitted" : "#35bd49",
+            "return" : "#bdba35",
+            "unable" : "#bd3535"
+        }
 
         self.config = self.ui.plainTextEdit
         self.config.setPlainText("")
@@ -57,12 +68,12 @@ class MainWindow(QDialog):
         p = self.galpathlist[self.curr_gal_index]
         with open(os.path.join(p, "2_sersic_g.dat"), "r") as f:
             config_file = f.readlines()
-        self.config.setPlainText("\n".join(config_file))
+        self.config.setPlainText("".join(config_file))
         self.config.repaint()
 
         with open(os.path.join(p, "2_sersic_g_fit_params.txt"), "r") as f:
             config_file = f.readlines()
-        self.params.setPlainText("\n".join(config_file))
+        self.params.setPlainText("".join(config_file))
         self.params.repaint()
 
         # files = [os.path.join(p, f"image_{b}.fits") for b in "griz"]
@@ -105,6 +116,11 @@ class MainWindow(QDialog):
             os.chdir(self.curr_dir)
         else:
             print("No running IMFIT processes")
+    
+    def markgalaxy(self, markas):
+        self.galaxylist.item(self.curr_gal_index).setBackground(QColor(self.colors[markas]))
+        self.galaxylist.repaint()
+
 
 def get_galaxies(p):
     structure = os.walk(p)

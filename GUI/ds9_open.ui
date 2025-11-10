@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>818</width>
-    <height>402</height>
+    <height>639</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,33 +20,23 @@
    <property name="sizeConstraint">
     <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
    </property>
-   <item row="5" column="2">
+   <item row="10" column="3">
     <widget class="QPushButton" name="opends9button">
      <property name="text">
       <string>Open in DS9</string>
      </property>
     </widget>
    </item>
-   <item row="0" column="2">
-    <widget class="QPushButton" name="nextgalbutton">
-     <property name="text">
-      <string>Next &gt;&gt;</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="4">
-    <widget class="QTextBrowser" name="currentgalaxytext_3">
+   <item row="0" column="1">
+    <widget class="QTextBrowser" name="currentgalaxytext">
      <property name="maximumSize">
       <size>
-       <width>16777215</width>
+       <width>200</width>
        <height>40</height>
       </size>
      </property>
      <property name="frameShape">
       <enum>QFrame::Shape::WinPanel</enum>
-     </property>
-     <property name="frameShadow">
-      <enum>QFrame::Shadow::Raised</enum>
      </property>
      <property name="html">
       <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
@@ -56,57 +46,11 @@ hr { height: 1px; border-width: 0; }
 li.unchecked::marker { content: &quot;\2610&quot;; }
 li.checked::marker { content: &quot;\2612&quot;; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Noto Sans'; font-size:10pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Best Fit Parameters&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Current Galaxy:&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
     </widget>
    </item>
-   <item row="3" column="2">
-    <widget class="QGroupBox" name="groupBox">
-     <property name="title">
-      <string>Solver Method</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignmentFlag::AlignCenter</set>
-     </property>
-     <property name="flat">
-      <bool>false</bool>
-     </property>
-     <layout class="QVBoxLayout" name="verticalLayout">
-      <item>
-       <widget class="QRadioButton" name="LMbutton">
-        <property name="text">
-         <string>LM</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="NMbutton">
-        <property name="text">
-         <string>NM</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="DEbutton">
-        <property name="text">
-         <string>DE</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="7" column="2">
-    <widget class="QPushButton" name="cancelbutton">
-     <property name="text">
-      <string>Cancel</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="3">
+   <item row="0" column="4">
     <widget class="QTextBrowser" name="currentgalaxytext_2">
      <property name="maximumSize">
       <size>
@@ -128,27 +72,45 @@ hr { height: 1px; border-width: 0; }
 li.unchecked::marker { content: &quot;\2610&quot;; }
 li.checked::marker { content: &quot;\2612&quot;; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Noto Sans'; font-size:10pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Config File&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+&lt;p align=&quot;center&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Config File&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
     </widget>
    </item>
-   <item row="1" column="0" rowspan="8">
-    <widget class="QListWidget" name="galaxylist">
-     <property name="frameShape">
-      <enum>QFrame::Shape::WinPanel</enum>
+   <item row="11" column="3">
+    <widget class="QPushButton" name="refitbutton">
+     <property name="text">
+      <string>Refit</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="3">
+    <widget class="QPushButton" name="nextgalbutton">
+     <property name="text">
+      <string>Next &gt;&gt;</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0">
+    <widget class="QPushButton" name="markreturn">
+     <property name="text">
+      <string>Return To</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="0">
+    <widget class="QPushButton" name="markunable">
+     <property name="text">
+      <string>Unable</string>
      </property>
     </widget>
    </item>
    <item row="0" column="0">
-    <widget class="QTextBrowser" name="currentgalaxytext">
+    <widget class="QTextBrowser" name="textBrowser">
      <property name="maximumSize">
       <size>
-       <width>16777215</width>
+       <width>100</width>
        <height>40</height>
       </size>
-     </property>
-     <property name="frameShape">
-      <enum>QFrame::Shape::WinPanel</enum>
      </property>
      <property name="html">
       <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
@@ -158,31 +120,24 @@ hr { height: 1px; border-width: 0; }
 li.unchecked::marker { content: &quot;\2610&quot;; }
 li.checked::marker { content: &quot;\2612&quot;; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Noto Sans'; font-size:10pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Current Galaxy:&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+&lt;p align=&quot;center&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Mark As:&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
     </widget>
    </item>
-   <item row="1" column="4" rowspan="8">
-    <widget class="QPlainTextEdit" name="plainTextEdit_2">
+   <item row="3" column="1" rowspan="11">
+    <widget class="QListWidget" name="galaxylist">
+     <property name="maximumSize">
+      <size>
+       <width>200</width>
+       <height>16777215</height>
+      </size>
+     </property>
      <property name="frameShape">
       <enum>QFrame::Shape::WinPanel</enum>
      </property>
-     <property name="frameShadow">
-      <enum>QFrame::Shadow::Sunken</enum>
-     </property>
     </widget>
    </item>
-   <item row="1" column="3" rowspan="8">
-    <widget class="QPlainTextEdit" name="plainTextEdit">
-     <property name="frameShape">
-      <enum>QFrame::Shape::WinPanel</enum>
-     </property>
-     <property name="frameShadow">
-      <enum>QFrame::Shadow::Sunken</enum>
-     </property>
-    </widget>
-   </item>
-   <item row="4" column="2">
+   <item row="7" column="3">
     <widget class="QGroupBox" name="groupBox_2">
      <property name="title">
       <string>Band</string>
@@ -228,10 +183,102 @@ li.checked::marker { content: &quot;\2612&quot;; }
      </layout>
     </widget>
    </item>
-   <item row="6" column="2">
-    <widget class="QPushButton" name="refitbutton">
+   <item row="3" column="0">
+    <widget class="QPushButton" name="markfitted">
      <property name="text">
-      <string>Refit</string>
+      <string>Fitted</string>
+     </property>
+    </widget>
+   </item>
+   <item row="12" column="3">
+    <widget class="QPushButton" name="cancelbutton">
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="3" rowspan="3">
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Solver Method</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignmentFlag::AlignCenter</set>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="QRadioButton" name="LMbutton">
+        <property name="text">
+         <string>LM</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="NMbutton">
+        <property name="text">
+         <string>NM</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="DEbutton">
+        <property name="text">
+         <string>DE</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="8" column="4">
+    <widget class="QTextBrowser" name="currentgalaxytext_3">
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>40</height>
+      </size>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Shape::WinPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Shadow::Raised</enum>
+     </property>
+     <property name="html">
+      <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;meta charset=&quot;utf-8&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+hr { height: 1px; border-width: 0; }
+li.unchecked::marker { content: &quot;\2610&quot;; }
+li.checked::marker { content: &quot;\2612&quot;; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Noto Sans'; font-size:10pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p align=&quot;center&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Best Fit Parameters&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="4" rowspan="5">
+    <widget class="QPlainTextEdit" name="plainTextEdit">
+     <property name="frameShape">
+      <enum>QFrame::Shape::WinPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Shadow::Sunken</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="9" column="4" rowspan="5">
+    <widget class="QPlainTextEdit" name="plainTextEdit_2">
+     <property name="frameShape">
+      <enum>QFrame::Shape::WinPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Shadow::Sunken</enum>
      </property>
     </widget>
    </item>
