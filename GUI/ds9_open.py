@@ -1,6 +1,6 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
-from PyQt6.QtGui import *
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import *
 from PyQt6 import uic
 import os
@@ -9,6 +9,7 @@ import subprocess
 import sys
 import glob
 import argparse
+import shutil
 sys.path.append("../")
 import imfit_run
 
@@ -33,6 +34,7 @@ class MainWindow(QDialog):
         self.ui.markfitted.clicked.connect(lambda: self.markgalaxy("fitted"))
         self.ui.markreturn.clicked.connect(lambda: self.markgalaxy("return"))
         self.ui.markunable.clicked.connect(lambda: self.markgalaxy("unable"))
+        self.ui.saveconfigbutton.clicked.connect(self.saveconfig)
 
         self.ui.opends9button.clicked.connect(self.open_ds9)
         self.ui.nextgalbutton.clicked.connect(self.next_galaxy)
@@ -53,7 +55,7 @@ class MainWindow(QDialog):
             "unable" : "#bd3535"
         }
 
-        self.config = self.ui.plainTextEdit
+        self.config = self.ui.configeditor
         self.config.setPlainText("")
 
         self.params = self.ui.plainTextEdit_2
@@ -66,15 +68,6 @@ class MainWindow(QDialog):
     def open_ds9(self, Dialog):
         print("Opening DS9...")
         p = self.galpathlist[self.curr_gal_index]
-        with open(os.path.join(p, "2_sersic_g.dat"), "r") as f:
-            config_file = f.readlines()
-        self.config.setPlainText("".join(config_file))
-        self.config.repaint()
-
-        with open(os.path.join(p, "2_sersic_g_fit_params.txt"), "r") as f:
-            config_file = f.readlines()
-        self.params.setPlainText("".join(config_file))
-        self.params.repaint()
 
         # files = [os.path.join(p, f"image_{b}.fits") for b in "griz"]
         files = [f"{os.path.join(p, f'2_sersic_{self.band}_composed.fits')}"]
@@ -86,6 +79,17 @@ class MainWindow(QDialog):
         self.curr_gal_index += 1
         self.currentgalaxytext.setText(f"Current Galaxy: {os.path.basename(self.galpathlist[self.curr_gal_index])}")
         self.currentgalaxytext.repaint()
+
+        p = self.galpathlist[self.curr_gal_index]
+        with open(os.path.join(p, f"2_sersic_{self.band}.dat"), "r") as f:
+            config_file = f.readlines()
+        self.config.setPlainText("".join(config_file))
+        self.config.repaint()
+
+        with open(os.path.join(p, f"2_sersic_{self.band}_fit_params.txt"), "r") as f:
+            config_file = f.readlines()
+        self.params.setPlainText("".join(config_file))
+        self.params.repaint()
     
     def changegal(self):
         galaxy = self.galaxylist.selectedItems()[0].text()
@@ -93,6 +97,17 @@ class MainWindow(QDialog):
         self.curr_gal_index = gl.index(galaxy)
         self.currentgalaxytext.setText(f"Current Galaxy: {os.path.basename(self.galpathlist[self.curr_gal_index])}")
         self.currentgalaxytext.repaint()
+
+        p = self.galpathlist[self.curr_gal_index]
+        with open(os.path.join(p, f"2_sersic_{self.band}.dat"), "r") as f:
+            config_file = f.readlines()
+        self.config.setPlainText("".join(config_file))
+        self.config.repaint()
+
+        with open(os.path.join(p, f"2_sersic_{self.band}_fit_params.txt"), "r") as f:
+            config_file = f.readlines()
+        self.params.setPlainText("".join(config_file))
+        self.params.repaint()
          
     def set_solver(self, solver):
         self.solvertype = solver 
@@ -104,7 +119,7 @@ class MainWindow(QDialog):
     def refit(self):
         self.curr_dir = os.getcwd()
         os.chdir(self.galpathlist[self.curr_gal_index])
-        command = ["imfit", "-c", f"2_sersic_{self.band}.dat", "image_g.fits", "--save-params", f"2_sersic__{self.band}_fit_params.txt", "--max-threads", "8", "--mask", "image_mask.fits", "--psf", "psf_patched_g.fits", "--noise", "image_g_invvar.fits", "--errors-are-weights"]
+        command = ["imfit", "-c", f"2_sersic_{self.band}.dat", f"image_{self.band}.fits", "--save-params", f"2_sersic_{self.band}_fit_params.txt", "--max-threads", "8", "--mask", "image_mask.fits", "--psf", f"psf_patched_{self.band}.fits", "--noise", f"image_{self.band}_invvar.fits", "--errors-are-weights"]
         p = subprocess.Popen(command)
         self.ps.append(p)
         os.chdir(self.curr_dir)
@@ -120,6 +135,15 @@ class MainWindow(QDialog):
     def markgalaxy(self, markas):
         self.galaxylist.item(self.curr_gal_index).setBackground(QColor(self.colors[markas]))
         self.galaxylist.repaint()
+    
+    def saveconfig(self):
+        p = self.galpathlist[self.curr_gal_index]
+        new_config = self.ui.configeditor.toPlainText()
+        print(new_config)
+        if not(new_config == ""):
+            shutil.copyfile(src=os.path.join(p, f"2_sersic_{self.band}.dat"), dst=os.path.join(p, f"2_sersic_{self.band}.dat.bak"))
+            with open(os.path.join(p, f"2_sersic_{self.band}.dat"), "w") as f:
+                f.write(new_config)
 
 
 def get_galaxies(p):
