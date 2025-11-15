@@ -71,7 +71,7 @@ class MainWindow(QDialog):
 
         # files = [os.path.join(p, f"image_{b}.fits") for b in "griz"]
         files = [f"{os.path.join(p, f'2_sersic_{self.band}_composed.fits')}"]
-        arg = ["ds9", "-cmap", "inferno", "-scale", "log", "-scale", "limits", "0", "10"]
+        arg = ["ds9", "-cmap", "inferno", "-scale", "log", "-scale", "limits", "0", "10", "-cube", "3"]
         arg.extend(files)
         subprocess.Popen(arg)
     
@@ -117,12 +117,10 @@ class MainWindow(QDialog):
     
 
     def refit(self):
-        self.curr_dir = os.getcwd()
-        os.chdir(self.galpathlist[self.curr_gal_index])
-        command = ["imfit", "-c", f"2_sersic_{self.band}.dat", f"image_{self.band}.fits", "--save-params", f"2_sersic_{self.band}_fit_params.txt", "--max-threads", "8", "--mask", "image_mask.fits", "--psf", f"psf_patched_{self.band}.fits", "--noise", f"image_{self.band}_invvar.fits", "--errors-are-weights"]
-        p = subprocess.Popen(command)
-        self.ps.append(p)
-        os.chdir(self.curr_dir)
+        imfit_run.main(self.galpathlist[self.curr_gal_index], [self.band], r=False, overwrite=True, mask=True, psf=True, invvar=True, alg="LM", max_threads=8, fit_type="2_sersic", make_composed=True)
+
+        # Just refreshing the configs and stats and whatnot
+        self.changegal()
     
     def cancel(self):
         if len(self.ps) > 0:
