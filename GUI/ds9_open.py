@@ -42,10 +42,9 @@ class MainWindow(QDialog):
         self.ui.refitbutton.clicked.connect(self.refit)
         self.ui.cancelbutton.clicked.connect(self.cancel)
 
-        l = self.ui.label
         p = self.galpathlist[self.curr_gal_index]
         pixmap = QPixmap(os.path.join(p, "image.jpg"))
-        l.setPixmap(pixmap)
+        self.ui.galaxyjpg.setPixmap(pixmap)
 
         self.galaxylist = self.ui.galaxylist
         self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
@@ -56,12 +55,6 @@ class MainWindow(QDialog):
             "return" : "#bdba35",
             "unable" : "#bd3535"
         }
-
-        self.config = self.ui.configeditor
-        self.config.setPlainText("")
-
-        self.params = self.ui.plainTextEdit_2
-        self.params.setPlainText("")
 
         self.ps = []
         self.changegal(self.curr_gal_index)
@@ -100,9 +93,8 @@ class MainWindow(QDialog):
         self.params.setPlainText("".join(config_file))
         self.params.repaint()
 
-        l = self.ui.label
         pixmap = QPixmap(os.path.join(p, "image.jpg"))
-        l.setPixmap(pixmap)
+        self.ui.galaxyjpg.setPixmap(pixmap)
          
     def set_solver(self, solver):
         self.solvertype = solver 
