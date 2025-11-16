@@ -159,7 +159,7 @@
    <item row="2" column="3">
     <layout class="QVBoxLayout" name="verticalLayout_2">
      <item>
-      <widget class="QTextBrowser" name="configedittext">
+      <widget class="QTextBrowser" name="configfile">
        <property name="maximumSize">
         <size>
          <width>16777215</width>

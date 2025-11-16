@@ -12,6 +12,7 @@ import argparse
 import shutil
 sys.path.append("../")
 import imfit_run
+from multiprocessing import Process
 
 
 class MainWindow(QDialog):
@@ -104,10 +105,13 @@ class MainWindow(QDialog):
     
 
     def refit(self):
-        imfit_run.main(self.galpathlist[self.curr_gal_index], [self.band], r=False, overwrite=True, mask=True, psf=True, invvar=True, alg=self.solvertype, max_threads=8, fit_type="2_sersic", make_composed=True)
+        p = Process(target=imfit_run.main, args=(self.galpathlist[self.curr_gal_index], [self.band], False, True, True, True, True, self.solvertype, 8, "2_sersic", True))
+        # imfit_run.main(self.galpathlist[self.curr_gal_index], [self.band], r=False, overwrite=True, mask=True, psf=True, invvar=True, alg=self.solvertype, max_threads=8, fit_type="2_sersic", make_composed=True)
+        self.ps.append(p)
+        p.start()
 
         # Just refreshing the configs and stats and whatnot
-        self.changegal()
+        self.changegal(index=self.curr_gal_index)
     
     def cancel(self):
         if len(self.ps) > 0:
@@ -123,7 +127,7 @@ class MainWindow(QDialog):
     
     def saveconfig(self):
         p = self.galpathlist[self.curr_gal_index]
-        new_config = self.ui.configeditor.toPlainText()
+        new_config = self.ui.config.toPlainText()
         print(new_config)
         if not(new_config == ""):
             shutil.copyfile(src=os.path.join(p, f"2_sersic_{self.band}.dat"), dst=os.path.join(p, f"2_sersic_{self.band}.dat.bak"))
