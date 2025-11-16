@@ -1,6 +1,6 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QPixmap
 from PyQt6.QtWidgets import *
 from PyQt6 import uic
 import os
@@ -18,6 +18,7 @@ class MainWindow(QDialog):
     def __init__(self, galpathlist=None):
         super().__init__()
         self.ui = uic.loadUi('ds9_open.ui', self)
+
 
         self.galpathlist = galpathlist
         self.curr_gal_index = 0
@@ -44,6 +45,11 @@ class MainWindow(QDialog):
         self.currentgalaxytext = self.ui.currentgalaxytext
         self.currentgalaxytext.setText(f"Current Galaxy: {os.path.basename(galpathlist[self.curr_gal_index])}")
         self.currentgalaxytext.repaint()
+
+        l = self.ui.label
+        p = self.galpathlist[self.curr_gal_index]
+        pixmap = QPixmap(os.path.join(p, "image.jpg"))
+        l.setPixmap(pixmap)
 
         self.galaxylist = self.ui.galaxylist
         self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
@@ -108,6 +114,10 @@ class MainWindow(QDialog):
             config_file = f.readlines()
         self.params.setPlainText("".join(config_file))
         self.params.repaint()
+
+        l = self.ui.label
+        pixmap = QPixmap(os.path.join(p, "image.jpg"))
+        l.setPixmap(pixmap)
          
     def set_solver(self, solver):
         self.solvertype = solver 
