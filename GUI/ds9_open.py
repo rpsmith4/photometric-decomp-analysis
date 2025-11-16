@@ -42,10 +42,6 @@ class MainWindow(QDialog):
         self.ui.refitbutton.clicked.connect(self.refit)
         self.ui.cancelbutton.clicked.connect(self.cancel)
 
-        self.currentgalaxytext = self.ui.currentgalaxytext
-        self.currentgalaxytext.setText(f"Current Galaxy: {os.path.basename(galpathlist[self.curr_gal_index])}")
-        self.currentgalaxytext.repaint()
-
         l = self.ui.label
         p = self.galpathlist[self.curr_gal_index]
         pixmap = QPixmap(os.path.join(p, "image.jpg"))
@@ -68,7 +64,7 @@ class MainWindow(QDialog):
         self.params.setPlainText("")
 
         self.ps = []
-
+        self.changegal(self.curr_gal_index)
         self.show()
 
     def open_ds9(self, Dialog):
@@ -83,24 +79,13 @@ class MainWindow(QDialog):
     
     def next_galaxy(self):
         self.curr_gal_index += 1
-        self.currentgalaxytext.setText(f"Current Galaxy: {os.path.basename(self.galpathlist[self.curr_gal_index])}")
-        self.currentgalaxytext.repaint()
-
-        p = self.galpathlist[self.curr_gal_index]
-        with open(os.path.join(p, f"2_sersic_{self.band}.dat"), "r") as f:
-            config_file = f.readlines()
-        self.config.setPlainText("".join(config_file))
-        self.config.repaint()
-
-        with open(os.path.join(p, f"2_sersic_{self.band}_fit_params.txt"), "r") as f:
-            config_file = f.readlines()
-        self.params.setPlainText("".join(config_file))
-        self.params.repaint()
+        self.changegal(self.curr_gal_index)
     
-    def changegal(self):
-        galaxy = self.galaxylist.selectedItems()[0].text()
-        gl = [os.path.basename(g) for g in self.galpathlist]
-        self.curr_gal_index = gl.index(galaxy)
+    def changegal(self, index=None):
+        if index == None:
+            galaxy = self.galaxylist.selectedItems()[0].text()
+            gl = [os.path.basename(g) for g in self.galpathlist]
+            self.curr_gal_index = gl.index(galaxy)
         self.currentgalaxytext.setText(f"Current Galaxy: {os.path.basename(self.galpathlist[self.curr_gal_index])}")
         self.currentgalaxytext.repaint()
 
@@ -127,7 +112,7 @@ class MainWindow(QDialog):
     
 
     def refit(self):
-        imfit_run.main(self.galpathlist[self.curr_gal_index], [self.band], r=False, overwrite=True, mask=True, psf=True, invvar=True, alg="LM", max_threads=8, fit_type="2_sersic", make_composed=True)
+        imfit_run.main(self.galpathlist[self.curr_gal_index], [self.band], r=False, overwrite=True, mask=True, psf=True, invvar=True, alg=self.solvertype, max_threads=8, fit_type="2_sersic", make_composed=True)
 
         # Just refreshing the configs and stats and whatnot
         self.changegal()
