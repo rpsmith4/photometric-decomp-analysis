@@ -13,6 +13,7 @@ import shutil
 sys.path.append("../")
 import imfit_run
 from multiprocessing import Process
+import json
 
 
 class MainWindow(QDialog):
@@ -59,6 +60,20 @@ class MainWindow(QDialog):
 
         self.ps = []
         self.changegal(self.curr_gal_index)
+
+        try:
+            with open('galmarks.json') as f:
+                self.galmarks = json.load(f)
+        except:
+            self.galmarks = {}
+
+        galnames = [os.path.basename(g) for g in galpathlist]
+        for gal in galnames:
+            if gal in self.galmarks.keys():
+                markas = self.galmarks[gal]
+                self.galaxylist.item(galnames.index(gal)).setBackground(QColor(self.colors[markas]))
+                self.galaxylist.repaint()
+            
         self.show()
 
     def open_ds9(self, Dialog):
@@ -124,6 +139,10 @@ class MainWindow(QDialog):
     def markgalaxy(self, markas):
         self.galaxylist.item(self.curr_gal_index).setBackground(QColor(self.colors[markas]))
         self.galaxylist.repaint()
+        
+        self.galmarks[self.galaxylist.item(self.curr_gal_index).text()] = markas
+        with open('galmarks.json', 'w') as fp:
+            json.dump(self.galmarks, fp)
     
     def saveconfig(self):
         p = self.galpathlist[self.curr_gal_index]
