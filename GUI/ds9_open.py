@@ -102,15 +102,23 @@ class MainWindow(QDialog):
         self.currentgalaxytext.repaint()
 
         p = self.galpathlist[self.curr_gal_index]
-        with open(os.path.join(p, f"2_sersic_{self.band}.dat"), "r") as f:
-            config_file = f.readlines()
-        self.config.setPlainText("".join(config_file))
-        self.config.repaint()
+        try:
+            with open(os.path.join(p, f"2_sersic_{self.band}.dat"), "r") as f:
+                config_file = f.readlines()
+            self.config.setPlainText("".join(config_file))
+            self.config.repaint()
+        except:
+            self.config.setPlainText("Config file not found!")
+            self.config.repaint()
 
-        with open(os.path.join(p, f"2_sersic_{self.band}_fit_params.txt"), "r") as f:
-            config_file = f.readlines()
-        self.params.setPlainText("".join(config_file))
-        self.params.repaint()
+        try:
+            with open(os.path.join(p, f"2_sersic_{self.band}_fit_params.txt"), "r") as f:
+                config_file = f.readlines()
+            self.params.setPlainText("".join(config_file))
+            self.params.repaint()
+        except:
+            self.params.setPlainText("Fit Params not found!")
+            self.params.repaint()
 
         pixmap = QPixmap(os.path.join(p, "image.jpg"))
         self.ui.galaxyjpg.setPixmap(pixmap)
