@@ -21,12 +21,13 @@ class MainWindow(QDialog):
         super().__init__()
         self.ui = uic.loadUi('ds9_open.ui', self)
 
-
+        # Initializing some variables
         self.galpathlist = galpathlist
         self.curr_gal_index = 0
         self.solvertype = "LM"
         self.band = "g"
 
+        # Setting up the buttons
         self.ui.LMbutton.clicked.connect(lambda: self.set_solver("LM"))
         self.ui.NMbutton.clicked.connect(lambda: self.set_solver("NM"))
         self.ui.DEbutton.clicked.connect(lambda: self.set_solver("DE"))
@@ -44,10 +45,7 @@ class MainWindow(QDialog):
         self.ui.refitbutton.clicked.connect(self.refit)
         self.ui.cancelbutton.clicked.connect(self.cancel)
 
-        p = self.galpathlist[self.curr_gal_index]
-        pixmap = QPixmap(os.path.join(p, "image.jpg"))
-        self.ui.galaxyjpg.setPixmap(pixmap)
-
+        # Loading the list of galaxies
         self.galaxylist = self.ui.galaxylist
         self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
         self.galaxylist.itemSelectionChanged.connect(self.changegal)
@@ -58,21 +56,26 @@ class MainWindow(QDialog):
             "unable" : "#bd3535"
         }
 
+        # Process list of currently running fits
         self.ps = []
+
+        # Switch over to the first galaxy
         self.changegal(self.curr_gal_index)
 
+        # Loading the JSON file for the galaxy marks (whether fitted, need to return to, or can't fit)
         try:
             with open('galmarks.json') as f:
                 self.galmarks = json.load(f)
         except:
             self.galmarks = {}
 
+        # Setting the colors of the marked galaxies
         galnames = [os.path.basename(g) for g in galpathlist]
         for gal in galnames:
             if gal in self.galmarks.keys():
                 markas = self.galmarks[gal]
                 self.galaxylist.item(galnames.index(gal)).setBackground(QColor(self.colors[markas]))
-                self.galaxylist.repaint()
+        self.galaxylist.repaint()
             
         self.show()
 
