@@ -13,6 +13,7 @@ import glob
 IMAN_DIR = os.path.expanduser("~/Documents/iman_new")
 sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
 import make_model_ima_imfit
+import signal
 
 
 def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, fit_type="2_sersic"):
@@ -34,10 +35,19 @@ def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, f
     if alg=="DE_LHS":
         command.extend(["--de_lhs"])
     
+    global p 
     p = subprocess.Popen(command)
     p.wait()
 
-# def main(args):
+def handler(signum, frame):
+    print("Terminating IMFIT process...")
+    p.terminate()
+    print("IMFIT process terminated.")
+    sys.exit(-1)
+    # raise IOError("Quitting on {}".format(signum))
+
+signal.signal(signal.SIGTERM, handler)
+
 def main(p, bands, r=False, overwrite=False, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, fit_type="2_sersic", make_composed=True):
     if not(p == None):
         p = Path(p).resolve()

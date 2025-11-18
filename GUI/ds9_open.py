@@ -13,7 +13,9 @@ import shutil
 sys.path.append("../")
 import imfit_run
 from multiprocessing import Process
+import multiprocessing
 import json
+import signal
 
 
 class MainWindow(QDialog):
@@ -142,9 +144,8 @@ class MainWindow(QDialog):
     
     def cancel(self):
         if len(self.ps) > 0:
-            self.ps[-1].kill()
+            self.ps[-1].terminate()
             self.ps.pop()
-            os.chdir(self.curr_dir)
         else:
             print("No running IMFIT processes")
     
