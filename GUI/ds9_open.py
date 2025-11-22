@@ -1,6 +1,6 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
-from PyQt6.QtGui import QColor, QPixmap
+from PyQt6.QtGui import QColor, QPixmap, QKeySequence
 from PyQt6.QtWidgets import *
 from PyQt6 import uic
 import os
@@ -34,18 +34,28 @@ class MainWindow(QDialog):
         self.ui.NMbutton.clicked.connect(lambda: self.set_solver("NM"))
         self.ui.DEbutton.clicked.connect(lambda: self.set_solver("DE"))
         self.ui.gbutton.clicked.connect(lambda: self.set_band("g"))
+        self.ui.gbutton.setShortcut(QKeySequence("g"))
         self.ui.rbutton.clicked.connect(lambda: self.set_band("r"))
+        self.ui.rbutton.setShortcut(QKeySequence("r"))
         self.ui.ibutton.clicked.connect(lambda: self.set_band("i"))
+        self.ui.ibutton.setShortcut(QKeySequence("i"))
         self.ui.zbutton.clicked.connect(lambda: self.set_band("z"))
+        self.ui.zbutton.setShortcut(QKeySequence("z"))
         self.ui.markfitted.clicked.connect(lambda: self.markgalaxy("fitted"))
+        self.ui.markfitted.setShortcut(QKeySequence("f"))
         self.ui.markreturn.clicked.connect(lambda: self.markgalaxy("return"))
+        self.ui.markreturn.setShortcut(QKeySequence("e"))
         self.ui.markunable.clicked.connect(lambda: self.markgalaxy("unable"))
+        self.ui.markunable.setShortcut(QKeySequence("u"))
         self.ui.saveconfigbutton.clicked.connect(self.saveconfig)
 
         self.ui.opends9button.clicked.connect(self.open_ds9)
+        self.ui.opends9button.setShortcut(QKeySequence("O"))
         self.ui.nextgalbutton.clicked.connect(self.next_galaxy)
         self.ui.refitbutton.clicked.connect(self.refit)
+        self.ui.refitbutton.setShortcut(QKeySequence("CTRL+R"))
         self.ui.cancelbutton.clicked.connect(self.cancel)
+        self.ui.cancelbutton.setShortcut(QKeySequence("CTRL+C"))
 
         # Loading the list of galaxies
         self.galaxylist = self.ui.galaxylist
