@@ -156,28 +156,34 @@ def make_patched_psf(psf_file_name, band,  target_size):
 
     xx, yy = np.meshgrid(np.arange(target_size), np.arange(target_size))
     distances = np.hypot(target_size//2-xx, target_size//2-yy)
+    pixscale = 0.262 # Arcsec/pixel
     distances[distances < 0.01] = 0.01
 
     match band:
         case 'g':
-            outer_psf = moffat_fit + 0.00045 * 1 / distances**2
+            outer_psf = moffat_fit + 0.00045 * 1 / (distances*pixscale)**2
         case 'r' | 'i':
-            outer_psf = moffat_fit + 0.00033 * 1 / distances**2
+            outer_psf = moffat_fit + 0.00033 * 1 / (distances*pixscale)**2
         case 'z':
             alpha = 17.650
             beta = 1.7
             w = 0.0145
-            outer_psf = moffat_fit + w * (beta-1) / ((np.pi * alpha**2) * (1+distances/alpha**2) ** beta)
+            outer_psf = moffat_fit + w * (beta-1) / ((np.pi * alpha**2) * (1+(distances*pixscale)/alpha**2) ** beta)
 
     # Compute weights maps
     R1 = 5 / 0.262
     R2 = 6 / 0.262
+    R3 = 7 / 0.262
+    R4 = 8 / 0.262
     psfex_weight = np.zeros_like(distances, dtype=float)
     psfex_weight[distances < R1] = 1.0
     psfex_weight[(distances > R1) * (distances < R2)] = (R2 - distances[(distances > R1) * (distances < R2)]) / (R2-R1)
     outer_weight = np.zeros_like(distances, dtype=float)
     outer_weight[distances > R2] = 1.0
     outer_weight[(distances > R1) * (distances < R2)] = (distances[(distances > R1) * (distances < R2)] - R1) / (R2-R1)
+
+    # outer_weight[distances > R4] = 0
+    outer_weight[(distances > R3) * (distances < R4)] = (distances[(distances > R3) * (distances < R4)] - R4) / (R3-R4)
 
     # Combine PSF
     psf_orig_size = psfex_data.shape[0]
