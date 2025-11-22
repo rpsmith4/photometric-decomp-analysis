@@ -124,47 +124,95 @@ def plot_stats(all_stats):
         "z" : "blueviolet"
     }
     bands = ["g", "r", "i", "z"]
-    fig = plt.figure(figsize=(16, 8))
-    for band in bands:
-        stats_band = all_stats[all_stats["Band"] == band]
+    fig = plt.figure(figsize=(20, 20))
+    # for band in bands:
+    #     stats_band = all_stats[all_stats["Band"] == band]
 
-        # App. mag in each band, Abs. mag in each band
-        # same but with high redshift
-        # same but with higher redshift when I get to it
+    #     # App. mag in each band, Abs. mag in each band
+    #     # same but with high redshift
+    #     # same but with higher redshift when I get to it
 
-        # OR
+    #     # OR
 
-        # App. mag of each type, Abs. mag of each type
-        # same but with high redshift
-        # same but with higher redshift when I get to it
+    #     # App. mag of each type, Abs. mag of each type
+    #     # same but with high redshift
+    #     # same but with higher redshift when I get to it
 
-        # gs = gridspec.GridSpec(2, 4)
-        # gs.update(wspace=0.5)
+    #     # gs = gridspec.GridSpec(2, 4)
+    #     # gs.update(wspace=0.5)
 
-        # plt.subplot(gs[0, :2])
-        for k,z in enumerate([0.03, 0.5, 1.0]):
-            stats_z = stats_band[stats_band["z"] == z]
-            app_mag = stats_z["App. Mag"]
-            abs_mag = stats_z["Abs. Mag"]
+    #     # plt.subplot(gs[0, :2])
+    #     for k,z in enumerate([0.03, 0.5, 1.0]):
+    #         stats_z = stats_band[stats_band["z"] == z]
+    #         app_mag = stats_z["App. Mag"]
+    #         abs_mag = stats_z["Abs. Mag"]
 
-            print(app_mag.value)
-            ax1 = plt.subplot(3, 2, 1 + k*2)
-            plt.hist(app_mag.value, label=f"{band}", color=band_colors[band], histtype="step")
-            plt.xlabel(rf"Apparent Magnitude at $z={z}$")
-            plt.ylabel("Count")
+    #         print(app_mag.value)
+    #         ax1 = plt.subplot(3, 2, 1 + k*2)
+    #         plt.hist(app_mag.value, label=f"{band}", color=band_colors[band], histtype="step")
+    #         plt.xlabel(rf"Apparent Magnitude at $z={z}$")
+    #         plt.ylabel("Count")
 
-            plt.subplot(3, 2, 2 + k*2)
-            plt.hist(abs_mag.value, label=rf"{band}", color=band_colors[band], histtype="step")
-            plt.xlabel(rf"Apparent Magnitude at $z={z}$")
-            plt.ylabel("Count")
+    #         plt.subplot(3, 2, 2 + k*2)
+    #         plt.hist(abs_mag.value, label=rf"{band}", color=band_colors[band], histtype="step")
+    #         plt.xlabel(rf"Apparent Magnitude at $z={z}$")
+    #         plt.ylabel("Count")
+
+
+    # App. mag in each band, Abs. mag in each band
+    # same but with high redshift
+    # same but with higher redshift when I get to it
+
+    # OR
+
+    # App. mag of each type, Abs. mag of each type
+    # same but with high redshift
+    # same but with higher redshift when I get to it
+
+    # gs = gridspec.GridSpec(2, 4)
+    # gs.update(wspace=0.5)
+
+    # plt.subplot(gs[0, :2])
+
+    plt.rc('axes', labelsize=20)
+    plt.rc('legend', fontsize=28)
+    plt.rc('figure', titlesize=34)
+    plt.rc('xtick', labelsize=28)
+    plt.rc('ytick', labelsize=28)
+    for k,z in enumerate([0.03, 0.5, 1.0]):
+        stats_z = all_stats[(all_stats["z"] == z) & (all_stats["Band"] == "r")]
+        app_mag = stats_z["App. Mag"]
+        abs_mag = stats_z["Abs. Mag"]
+
+        ax1 = plt.subplot(3, 2, 1 + k*2)
+        plt.hist(app_mag, label=rf"", histtype="bar", color="lightgrey")
+        plt.hist(app_mag, label=rf"", histtype="step", color="black", lw=1)
+        plt.xlabel(rf"$m_r$ at $z={z}$", fontsize=28)
+        plt.ylabel("Count", fontsize=28)
+        if k == 0:
+            plt.title("Apparent Magnitude", fontsize=30)
+
+        plt.subplot(3, 2, 2 + k*2)
+        plt.hist(abs_mag, label=rf"", histtype="bar", color="lightgrey")
+        plt.hist(abs_mag, label=rf"", histtype="step", color="black", lw=1)
+        plt.xlabel(rf"$M_r$ at $z={z}$", fontsize=28)
+        plt.ylabel("Count", fontsize=28)
+        if k == 0:
+            plt.title("Absolute Magnitude", fontsize=30)
 
 
     plt.tight_layout()
-    plt.savefig("output1.png")
+    plt.savefig("mags.png")
 
-    fig = plt.figure(figsize=(8, 8))
+    fig = plt.figure(figsize=(10, 20))
 
     # Color magnitude <g-r>
+
+    plt.rc('axes', labelsize=20)
+    plt.rc('legend', fontsize=28)
+    plt.rc('figure', titlesize=34)
+    plt.rc('xtick', labelsize=28)
+    plt.rc('ytick', labelsize=28)
 
     for k,z in enumerate([0.03, 0.5, 1.0]):
         stats_z = all_stats[all_stats["z"] == z]
@@ -176,11 +224,12 @@ def plot_stats(all_stats):
         g_r = abs_mag_g - abs_mag_r
 
         ax1 = plt.subplot(3, 1, 1 + k)
-        plt.plot()
-        plt.hist(g_r, label=rf"", histtype="bar", color="orange")
+        plt.hist(g_r, label=rf"", histtype="bar", color="lightgrey")
         plt.hist(g_r, label=rf"", histtype="step", color="black", lw=1)
-        plt.xlabel(fr"$g-r$ at $z={z}$")
-        plt.ylabel("Count")
+        plt.xlabel(fr"$g-r$ at $z={z}$", fontsize=28)
+        plt.ylabel("Count", fontsize=28)
+        if k==0:
+            plt.title(r"$<g-r>$ Color", fontsize=30)
 
         # plt.subplot(3, 2, 2 + k*2)
         # plt.hist(abs_mag, label=rf"$z={z}$", color=band_colors[band], histtype="step")
@@ -189,7 +238,7 @@ def plot_stats(all_stats):
 
     # ax1.legend()
     plt.tight_layout()
-    plt.savefig("output2.png")
+    plt.savefig("g-r.png")
 
     
 
@@ -218,7 +267,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", help="Path to folder containing fits simulation images", default=".")
     parser.add_argument("-pr", help="Path to folder containing fits simulation images (redshifted)", default="../")
     parser.add_argument("-b", help="Input bands", nargs="+", choices=["g", "r", "i", "z"], default=["g", "r", "i", "z"])
-    parser.add_argument("-n", help="Number of parallel redshifts", default=1, type=int)
+    # parser.add_argument("-n", help="Number of parallel redshifts", default=1, type=int)
 
     args = parser.parse_args()
     p = Path(args.p).resolve()
@@ -227,18 +276,18 @@ if __name__ == "__main__":
     print(pr)
 
     galaxy_names = glob.glob(f"*", root_dir=p)
-    galaxy_names = [galaxy_name for galaxy_name in galaxy_names if "psf" not in galaxy_name]
+    # galaxy_names = [galaxy_name for galaxy_name in galaxy_names if "psf" not in galaxy_name]
+    print(len(galaxy_names))
 
     
     galaxy_names = [Path(galaxy_name).stem for galaxy_name in galaxy_names]
 
-    zs = [galaxy_name.split('_')[2][2:] for galaxy_name in galaxy_names]
+    # zs = [galaxy_name.split('_')[2][2:] for galaxy_name in galaxy_names]
     # zs = np.array(zs, dtype=np.float64)
-    zs = [float(z) for z in zs]
+    # zs = [float(z) for z in zs]
+    zs = [0.05, 0.1, 0.15, 0.2]
 
     galaxy_names = [galaxy_name.split('_')[0] for galaxy_name in galaxy_names]
-    print(galaxy_names)
-
 
     pixscale = 0.262 * u.arcsecond
     pixarea = pixscale ** 2
@@ -257,15 +306,20 @@ if __name__ == "__main__":
 
         im = np.moveaxis(im, 0, -1)
         im_lo = np.moveaxis(im_lo, 0, -1)
-        im_lo = im_lo * 10**4
+        # im_lo = im_lo * 10**4
         im_lo = simunits2maggies(im_lo, pixarea)
         # In the shape of (x, y, bands)
 
         im = im * 10 ** (-9)
 
-        data[galaxy_name] = {0.03: im_lo}
+        try:
+            data[galaxy_name][0] = im_lo
+        except:
+            data[galaxy_name] = {0: im_lo}
         data[galaxy_name][zs[k]] = im
+        print(galaxy_name, zs[k])
         # data[galaxy_name] = {zs[k]: im}
 
+    # print(data["TNG167392"].keys())
     
     main(data)
