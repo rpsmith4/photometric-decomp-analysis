@@ -1,6 +1,6 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
-from PyQt6.QtGui import QColor, QPixmap, QKeySequence
+from PyQt6.QtGui import QColor, QPixmap, QKeySequence, QImage
 from PyQt6.QtWidgets import *
 from PyQt6 import uic
 import os
@@ -16,12 +16,35 @@ from multiprocessing import Process
 import multiprocessing
 import json
 import signal
+import matplotlib.pyplot as plt
+from io import BytesIO
+from PIL import Image
+from astropy.io import fits
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
+from astropy.visualization.stretch import LogStretch
+from astropy.visualization import ImageNormalize
 
+class PlotCanvas(FigureCanvas):
+    def __init__(self, parent=None):
+        fig = Figure(figsize=(250/100, 250/100), dpi=100)
+        self.ax = fig.add_subplot(111)
+        fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
+        super().__init__(fig)
+        self.setParent(parent)
+
+    def plot(self, galaxy_path, band, idx):
+        im = fits.getdata(os.path.join(galaxy_path, f"2_sersic_{band}_composed.fits"))[idx]
+        self.ax.cla()
+        self.ax.set_axis_off()
+        norm = ImageNormalize(stretch=LogStretch(), vmin=0, vmax=1)
+        self.ax.imshow(im, origin="lower", norm=norm, cmap="inferno")
+        self.draw()
 
 class MainWindow(QDialog):
     def __init__(self, galpathlist=None):
         super().__init__()
-        self.ui = uic.loadUi('ds9_open.ui', self)
+        self.ui = uic.loadUi('ds9_open2.ui', self)
 
         # Initializing some variables
         self.galpathlist = galpathlist
@@ -71,6 +94,11 @@ class MainWindow(QDialog):
         # Process list of currently running fits
         self.ps = []
 
+        # Setting up the FITs plots for the iamge, model, and residual
+        self.img = PlotCanvas(parent=self.ui.galimg)
+        self.model = PlotCanvas(parent=self.ui.galmodel)
+        self.resid = PlotCanvas(parent=self.ui.galresid)
+
         # Switch over to the first galaxy
         self.changegal(self.curr_gal_index)
 
@@ -88,7 +116,7 @@ class MainWindow(QDialog):
                 markas = self.galmarks[gal]
                 self.galaxylist.item(galnames.index(gal)).setBackground(QColor(self.colors[markas]))
         self.galaxylist.repaint()
-            
+
         self.show()
 
     def open_ds9(self, Dialog):
@@ -134,6 +162,9 @@ class MainWindow(QDialog):
 
         pixmap = QPixmap(os.path.join(p, "image.jpg"))
         self.ui.galaxyjpg.setPixmap(pixmap)
+        self.img.plot(self.galpathlist[self.curr_gal_index], self.band, idx=0)
+        self.model.plot(self.galpathlist[self.curr_gal_index], self.band, idx=1)
+        self.resid.plot(self.galpathlist[self.curr_gal_index], self.band, idx=2)
          
     def set_solver(self, solver):
         self.solvertype = solver 
@@ -175,7 +206,6 @@ class MainWindow(QDialog):
             shutil.copyfile(src=os.path.join(p, f"2_sersic_{self.band}.dat"), dst=os.path.join(p, f"2_sersic_{self.band}.dat.bak"))
             with open(os.path.join(p, f"2_sersic_{self.band}.dat"), "w") as f:
                 f.write(new_config)
-
 
 def get_galaxies(p):
     structure = os.walk(p)
