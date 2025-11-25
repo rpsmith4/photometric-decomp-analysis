@@ -34,12 +34,16 @@ class PlotCanvas(FigureCanvas):
         self.setParent(parent)
 
     def plot(self, galaxy_path, band, idx):
-        im = fits.getdata(os.path.join(galaxy_path, f"2_sersic_{band}_composed.fits"))[idx]
         self.ax.cla()
         self.ax.set_axis_off()
-        norm = ImageNormalize(stretch=LogStretch(), vmin=0, vmax=1)
-        self.ax.imshow(im, origin="lower", norm=norm, cmap="inferno")
-        self.draw()
+        try:
+            im = fits.getdata(os.path.join(galaxy_path, f"2_sersic_{band}_composed.fits"))[idx]
+            norm = ImageNormalize(stretch=LogStretch(), vmin=0, vmax=1)
+            self.ax.imshow(im, origin="lower", norm=norm, cmap="inferno")
+        except:
+            self.ax.text(0,0.5,"Cannot find FITs composed image!")
+        finally:
+            self.draw()
 
 class MainWindow(QDialog):
     def __init__(self, galpathlist=None):
