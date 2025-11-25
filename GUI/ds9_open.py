@@ -7,23 +7,21 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import glob
 import argparse
 import shutil
-sys.path.append("../")
-import imfit_run
 from multiprocessing import Process
-import multiprocessing
 import json
-import signal
 import matplotlib.pyplot as plt
-from io import BytesIO
-from PIL import Image
 from astropy.io import fits
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
 from astropy.visualization.stretch import LogStretch
 from astropy.visualization import ImageNormalize
+
+LOCAL_DIR = "GUI"
+MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
+sys.path.append(os.path.join(MAINDIR))
+import imfit_run
 
 class PlotCanvas(FigureCanvas):
     def __init__(self, parent=None):
@@ -48,7 +46,7 @@ class PlotCanvas(FigureCanvas):
 class MainWindow(QDialog):
     def __init__(self, galpathlist=None):
         super().__init__()
-        self.ui = uic.loadUi('ds9_open.ui', self)
+        self.ui = uic.loadUi(os.path.join(MAINDIR, LOCAL_DIR, 'ds9_open.ui'), self)
 
         # Initializing some variables
         self.galpathlist = galpathlist
