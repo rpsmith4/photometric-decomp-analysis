@@ -182,7 +182,7 @@ def make_patched_psf(psf_file_name, band,  target_size):
     outer_weight[distances > R2] = 1.0
     outer_weight[(distances > R1) * (distances < R2)] = (distances[(distances > R1) * (distances < R2)] - R1) / (R2-R1)
 
-    # outer_weight[distances > R4] = 0
+    outer_weight[distances > R4] = 0
     outer_weight[(distances > R3) * (distances < R4)] = (distances[(distances > R3) * (distances < R4)] - R4) / (R3-R4)
 
     # Combine PSF
