@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1207</width>
+    <width>1269</width>
     <height>727</height>
    </rect>
   </property>
@@ -517,7 +517,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
        </item>
        <item>
         <property name="text">
-         <string>1_gauss_ring_1_sersic</string>
+         <string>1_sersic_1_gauss_ring</string>
         </property>
        </item>
       </widget>
