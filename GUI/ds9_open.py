@@ -31,11 +31,11 @@ class PlotCanvas(FigureCanvas):
         super().__init__(fig)
         self.setParent(parent)
 
-    def plot(self, galaxy_path, band, idx):
+    def plot(self, galaxy_path, band, idx, fit_type):
         self.ax.cla()
         self.ax.set_axis_off()
         try:
-            im = fits.getdata(os.path.join(galaxy_path, f"2_sersic_{band}_composed.fits"))[idx]
+            im = fits.getdata(os.path.join(galaxy_path, f"{fit_type}_{band}_composed.fits"))[idx]
             norm = ImageNormalize(stretch=LogStretch(), vmin=0, vmax=1)
             self.ax.imshow(im, origin="lower", norm=norm, cmap="inferno")
         except:
@@ -82,6 +82,10 @@ class MainWindow(QDialog):
         self.ui.cancelbutton.clicked.connect(self.cancel)
         self.ui.cancelbutton.setShortcut(QKeySequence("CTRL+C"))
 
+        # Get the fit type
+        self.ui.fit_type_combo.currentTextChanged.connect(self.change_fit_type)
+        self.fit_type = self.ui.fit_type_combo.currentText()
+
         # Loading the list of galaxies
         self.galaxylist = self.ui.galaxylist
         self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
@@ -121,12 +125,16 @@ class MainWindow(QDialog):
 
         self.show()
 
+    def change_fit_type(self):
+        self.fit_type = self.ui.fit_type_combo.currentText()
+        self.changegal(index=self.curr_gal_index)
+
     def open_ds9(self, Dialog):
         print("Opening DS9...")
         p = self.galpathlist[self.curr_gal_index]
 
         # files = [os.path.join(p, f"image_{b}.fits") for b in "griz"]
-        files = [f"{os.path.join(p, f'2_sersic_{self.band}_composed.fits')}"]
+        files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
         arg = ["ds9", "-cmap", "inferno", "-scale", "log", "-scale", "limits", "0", "10", "-cube", "3"]
         arg.extend(files)
         subprocess.Popen(arg)
@@ -145,7 +153,7 @@ class MainWindow(QDialog):
 
         p = self.galpathlist[self.curr_gal_index]
         try:
-            with open(os.path.join(p, f"2_sersic_{self.band}.dat"), "r") as f:
+            with open(os.path.join(p, f"{self.fit_type}_{self.band}.dat"), "r") as f:
                 config_file = f.readlines()
             self.config.setPlainText("".join(config_file))
             self.config.repaint()
@@ -154,7 +162,7 @@ class MainWindow(QDialog):
             self.config.repaint()
 
         try:
-            with open(os.path.join(p, f"2_sersic_{self.band}_fit_params.txt"), "r") as f:
+            with open(os.path.join(p, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
                 config_file = f.readlines()
             self.params.setPlainText("".join(config_file))
             self.params.repaint()
@@ -164,9 +172,9 @@ class MainWindow(QDialog):
 
         pixmap = QPixmap(os.path.join(p, "image.jpg"))
         self.ui.galaxyjpg.setPixmap(pixmap)
-        self.img.plot(self.galpathlist[self.curr_gal_index], self.band, idx=0)
-        self.model.plot(self.galpathlist[self.curr_gal_index], self.band, idx=1)
-        self.resid.plot(self.galpathlist[self.curr_gal_index], self.band, idx=2)
+        self.img.plot(self.galpathlist[self.curr_gal_index], self.band, idx=0, fit_type=self.fit_type)
+        self.model.plot(self.galpathlist[self.curr_gal_index], self.band, idx=1, fit_type=self.fit_type)
+        self.resid.plot(self.galpathlist[self.curr_gal_index], self.band, idx=2, fit_type=self.fit_type)
          
     def set_solver(self, solver):
         self.solvertype = solver 
@@ -177,7 +185,7 @@ class MainWindow(QDialog):
     
 
     def refit(self):
-        p = Process(target=imfit_run.main, args=(self.galpathlist[self.curr_gal_index], [self.band], False, True, True, True, True, self.solvertype, 8, "2_sersic", True))
+        p = Process(target=imfit_run.main, args=(self.galpathlist[self.curr_gal_index], [self.band], False, True, True, True, True, self.solvertype, 8, self.fit_type, True))
         # imfit_run.main(self.galpathlist[self.curr_gal_index], [self.band], r=False, overwrite=True, mask=True, psf=True, invvar=True, alg=self.solvertype, max_threads=8, fit_type="2_sersic", make_composed=True)
         self.ps.append(p)
         p.start()
@@ -205,8 +213,9 @@ class MainWindow(QDialog):
         new_config = self.ui.config.toPlainText()
         print(new_config)
         if not(new_config == ""):
-            shutil.copyfile(src=os.path.join(p, f"2_sersic_{self.band}.dat"), dst=os.path.join(p, f"2_sersic_{self.band}.dat.bak"))
-            with open(os.path.join(p, f"2_sersic_{self.band}.dat"), "w") as f:
+            fit_type = self.fit_type_combo.currentText()
+            shutil.copyfile(src=os.path.join(p, f"{fit_type}_{self.band}.dat"), dst=os.path.join(p, f"{fit_type}_{self.band}.dat.bak"))
+            with open(os.path.join(p, f"{fit_type}_{self.band}.dat"), "w") as f:
                 f.write(new_config)
 
 def get_galaxies(p):
