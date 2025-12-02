@@ -16,11 +16,12 @@ from PIL import Image
 def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9'):
     url = "http://legacysurvey.org/viewer/"
 
+    RA = np.array(RA, float)
+    DEC = np.array(DEC, float)
+    R = np.array(R, float)
+
     for k in range(len(RA)):
         # R in arcmin
-        RA = np.array(RA, float)
-        DEC = np.array(DEC, float)
-        R = np.array(R, float)
         RR = int(math.ceil(R[k]*60./pixscale))
 
         options = "?ra=%f&dec=%f&width=%i&height=%i&layer=ls-%s&pixscale=%.3f&bands=%s" % (RA[k], DEC[k], 2*RR, 2*RR, dr, pixscale,bands)
@@ -83,8 +84,8 @@ def download(names, RA, DEC, R, file_types, bands='grz', pixscale=0.262, dr='dr9
                         data = hdu.data
                         fits.PrimaryHDU(data=data).writeto(f"psf_core_{band}.fits", overwrite=True)
                         psf_size = 150
-                        if band == "z":
-                            psf_size = 600
+                        # if band == "z":
+                        #     psf_size = 600
                         psf_combined = make_patched_psf(f"psf_core_{band}.fits", band, psf_size)
                         fits.PrimaryHDU(data=psf_combined).writeto(f"psf_patched_{band}.fits", overwrite=True)
             except Exception as e:
@@ -116,6 +117,8 @@ def get_data(url, params):
         try:
             # Make the request to the Legacy Survey API
             print("Requesting data")
+            print(url)
+            print(params)
             response = requests.get(url, params=params)
             print(f"Response status: {response.reason}")
 
