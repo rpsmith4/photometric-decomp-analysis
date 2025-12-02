@@ -22,6 +22,7 @@ LOCAL_DIR = "GUI"
 MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
 sys.path.append(os.path.join(MAINDIR))
 import imfit_run
+import fit_monitor
 
 class PlotCanvas(FigureCanvas):
     def __init__(self, parent=None):
@@ -99,6 +100,7 @@ class MainWindow(QDialog):
 
         # Process list of currently running fits
         self.ps = []
+        self.fit_dialogs = []
 
         # Setting up the FITs plots for the iamge, model, and residual
         self.img = PlotCanvas(parent=self.ui.galimg)
@@ -185,15 +187,27 @@ class MainWindow(QDialog):
     
 
     def refit(self):
-        p = Process(target=imfit_run.main, args=(self.galpathlist[self.curr_gal_index], [self.band], False, True, True, True, True, self.solvertype, 8, self.fit_type, True))
-        # imfit_run.main(self.galpathlist[self.curr_gal_index], [self.band], r=False, overwrite=True, mask=True, psf=True, invvar=True, alg=self.solvertype, max_threads=8, fit_type="2_sersic", make_composed=True)
-        self.ps.append(p)
-        p.start()
+        # Open a Fit Monitor dialog which runs IMFIT and streams stdout
+        path = self.galpathlist[self.curr_gal_index]
+        dlg = fit_monitor.FitMonitorDialog(path, self.band, self.solvertype, max_threads=8, fit_type=self.fit_type, parent=self)
+        dlg.show()
+        self.fit_dialogs.append(dlg)
 
         # Just refreshing the configs and stats and whatnot
         self.changegal(index=self.curr_gal_index)
     
     def cancel(self):
+        # Try to cancel dialog-based fits first
+        if len(self.fit_dialogs) > 0:
+            dlg = self.fit_dialogs[-1]
+            try:
+                dlg.cancel()
+                dlg.close()
+            except Exception:
+                pass
+            self.fit_dialogs.pop()
+            return
+
         if len(self.ps) > 0:
             self.ps[-1].terminate()
             self.ps.pop()

@@ -16,7 +16,7 @@ import make_model_ima_imfit
 import signal
 
 
-def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, fit_type="2_sersic"):
+def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, fit_type="2_sersic", stdout_callback=None):
     # Assumes alread in directory
     #imfit -c config.dat image_g.fits --mask image_mask.fits --psf psf_patched_g.fits --noise image_g_invvar.fits --save-model g_model.fits --save-residual g_residual.fits --max-threads 4 --errors-are-weights
     # command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt", "--max-threads", f"{args.max_threads}"]
@@ -35,13 +35,41 @@ def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, f
     if alg=="DE_LHS":
         command.extend(["--de_lhs"])
     
-    global p 
-    p = subprocess.Popen(command)
-    p.wait()
+    # Launch imfit and optionally stream stdout to a callback
+    global p
+    # Use line-buffering where possible so output is delivered in real time
+    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    if stdout_callback is None:
+        # If no callback provided, just wait until completion
+        p.wait()
+    else:
+        # Stream output lines to callback in real time using readline loop
+        try:
+            # Ensure p.stdout is not None (type check for static analyzers)
+            if p.stdout is not None:
+                for line in iter(p.stdout.readline, ''):
+                    if line:
+                        try:
+                            stdout_callback(line)
+                        except Exception:
+                            # Ensure exceptions in the callback don't break the loop
+                            pass
+                    else:
+                        break
+        except Exception:
+            pass
+        finally:
+            try:
+                p.wait()
+            except Exception:
+                pass
 
 def handler(signum, frame):
     print("Terminating IMFIT process...")
-    p.terminate()
+    try:
+        p.terminate()
+    except Exception:
+        pass
     print("IMFIT process terminated.")
     sys.exit(-1)
     # raise IOError("Quitting on {}".format(signum))
@@ -97,6 +125,23 @@ def main(p, bands, r=False, overwrite=False, mask=True, psf=True, invvar=True, a
                                 os.remove("./masked.fits")
                             else:
                                 make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{fit_type}_{band}_composed.fits", comp_names=["Host", "Polar"])
+
+
+def terminate_imfit():
+    global p
+    try:
+        if p is not None:
+            p.terminate()
+            # give it a short grace period
+            try:
+                p.wait(timeout=1)
+            except Exception:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 
 
