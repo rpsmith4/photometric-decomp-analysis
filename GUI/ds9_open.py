@@ -228,7 +228,8 @@ class MainWindow(QDialog):
         print(new_config)
         if not(new_config == ""):
             fit_type = self.fit_type_combo.currentText()
-            shutil.copyfile(src=os.path.join(p, f"{fit_type}_{self.band}.dat"), dst=os.path.join(p, f"{fit_type}_{self.band}.dat.bak"))
+            if os.path.isfile(os.path.join(p, f"{fit_type}_{self.band}.dat")):
+                shutil.copyfile(src=os.path.join(p, f"{fit_type}_{self.band}.dat"), dst=os.path.join(p, f"{fit_type}_{self.band}.dat.bak"))
             with open(os.path.join(p, f"{fit_type}_{self.band}.dat"), "w") as f:
                 f.write(new_config)
 
