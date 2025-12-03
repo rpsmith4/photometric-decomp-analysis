@@ -2,9 +2,12 @@ from PyQt6 import QtCore, QtWidgets, uic
 from PyQt6.QtWidgets import QDialog
 from PyQt6.QtGui import QTextCursor
 import os
-import imfit_run
 import sys
 from pathlib import Path
+LOCAL_DIR = "GUI"
+MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
+sys.path.append(os.path.join(MAINDIR))
+import imfit_run
 
 class FitWorker(QtCore.QThread):
     output = QtCore.pyqtSignal(str)
