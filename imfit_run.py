@@ -10,10 +10,13 @@ from pathlib import Path
 import pyimfit
 import subprocess
 import glob
-IMAN_DIR = os.path.expanduser("~/Documents/iman_new")
+import signal
+
+LOCAL_DIR = "."
+MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
+IMAN_DIR = os.path.join("../", MAINDIR, "iman_new")
 sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
 import make_model_ima_imfit
-import signal
 
 
 def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, fit_type="2_sersic", stdout_callback=None):
