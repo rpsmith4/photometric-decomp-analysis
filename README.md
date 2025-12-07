@@ -68,7 +68,15 @@ Which will run IMFIT on each galaxy in ```my_galaxies/``` with the PSF, weight m
 > Check IMFIT's main [documentation](https://www.mpe.mpg.de/~erwin/resources/imfit/imfit_howto.pdf), which describes some of the caveats to using multiple threads.
 
 ---
+```GUI/ds9_open.py```
 
+Used to view the results/refine/make new fits in a GUI interface.
+
+Can be used by running:
+
+```python3 GUI/ds9_open.py -p path/to/my_galaxies```
+
+---
 ```plot_parameters.py```
 
 Used to make plots of the outputs of the fitting process, as well as determine (at least somewhat) the quality of the fits. Can also be used to make composed images.
@@ -88,6 +96,9 @@ To get the overall output of our fits, use:
 ```python3 plot_parameters.py -p my_galaxies/ -r -o Plots/ --fit_type 2_sersic --plot_stats --plot_type compare_structure -c path/to/SGA2020.fits```
 
 ---
+> [!CAUTION]
+> The documentation for this code is largely out of date, I will come back to it.
+
 ```redshift_galaxy.py```
 
 Used to artificially redshift galaxy images that are output from TNG50 (and post-processed with SKIRT).
