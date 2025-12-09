@@ -1,0 +1,12 @@
+{
+    "ds9_limits": [0,1],
+    "ds9_scale": "log",
+    "ds9_cmap": "inferno",
+    "ds9_path": "",
+    "mark_colors": {
+        "fitted": "#35bd49",
+        "return": "#bdba35",
+        "unable": "#bd3535"
+    },
+    "imfit_maxthreads" : 8
+}

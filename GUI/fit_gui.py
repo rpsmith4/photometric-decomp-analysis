@@ -32,13 +32,13 @@ class PlotCanvas(FigureCanvas):
         super().__init__(fig)
         self.setParent(parent)
 
-    def plot(self, galaxy_path, band, idx, fit_type):
+    def plot(self, galaxy_path, band, idx, fit_type, limits, cmap):
         self.ax.cla()
         self.ax.set_axis_off()
         try:
             im = fits.getdata(os.path.join(galaxy_path, f"{fit_type}_{band}_composed.fits"))[idx]
-            norm = ImageNormalize(stretch=LogStretch(), vmin=0, vmax=1)
-            self.ax.imshow(im, origin="lower", norm=norm, cmap="inferno")
+            norm = ImageNormalize(stretch=LogStretch(), vmin=limits[0], vmax=limits[1])
+            self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
         except:
             self.ax.text(0,0.5,"Cannot find FITs composed image!")
         finally:
@@ -48,6 +48,11 @@ class MainWindow(QDialog):
     def __init__(self, galpathlist=None):
         super().__init__()
         self.ui = uic.loadUi(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'), self)
+
+        # Loading the config file for the GUI
+        with open(os.path.join(MAINDIR, LOCAL_DIR, 'config.json')) as config:
+            self.gui_config = json.load(config)
+            config.close()
 
         # Initializing some variables
         self.galpathlist = galpathlist
@@ -92,11 +97,7 @@ class MainWindow(QDialog):
         self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
         self.galaxylist.itemSelectionChanged.connect(self.changegal)
 
-        self.colors = {
-            "fitted" : "#35bd49",
-            "return" : "#bdba35",
-            "unable" : "#bd3535"
-        }
+        self.colors = self.gui_config["mark_colors"]
 
         # Process list of currently running fits
         self.ps = []
@@ -112,7 +113,7 @@ class MainWindow(QDialog):
 
         # Loading the JSON file for the galaxy marks (whether fitted, need to return to, or can't fit)
         try:
-            with open('galmarks.json') as f:
+            with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json')) as f:
                 self.galmarks = json.load(f)
         except:
             self.galmarks = {}
@@ -137,7 +138,7 @@ class MainWindow(QDialog):
 
         # files = [os.path.join(p, f"image_{b}.fits") for b in "griz"]
         files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
-        arg = ["ds9", "-cmap", "inferno", "-scale", "log", "-scale", "limits", "0", "10", "-cube", "3"]
+        arg = ["ds9", "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config["ds9_limits"][0]}", f"{self.gui_config["ds9_limits"][1]}", "-cube", "3"]
         arg.extend(files)
         subprocess.Popen(arg)
     
@@ -174,9 +175,9 @@ class MainWindow(QDialog):
 
         pixmap = QPixmap(os.path.join(p, "image.jpg"))
         self.ui.galaxyjpg.setPixmap(pixmap)
-        self.img.plot(self.galpathlist[self.curr_gal_index], self.band, idx=0, fit_type=self.fit_type)
-        self.model.plot(self.galpathlist[self.curr_gal_index], self.band, idx=1, fit_type=self.fit_type)
-        self.resid.plot(self.galpathlist[self.curr_gal_index], self.band, idx=2, fit_type=self.fit_type)
+        self.img.plot(self.galpathlist[self.curr_gal_index], self.band, idx=0, fit_type=self.fit_type, limits=self.gui_config["ds9_limits"], cmap=self.gui_config["ds9_cmap"])
+        self.model.plot(self.galpathlist[self.curr_gal_index], self.band, idx=1, fit_type=self.fit_type, limits=self.gui_config["ds9_limits"], cmap=self.gui_config["ds9_cmap"])
+        self.resid.plot(self.galpathlist[self.curr_gal_index], self.band, idx=2, fit_type=self.fit_type, limits=self.gui_config["ds9_limits"], cmap=self.gui_config["ds9_cmap"])
          
     def set_solver(self, solver):
         self.solvertype = solver 
@@ -189,7 +190,7 @@ class MainWindow(QDialog):
     def refit(self):
         # Open a Fit Monitor dialog which runs IMFIT and streams stdout
         path = self.galpathlist[self.curr_gal_index]
-        dlg = fit_monitor.FitMonitorDialog(path, self.band, self.solvertype, max_threads=8, fit_type=self.fit_type, parent=self)
+        dlg = fit_monitor.FitMonitorDialog(path, self.band, self.solvertype, max_threads=self.gui_config["imfit_maxthreads"], fit_type=self.fit_type, parent=self)
         dlg.show()
         self.fit_dialogs.append(dlg)
 
@@ -219,7 +220,7 @@ class MainWindow(QDialog):
         self.galaxylist.repaint()
         
         self.galmarks[self.galaxylist.item(self.curr_gal_index).text()] = markas
-        with open('galmarks.json', 'w') as fp:
+        with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json'), 'w') as fp:
             json.dump(self.galmarks, fp)
     
     def saveconfig(self):
