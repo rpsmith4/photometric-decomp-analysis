@@ -89,8 +89,14 @@ class MainWindow(QDialog):
 
         # Loading the list of galaxies
         self.galaxylist = self.ui.galaxylist
-        self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
+        # self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
         self.galaxylist.itemSelectionChanged.connect(self.changegal)
+        # print(self.galpathlist)
+        for galtype in self.galpathlist.keys():
+            a = QtWidgets.QTreeWidgetItem(self.galaxylist, [galtype])
+            for galpath in self.galpathlist[galtype]:
+                b = QtWidgets.QTreeWidgetItem([str(galpath.name)])
+                a.addChild(b)
 
         self.colors = {
             "fitted" : "#35bd49",
@@ -108,7 +114,7 @@ class MainWindow(QDialog):
         self.resid = PlotCanvas(parent=self.ui.galresid)
 
         # Switch over to the first galaxy
-        self.changegal(self.curr_gal_index)
+        # self.changegal(self.curr_gal_index)
 
         # Loading the JSON file for the galaxy marks (whether fitted, need to return to, or can't fit)
         try:
@@ -118,12 +124,12 @@ class MainWindow(QDialog):
             self.galmarks = {}
 
         # Setting the colors of the marked galaxies
-        galnames = [os.path.basename(g) for g in galpathlist]
-        for gal in galnames:
-            if gal in self.galmarks.keys():
-                markas = self.galmarks[gal]
-                self.galaxylist.item(galnames.index(gal)).setBackground(QColor(self.colors[markas]))
-        self.galaxylist.repaint()
+        # galnames = [os.path.basename(g) for g in galpathlist]
+        # for gal in galnames:
+        #     if gal in self.galmarks.keys():
+        #         markas = self.galmarks[gal]
+        #         self.galaxylist.item(galnames.index(gal)).setBackground(QColor(self.colors[markas]))
+        # self.galaxylist.repaint()
 
         self.show()
 
@@ -145,38 +151,41 @@ class MainWindow(QDialog):
         self.curr_gal_index += 1
         self.changegal(self.curr_gal_index)
     
-    def changegal(self, index=None):
-        if index == None:
-            galaxy = self.galaxylist.selectedItems()[0].text()
-            gl = [os.path.basename(g) for g in self.galpathlist]
-            self.curr_gal_index = gl.index(galaxy)
-        self.currentgalaxytext.setText(f"Current Galaxy: {os.path.basename(self.galpathlist[self.curr_gal_index])}")
-        self.currentgalaxytext.repaint()
+    def changegal(self):
+        print(self.galaxylist.currentItem().text(0))
+        print("Hello")
+    # def changegal(self, index=None):
+    #     if index == None:
+    #         galaxy = self.galaxylist.selectedItems()[0].text()
+    #         gl = [os.path.basename(g) for g in self.galpathlist]
+    #         self.curr_gal_index = gl.index(galaxy)
+    #     self.currentgalaxytext.setText(f"Current Galaxy: {os.path.basename(self.galpathlist[self.curr_gal_index])}")
+    #     self.currentgalaxytext.repaint()
 
-        p = self.galpathlist[self.curr_gal_index]
-        try:
-            with open(os.path.join(p, f"{self.fit_type}_{self.band}.dat"), "r") as f:
-                config_file = f.readlines()
-            self.config.setPlainText("".join(config_file))
-            self.config.repaint()
-        except:
-            self.config.setPlainText("Config file not found!")
-            self.config.repaint()
+    #     p = self.galpathlist[self.curr_gal_index]
+    #     try:
+    #         with open(os.path.join(p, f"{self.fit_type}_{self.band}.dat"), "r") as f:
+    #             config_file = f.readlines()
+    #         self.config.setPlainText("".join(config_file))
+    #         self.config.repaint()
+    #     except:
+    #         self.config.setPlainText("Config file not found!")
+    #         self.config.repaint()
 
-        try:
-            with open(os.path.join(p, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
-                config_file = f.readlines()
-            self.params.setPlainText("".join(config_file))
-            self.params.repaint()
-        except:
-            self.params.setPlainText("Fit Params not found!")
-            self.params.repaint()
+    #     try:
+    #         with open(os.path.join(p, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
+    #             config_file = f.readlines()
+    #         self.params.setPlainText("".join(config_file))
+    #         self.params.repaint()
+    #     except:
+    #         self.params.setPlainText("Fit Params not found!")
+    #         self.params.repaint()
 
-        pixmap = QPixmap(os.path.join(p, "image.jpg"))
-        self.ui.galaxyjpg.setPixmap(pixmap)
-        self.img.plot(self.galpathlist[self.curr_gal_index], self.band, idx=0, fit_type=self.fit_type)
-        self.model.plot(self.galpathlist[self.curr_gal_index], self.band, idx=1, fit_type=self.fit_type)
-        self.resid.plot(self.galpathlist[self.curr_gal_index], self.band, idx=2, fit_type=self.fit_type)
+    #     pixmap = QPixmap(os.path.join(p, "image.jpg"))
+    #     self.ui.galaxyjpg.setPixmap(pixmap)
+    #     self.img.plot(self.galpathlist[self.curr_gal_index], self.band, idx=0, fit_type=self.fit_type)
+    #     self.model.plot(self.galpathlist[self.curr_gal_index], self.band, idx=1, fit_type=self.fit_type)
+    #     self.resid.plot(self.galpathlist[self.curr_gal_index], self.band, idx=2, fit_type=self.fit_type)
          
     def set_solver(self, solver):
         self.solvertype = solver 
@@ -237,14 +246,19 @@ def get_galaxies(p):
     structure = os.walk(p)
 
     gal_pathlist = []
+    gal_pathdict = {}
     for root, dirs, files in structure:
         if not(files == []):
             # Assumes data is at the end of the file tree
-            galpath = root
+            galpath = Path(root)
             if galpath != None:
-                 gal_pathlist.append(galpath)
+                gal_pathlist.append([galpath.parent.name, galpath])
+                try:
+                    gal_pathdict[galpath.parent.name].append(galpath)
+                except:
+                    gal_pathdict[galpath.parent.name] = [galpath]
 
-    return gal_pathlist
+    return gal_pathdict
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

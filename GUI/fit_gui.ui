@@ -146,7 +146,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
       </widget>
      </item>
      <item>
-      <widget class="QListWidget" name="galaxylist">
+      <widget class="QTreeWidget" name="galaxylist">
        <property name="maximumSize">
         <size>
          <width>200</width>
@@ -156,6 +156,20 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <property name="frameShape">
         <enum>QFrame::Shape::WinPanel</enum>
        </property>
+       <property name="alternatingRowColors">
+        <bool>true</bool>
+       </property>
+       <property name="indentation">
+        <number>10</number>
+       </property>
+       <property name="headerHidden">
+        <bool>true</bool>
+       </property>
+       <column>
+        <property name="text">
+         <string>Galaxy Type</string>
+        </property>
+       </column>
       </widget>
      </item>
     </layout>
