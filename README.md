@@ -68,13 +68,13 @@ Which will run IMFIT on each galaxy in ```my_galaxies/``` with the PSF, weight m
 > Check IMFIT's main [documentation](https://www.mpe.mpg.de/~erwin/resources/imfit/imfit_howto.pdf), which describes some of the caveats to using multiple threads.
 
 ---
-```GUI/ds9_open.py```
+```GUI/fit_gui.py```
 
 Used to view the results/refine/make new fits in a GUI interface.
 
 Can be used by running:
 
-```python3 GUI/ds9_open.py -p path/to/my_galaxies```
+```python3 GUI/fit_gui.py -p path/to/my_galaxies```
 
 ---
 ```plot_parameters.py```
