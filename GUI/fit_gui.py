@@ -47,7 +47,7 @@ class PlotCanvas(FigureCanvas):
 class MainWindow(QDialog):
     def __init__(self, galpathlist=None):
         super().__init__()
-        self.ui = uic.loadUi(os.path.join(MAINDIR, LOCAL_DIR, 'ds9_open.ui'), self)
+        self.ui = uic.loadUi(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'), self)
 
         # Initializing some variables
         self.galpathlist = galpathlist

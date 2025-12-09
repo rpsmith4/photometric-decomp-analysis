@@ -542,6 +542,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
        </property>
       </widget>
      </item>
+     <item>
+      <widget class="QPushButton" name="newconfbutton">
+       <property name="text">
+        <string>(G)enerate New Config</string>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
   </layout>
