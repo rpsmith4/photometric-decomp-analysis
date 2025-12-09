@@ -1,7 +1,10 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
-from PyQt6.QtGui import QColor, QPixmap, QKeySequence, QImage
-from PyQt6.QtWidgets import *
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
+from PySide6.QtGui import QColor, QPixmap, QKeySequence, QImage
+from PySide6.QtUiTools import QUiLoader
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QFile, QIODevice
+from PySide6.QtWidgets import *
 from PyQt6 import uic
 import os
 from pathlib import Path
@@ -47,7 +50,9 @@ class PlotCanvas(FigureCanvas):
 class MainWindow(QDialog):
     def __init__(self, galpathlist=None):
         super().__init__()
-        self.ui = uic.loadUi(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'), self)
+        ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
+        loader = QUiLoader()
+        self.ui = loader.load(ui_file)
 
         # Initializing some variables
         self.galpathlist = galpathlist
@@ -88,14 +93,15 @@ class MainWindow(QDialog):
         self.fit_type = self.ui.fit_type_combo.currentText()
 
         # Loading the list of galaxies
-        self.galaxylist = self.ui.galaxylist
+        self.galaxylist: QTreeWidget = self.ui.galaxylist
         # self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
         self.galaxylist.itemSelectionChanged.connect(self.changegal)
         # print(self.galpathlist)
         for galtype in self.galpathlist.keys():
             a = QtWidgets.QTreeWidgetItem(self.galaxylist, [galtype])
-            for galpath in self.galpathlist[galtype]:
-                b = QtWidgets.QTreeWidgetItem([str(galpath.name)])
+            for galpath_dict in self.galpathlist[galtype]:
+                print(galpath_dict)
+                b = QtWidgets.QTreeWidgetItem([str(galpath_dict["galname"])])
                 a.addChild(b)
 
         self.colors = {
@@ -131,7 +137,7 @@ class MainWindow(QDialog):
         #         self.galaxylist.item(galnames.index(gal)).setBackground(QColor(self.colors[markas]))
         # self.galaxylist.repaint()
 
-        self.show()
+        self.ui.show()
 
     def change_fit_type(self):
         self.fit_type = self.ui.fit_type_combo.currentText()
@@ -153,6 +159,8 @@ class MainWindow(QDialog):
     
     def changegal(self):
         print(self.galaxylist.currentItem().text(0))
+        print(self.galaxylist.topLevelItem(0))
+        # print(self.galaxylist.currentIndex().internalId())
         print("Hello")
     # def changegal(self, index=None):
     #     if index == None:
@@ -252,11 +260,12 @@ def get_galaxies(p):
             # Assumes data is at the end of the file tree
             galpath = Path(root)
             if galpath != None:
-                gal_pathlist.append([galpath.parent.name, galpath])
+                # gal_pathlist.append([galpath.parent.name, galpath])
                 try:
-                    gal_pathdict[galpath.parent.name].append(galpath)
+                    # gal_pathdict[galpath.parent.name].append(galpath)
+                    gal_pathdict[galpath.parent.name].append({"galname": galpath.name, "galpath": galpath})
                 except:
-                    gal_pathdict[galpath.parent.name] = [galpath]
+                    gal_pathdict[galpath.parent.name] = [{"galname": galpath.name, "galpath": galpath}]
 
     return gal_pathdict
 
