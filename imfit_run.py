@@ -12,9 +12,8 @@ import subprocess
 import glob
 import signal
 
-LOCAL_DIR = "."
-MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
-IMAN_DIR = os.path.join("../", MAINDIR, "iman_new")
+MAINDIR = Path(os.path.dirname(__file__))
+IMAN_DIR = os.path.join(MAINDIR.parent, "iman_new")
 sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
 import make_model_ima_imfit
 
