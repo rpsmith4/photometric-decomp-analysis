@@ -1,8 +1,9 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
-from PyQt6.QtGui import QColor, QPixmap, QKeySequence, QImage
-from PyQt6.QtWidgets import *
-from PyQt6 import uic
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
+from PySide6.QtGui import QColor, QPixmap, QKeySequence, QImage
+from PySide6.QtWidgets import *
+from PySide6.QtCore import QFile
+from PySide6.QtUiTools import *
 import os
 from pathlib import Path
 import subprocess
@@ -47,12 +48,18 @@ class PlotCanvas(FigureCanvas):
 class MainWindow(QDialog):
     def __init__(self, galpathlist=None):
         super().__init__()
-        self.ui = uic.loadUi(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'), self)
-
+        ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
+        loader = QUiLoader()
+        self.ui = loader.load(ui_file)
         # Loading the config file for the GUI
         with open(os.path.join(MAINDIR, LOCAL_DIR, 'config.json')) as config:
             self.gui_config = json.load(config)
             config.close()
+
+        # Initializing widget types to make my autocomplete work
+        self.currentgalaxytext: QTextBrowser = self.ui.currentgalaxytext
+        self.config: QTextBrowser = self.ui.config
+        self.params: QTextBrowser = self.ui.params
 
         # Initializing some variables
         self.galpathlist = galpathlist
@@ -126,7 +133,7 @@ class MainWindow(QDialog):
                 self.galaxylist.item(galnames.index(gal)).setBackground(QColor(self.colors[markas]))
         self.galaxylist.repaint()
 
-        self.show()
+        self.ui.show()
 
     def change_fit_type(self):
         self.fit_type = self.ui.fit_type_combo.currentText()
