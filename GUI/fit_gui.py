@@ -15,7 +15,7 @@ import json
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
 from astropy.visualization.stretch import LogStretch, LinearStretch
 from astropy.visualization import ImageNormalize
 
