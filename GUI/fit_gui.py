@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
-from astropy.visualization.stretch import LogStretch
+from astropy.visualization.stretch import LogStretch, LinearStretch
 from astropy.visualization import ImageNormalize
 
 LOCAL_DIR = "GUI"
@@ -33,12 +33,12 @@ class PlotCanvas(FigureCanvas):
         super().__init__(fig)
         self.setParent(parent)
 
-    def plot(self, galaxy_path, band, idx, fit_type, limits, cmap):
+    def plot(self, galaxy_path, band, idx, fit_type, limits, cmap, stretch=LogStretch()):
         self.ax.cla()
         self.ax.set_axis_off()
         try:
             im = fits.getdata(os.path.join(galaxy_path, f"{fit_type}_{band}_composed.fits"))[idx]
-            norm = ImageNormalize(stretch=LogStretch(), vmin=limits[0], vmax=limits[1])
+            norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
             self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
         except:
             self.ax.text(0,0.5,"Cannot find FITs composed image!")
@@ -182,9 +182,25 @@ class MainWindow(QDialog):
 
         pixmap = QPixmap(os.path.join(p, "image.jpg"))
         self.ui.galaxyjpg.setPixmap(pixmap)
-        self.img.plot(self.galpathlist[self.curr_gal_index], self.band, idx=0, fit_type=self.fit_type, limits=self.gui_config["ds9_limits"], cmap=self.gui_config["ds9_cmap"])
-        self.model.plot(self.galpathlist[self.curr_gal_index], self.band, idx=1, fit_type=self.fit_type, limits=self.gui_config["ds9_limits"], cmap=self.gui_config["ds9_cmap"])
-        self.resid.plot(self.galpathlist[self.curr_gal_index], self.band, idx=2, fit_type=self.fit_type, limits=self.gui_config["ds9_limits"], cmap=self.gui_config["ds9_cmap"])
+        self.img.plot(self.galpathlist[self.curr_gal_index], 
+                        self.band,
+                        idx=0,
+                        fit_type=self.fit_type, 
+                        limits=self.gui_config["plot_limits"], 
+                        cmap=self.gui_config["plot_cmap"])
+        self.model.plot(self.galpathlist[self.curr_gal_index], 
+                        self.band, 
+                        idx=1, 
+                        fit_type=self.fit_type, 
+                        limits=self.gui_config["plot_limits"],
+                        cmap=self.gui_config["plot_cmap"])
+        self.resid.plot(self.galpathlist[self.curr_gal_index], 
+                        self.band,
+                        idx=2, 
+                        fit_type=self.fit_type, 
+                        limits=self.gui_config["plot_resid_limits"], 
+                        cmap=self.gui_config["plot_resid_cmap"],
+                        stretch=LinearStretch())
          
     def set_solver(self, solver):
         self.solvertype = solver 

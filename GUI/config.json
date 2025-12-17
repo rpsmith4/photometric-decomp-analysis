@@ -2,6 +2,11 @@
     "ds9_limits": [0,1],
     "ds9_scale": "log",
     "ds9_cmap": "inferno",
+    "plot_limits": [0,1],
+    "plot_resid_limits": [-0.05,0.05],
+    "plot_scale": "log",
+    "plot_cmap": "inferno",
+    "plot_resid_cmap": "seismic_r",
     "ds9_path": "",
     "mark_colors": {
         "fitted": "#35bd49",
