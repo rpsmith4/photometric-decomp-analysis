@@ -18,8 +18,9 @@ import astropy.units as u
 import subprocess
 
 import sys
-IMAN_DIR = os.path.expanduser("~/Documents/iman_new")
-sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
+
+IMAN_DIR = Path(os.path.dirname(__file__))
+sys.path.append(os.path.join(IMAN_DIR, 'iman_new/decomposition/make_model'))
 import make_model_ima_imfit
 
 # warnings.filterwarnings("ignore")
