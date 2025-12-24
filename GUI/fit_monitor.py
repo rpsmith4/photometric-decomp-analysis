@@ -1,6 +1,9 @@
-from PyQt6 import QtCore, QtWidgets, uic
-from PyQt6.QtWidgets import QDialog
-from PyQt6.QtGui import QTextCursor
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
+from PySide6.QtGui import QColor, QPixmap, QKeySequence, QImage, QTextCursor
+from PySide6.QtWidgets import *
+from PySide6.QtCore import QFile
+from PySide6.QtUiTools import *
 import os
 import sys
 from pathlib import Path
@@ -9,9 +12,13 @@ MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
 sys.path.append(os.path.join(MAINDIR))
 import imfit_run
 
+IMAN_DIR = Path(os.path.dirname(__file__))
+sys.path.append(os.path.join(IMAN_DIR, 'iman_new/decomposition/make_model'))
+import make_model_ima_imfit
+
 class FitWorker(QtCore.QThread):
-    output = QtCore.pyqtSignal(str)
-    finished = QtCore.pyqtSignal(int)
+    output = QtCore.Signal(str)
+    finished = QtCore.Signal(int)
 
     def __init__(self, path, band, solver, max_threads, fit_type, mask=True, psf=True, invvar=True, parent=None):
         super().__init__(parent)
@@ -59,10 +66,6 @@ class FitWorker(QtCore.QThread):
             mask_file = "image_mask.fits"
 
             if os.path.exists(params_file):
-                # import make_model helper (imfit_run already appends IMAN path; replicate minimal import)
-                IMAN_DIR = os.path.expanduser("~/Documents/iman_new")
-                sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
-                import make_model_ima_imfit
 
                 if self.mask and os.path.exists(mask_file):
                     from astropy.io import fits
@@ -90,11 +93,12 @@ class FitWorker(QtCore.QThread):
         self.finished.emit(0)
 
 
-class FitMonitorDialog(QDialog):
+class FitMonitorDialog:
     def __init__(self, path, band, solver, max_threads=8, fit_type="2_sersic", parent=None):
-        super().__init__(parent)
-        ui_path = os.path.join(os.path.dirname(__file__), 'fit_monitor.ui')
-        uic.loadUi(ui_path, self)
+        self.parent = parent
+        ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_monitor.ui'))
+        loader = QUiLoader()
+        self.ui = loader.load(ui_file)
 
         self.path = path
         self.band = band
@@ -103,32 +107,32 @@ class FitMonitorDialog(QDialog):
         self.fit_type = fit_type
 
         # UI elements from the .ui
-        self.stdoutEdit.setReadOnly(True)
-        self.cancelButton.clicked.connect(self.cancel)
-        self.closeButton.clicked.connect(self.close)
+        self.ui.stdoutEdit.setReadOnly(True)
+        self.ui.cancelButton.clicked.connect(self.cancel)
+        self.ui.closeButton.clicked.connect(self.close)
 
         # Worker thread
         self.worker = FitWorker(path, band, solver, max_threads, fit_type)
         self.worker.output.connect(self._append_output)
         self.worker.finished.connect(self._finished)
 
-        self.titleLabel.setText(f"IMFIT: {os.path.basename(self.path)}  band={self.band}  solver={self.solver}")
-        self.statusLabel.setText("Status: Running")
+        self.ui.titleLabel.setText(f"IMFIT: {os.path.basename(self.path)}  band={self.band}  solver={self.solver}")
+        self.ui.statusLabel.setText("Status: Running")
 
         # Start
         self.worker.start()
 
     def _append_output(self, text):
         # Append text to stdout view
-        self.stdoutEdit.moveCursor(QTextCursor.MoveOperation.End)
-        self.stdoutEdit.insertPlainText(text)
-        self.stdoutEdit.moveCursor(QTextCursor.MoveOperation.End)
+        self.ui.stdoutEdit.moveCursor(QTextCursor.MoveOperation.End)
+        self.ui.stdoutEdit.insertPlainText(text)
+        self.ui.stdoutEdit.moveCursor(QTextCursor.MoveOperation.End)
 
     def _finished(self, code):
-        self.statusLabel.setText(f"Status: Finished (code={code})")
+        self.ui.statusLabel.setText(f"Status: Finished (code={code})")
         # If parent is the main window, trigger a refresh of the currently selected galaxy
         try:
-            parent = self.parent()
+            parent = self.parent
             if parent is not None and hasattr(parent, 'changegal'):
                 try:
                     parent.changegal(index=parent.curr_gal_index)
@@ -145,7 +149,13 @@ class FitMonitorDialog(QDialog):
         # Try to terminate the running imfit process
         try:
             imfit_run.terminate_imfit()
-            self.statusLabel.setText("Status: Terminated")
+            self.ui.statusLabel.setText("Status: Terminated")
         except Exception as e:
-            self.stdoutEdit.insertPlainText(f"Failed to terminate: {e}\n")
+            self.ui.stdoutEdit.insertPlainText(f"Failed to terminate: {e}\n")
+
+    def show(self):
+        self.ui.show()
+
+    def close(self):
+        self.ui.close()
 
