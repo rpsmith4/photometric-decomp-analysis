@@ -146,7 +146,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
       </widget>
      </item>
      <item>
-      <widget class="QTreeWidget" name="galaxylist">
+      <widget class="QTreeView" name="galaxytree">
        <property name="maximumSize">
         <size>
          <width>200</width>
@@ -165,16 +165,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <property name="headerHidden">
         <bool>true</bool>
        </property>
-       <column>
-        <property name="text">
-         <string>Galaxy Type</string>
-        </property>
-       </column>
-       <column>
-        <property name="text">
-         <string>Galaxy Path</string>
-        </property>
-       </column>
       </widget>
      </item>
     </layout>

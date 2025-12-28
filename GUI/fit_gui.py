@@ -45,8 +45,27 @@ class PlotCanvas(FigureCanvas):
         finally:
             self.draw()
 
+class DirOnlyChildrenFileSystemModel(QFileSystemModel):
+    def hasChildren(self, index):
+        # For invalid indices, fall back to default behavior
+        if not index.isValid():
+            return super().hasChildren(index)
+        # Files are never considered to have children
+        if not self.isDir(index):
+            return False
+        path = self.filePath(index)
+        try:
+            # Only report that this index has children if it contains subdirectories
+            with os.scandir(path) as it:
+                for entry in it:
+                    if entry.is_dir():
+                        return True
+            return False
+        except Exception:
+            return super().hasChildren(index)
+
 class MainWindow(QDialog):
-    def __init__(self, galpathlist=None):
+    def __init__(self, galpathlist=None, p=None):
         super().__init__()
         ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
         loader = QUiLoader()
@@ -99,17 +118,23 @@ class MainWindow(QDialog):
         self.fit_type = self.ui.fit_type_combo.currentText()
 
         # Loading the list of galaxies
-        self.galaxylist: QTreeWidget = self.ui.galaxylist
-        self.galaxylist.setColumnHidden(1, True)
-        # self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
-        self.galaxylist.itemSelectionChanged.connect(self.changegal)
+        self.galaxytree: QTreeView = self.ui.galaxytree
+        self.galaxytree.setColumnHidden(1, True)
 
-        # print(self.galpathlist)
-        for galtype in self.galpathlist.keys():
-            a = QtWidgets.QTreeWidgetItem(self.galaxylist, [galtype])
-            for galpath_dict in self.galpathlist[galtype]:
-                b = QtWidgets.QTreeWidgetItem([str(galpath_dict["galname"]), str(galpath_dict["galpath"])])
-                a.addChild(b)
+        # Use a QFileSystemModel that only reports directories as having children
+        # if they contain subdirectories (so leaf folders won't be expandable).
+        model = DirOnlyChildrenFileSystemModel()
+        model.setRootPath(str(p))
+        self.galaxytree.setModel(model)
+        self.galaxytree.setRootIndex(model.index(str(p)))
+        self.galaxytree.setColumnHidden(1, True)
+        self.galaxytree.setColumnHidden(2, True)
+        self.galaxytree.setColumnHidden(3, True)
+
+        # Track the currently selected lowest-level galaxy folder (Path) if any
+        self.selected_galaxy_path = None
+        # Detect selections on the tree to identify when a leaf directory is selected
+        self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
 
         self.colors = self.gui_config["mark_colors"]
 
@@ -130,14 +155,14 @@ class MainWindow(QDialog):
             self.galmarks = {}
 
         # Setting the colors of the marked galaxies
-        galnames = [os.path.basename(k["galname"]) for g in galpathlist.keys() for k in galpathlist[g]]
-        for gal in galnames:
-            if gal in self.galmarks.keys():
-                markas = self.galmarks[gal]
-                i = self.galaxylist.findItems(gal, QtCore.Qt.MatchFlag.MatchContains | QtCore.Qt.MatchFlag.MatchRecursive, 0)[0]
-                i.setBackground(0, QBrush(QColor(self.colors[markas])))
-                self.galaxylist.repaint()
-        self.galaxylist.repaint()
+        # galnames = [os.path.basename(k["galname"]) for g in galpathlist.keys() for k in galpathlist[g]]
+        # for gal in galnames:
+        #     if gal in self.galmarks.keys():
+        #         markas = self.galmarks[gal]
+        #         i = self.galaxylist.findItems(gal, QtCore.Qt.MatchFlag.MatchContains | QtCore.Qt.MatchFlag.MatchRecursive, 0)[0]
+        #         i.setBackground(0, QBrush(QColor(self.colors[markas])))
+        #         self.galaxylist.repaint()
+        # self.galaxylist.repaint()
 
         self.ui.show()
 
@@ -145,19 +170,17 @@ class MainWindow(QDialog):
         self.fit_type = self.ui.fit_type_combo.currentText()
         self.changegal()
 
-    def open_ds9(self, Dialog):
-        print("Opening DS9...")
-        p = Path(self.galaxylist.currentItem().text(1))
-
-        # files = [os.path.join(p, f"image_{b}.fits") for b in "griz"]
+    def open_ds9(self, *args):
+        p = self.selected_galaxy_path
         files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
         arg = ["ds9", "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config["ds9_limits"][0]}", f"{self.gui_config["ds9_limits"][1]}", "-cube", "3"]
         arg.extend(files)
         subprocess.Popen(arg)
     
     def changegal(self):
-        galaxy = self.galaxylist.currentItem().text(0)
-        galaxypath = Path(self.galaxylist.currentItem().text(1))
+        # Update UI based on the currently selected leaf galaxy folder
+        galaxypath = self.selected_galaxy_path
+        galaxy = galaxypath.name
         self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
         self.currentgalaxytext.repaint()
 
@@ -200,7 +223,32 @@ class MainWindow(QDialog):
                         limits=self.gui_config["plot_resid_limits"], 
                         cmap=self.gui_config["plot_resid_cmap"],
                         stretch=LinearStretch())
-         
+        
+    def on_galaxytree_selection_changed(self, selected, deselected):
+        """Called when the tree selection changes. If the selected item is a lowest-level
+        directory (a directory with no subdirectories) we store it as the current galaxy
+        and update the UI."""
+        idxs = selected.indexes()
+        if not idxs:
+            return
+        idx = idxs[0]
+        model = self.galaxytree.model()
+        # Only consider directory selections
+        try:
+            if not model.isDir(idx):
+                return
+        except Exception:
+            return
+
+        is_leaf = not model.hasChildren(idx)
+        path = Path(model.filePath(idx))
+        if is_leaf:
+            self.selected_galaxy_path = path
+            self.changegal()
+        else:
+            # Clear selection for non-leaf directories
+            self.selected_galaxy_path = None
+
     def set_solver(self, solver):
         self.solvertype = solver 
 
@@ -211,7 +259,10 @@ class MainWindow(QDialog):
 
     def refit(self):
         # Open a Fit Monitor dialog which runs IMFIT and streams stdout
-        path = Path(self.galaxylist.currentItem().text(1))
+        if getattr(self, "selected_galaxy_path", None) is None:
+            print("No galaxy selected to refit")
+            return
+        path = self.selected_galaxy_path
         dlg = fit_monitor.FitMonitorDialog(path, self.band, self.solvertype, max_threads=self.gui_config["imfit_maxthreads"], fit_type=self.fit_type, parent=self)
         dlg.show()
         self.fit_dialogs.append(dlg)
@@ -238,16 +289,19 @@ class MainWindow(QDialog):
             print("No running IMFIT processes")
     
     def markgalaxy(self, markas):
-        i = self.galaxylist.currentItem()
-        i.setBackground(0, QBrush(QColor(self.colors[markas])))
-        self.galaxylist.repaint()
-        
-        self.galmarks[i.text(0)] = markas
+        if getattr(self, "selected_galaxy_path", None) is None:
+            return
+        galname = self.selected_galaxy_path.name
+        # Save mark state; tree coloring for QFileSystemModel is not changed here
+        self.galmarks[galname] = markas
         with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json'), 'w') as fp:
             json.dump(self.galmarks, fp)
     
     def saveconfig(self):
-        p = Path(self.galaxylist.currentItem().text(1))
+        if getattr(self, "selected_galaxy_path", None) is None:
+            print("No galaxy selected to save config")
+            return
+        p = self.selected_galaxy_path
         new_config = self.ui.config.toPlainText()
         print(new_config)
         if not(new_config == ""):
@@ -266,12 +320,9 @@ def get_galaxies(p):
             # Assumes data is at the end of the file tree
             galpath = Path(root)
             if galpath != None:
-                try:
-                    gal_pathdict[galpath.parent.name].append({"galname": galpath.name, "galpath": galpath})
-                except:
-                    gal_pathdict[galpath.parent.name] = [{"galname": galpath.name, "galpath": galpath}]
+                gal_pathdict[galpath.name] = galpath
 
-    return gal_pathdict
+    return gal_pathdict, p
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -284,5 +335,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     p = Path(args.p).resolve()
     app = QApplication(sys.argv)
-    main_win = MainWindow(get_galaxies(p))
+    r = get_galaxies(p)
+    main_win = MainWindow(p, r[1])
     sys.exit(app.exec())
