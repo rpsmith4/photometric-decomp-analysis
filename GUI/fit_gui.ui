@@ -170,6 +170,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
          <string>Galaxy Type</string>
         </property>
        </column>
+       <column>
+        <property name="text">
+         <string>Galaxy Path</string>
+        </property>
+       </column>
       </widget>
      </item>
     </layout>

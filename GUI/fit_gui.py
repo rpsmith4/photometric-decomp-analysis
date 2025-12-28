@@ -1,6 +1,6 @@
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import QApplication, QWidget, QMessageBox, QMainWindow, QDialog, QAbstractItemView
-from PySide6.QtGui import QColor, QPixmap, QKeySequence, QImage
+from PySide6.QtGui import QColor, QPixmap, QKeySequence, QImage, QBrush
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QFile
 from PySide6.QtUiTools import *
@@ -101,6 +101,7 @@ class MainWindow(QDialog):
 
         # Loading the list of galaxies
         self.galaxylist: QTreeWidget = self.ui.galaxylist
+        self.galaxylist.setColumnHidden(1, True)
         # self.galaxylist.addItems([os.path.basename(g) for g in galpathlist])
         self.galaxylist.itemSelectionChanged.connect(self.changegal)
 
@@ -108,8 +109,7 @@ class MainWindow(QDialog):
         for galtype in self.galpathlist.keys():
             a = QtWidgets.QTreeWidgetItem(self.galaxylist, [galtype])
             for galpath_dict in self.galpathlist[galtype]:
-                print(galpath_dict)
-                b = QtWidgets.QTreeWidgetItem([str(galpath_dict["galname"])])
+                b = QtWidgets.QTreeWidgetItem([str(galpath_dict["galname"]), str(galpath_dict["galpath"])])
                 a.addChild(b)
 
         self.colors = self.gui_config["mark_colors"]
@@ -123,9 +123,6 @@ class MainWindow(QDialog):
         self.model = PlotCanvas(parent=self.ui.galmodel)
         self.resid = PlotCanvas(parent=self.ui.galresid)
 
-        # Switch over to the first galaxy
-        # self.changegal(self.curr_gal_index)
-
         # Loading the JSON file for the galaxy marks (whether fitted, need to return to, or can't fit)
         try:
             with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json')) as f:
@@ -134,6 +131,12 @@ class MainWindow(QDialog):
             self.galmarks = {}
 
         # Setting the colors of the marked galaxies
+        blue = QBrush(QColor(0, 0, 255))
+        # self.galaxylist.findItems()
+        
+        # i = self.galaxylist.currentItem()
+        # i.setBackground(0, blue)
+
         # galnames = [os.path.basename(g) for g in galpathlist]
         # for gal in galnames:
         #     if gal in self.galmarks.keys():
@@ -162,52 +165,44 @@ class MainWindow(QDialog):
         self.changegal(self.curr_gal_index)
     
     def changegal(self):
-        print(self.galaxylist.currentItem().text(0))
-        print(self.galaxylist.topLevelItem(0))
-        # print(self.galaxylist.currentIndex().internalId())
-        print("Hello")
-    # def changegal(self, index=None):
-    #     if index == None:
-    #         galaxy = self.galaxylist.selectedItems()[0].text()
-    #         gl = [os.path.basename(g) for g in self.galpathlist]
-    #         self.curr_gal_index = gl.index(galaxy)
-    #     self.currentgalaxytext.setText(f"Current Galaxy: {os.path.basename(self.galpathlist[self.curr_gal_index])}")
-    #     self.currentgalaxytext.repaint()
+        galaxy = self.galaxylist.currentItem().text(0)
+        galaxypath = Path(self.galaxylist.currentItem().text(1))
+        self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
+        self.currentgalaxytext.repaint()
 
-    #     p = self.galpathlist[self.curr_gal_index]
-    #     try:
-    #         with open(os.path.join(p, f"{self.fit_type}_{self.band}.dat"), "r") as f:
-    #             config_file = f.readlines()
-    #         self.config.setPlainText("".join(config_file))
-    #         self.config.repaint()
-    #     except:
-    #         self.config.setPlainText("Config file not found!")
-    #         self.config.repaint()
+        try:
+            with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat"), "r") as f:
+                config_file = f.readlines()
+            self.config.setPlainText("".join(config_file))
+            self.config.repaint()
+        except:
+            self.config.setPlainText("Config file not found!")
+            self.config.repaint()
 
-    #     try:
-    #         with open(os.path.join(p, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
-    #             config_file = f.readlines()
-    #         self.params.setPlainText("".join(config_file))
-    #         self.params.repaint()
-    #     except:
-    #         self.params.setPlainText("Fit Params not found!")
-    #         self.params.repaint()
+        try:
+            with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
+                config_file = f.readlines()
+            self.params.setPlainText("".join(config_file))
+            self.params.repaint()
+        except:
+            self.params.setPlainText("Fit Params not found!")
+            self.params.repaint()
 
-        pixmap = QPixmap(os.path.join(p, "image.jpg"))
+        pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
         self.ui.galaxyjpg.setPixmap(pixmap)
-        self.img.plot(self.galpathlist[self.curr_gal_index], 
+        self.img.plot(galaxypath, 
                         self.band,
                         idx=0,
                         fit_type=self.fit_type, 
                         limits=self.gui_config["plot_limits"], 
                         cmap=self.gui_config["plot_cmap"])
-        self.model.plot(self.galpathlist[self.curr_gal_index], 
+        self.model.plot(galaxypath, 
                         self.band, 
                         idx=1, 
                         fit_type=self.fit_type, 
                         limits=self.gui_config["plot_limits"],
                         cmap=self.gui_config["plot_cmap"])
-        self.resid.plot(self.galpathlist[self.curr_gal_index], 
+        self.resid.plot(galaxypath, 
                         self.band,
                         idx=2, 
                         fit_type=self.fit_type, 
