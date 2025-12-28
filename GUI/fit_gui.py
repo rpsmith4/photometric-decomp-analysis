@@ -89,7 +89,6 @@ class MainWindow(QDialog):
 
         self.ui.opends9button.clicked.connect(self.open_ds9)
         self.ui.opends9button.setShortcut(QKeySequence("O"))
-        self.ui.nextgalbutton.clicked.connect(self.next_galaxy)
         self.ui.refitbutton.clicked.connect(self.refit)
         self.ui.refitbutton.setShortcut(QKeySequence("CTRL+R"))
         self.ui.cancelbutton.clicked.connect(self.cancel)
@@ -131,38 +130,30 @@ class MainWindow(QDialog):
             self.galmarks = {}
 
         # Setting the colors of the marked galaxies
-        blue = QBrush(QColor(0, 0, 255))
-        # self.galaxylist.findItems()
-        
-        # i = self.galaxylist.currentItem()
-        # i.setBackground(0, blue)
-
-        # galnames = [os.path.basename(g) for g in galpathlist]
-        # for gal in galnames:
-        #     if gal in self.galmarks.keys():
-        #         markas = self.galmarks[gal]
-        #         self.galaxylist.item(galnames.index(gal)).setBackground(QColor(self.colors[markas]))
-        # self.galaxylist.repaint()
+        galnames = [os.path.basename(k["galname"]) for g in galpathlist.keys() for k in galpathlist[g]]
+        for gal in galnames:
+            if gal in self.galmarks.keys():
+                markas = self.galmarks[gal]
+                i = self.galaxylist.findItems(gal, QtCore.Qt.MatchFlag.MatchContains | QtCore.Qt.MatchFlag.MatchRecursive, 0)[0]
+                i.setBackground(0, QBrush(QColor(self.colors[markas])))
+                self.galaxylist.repaint()
+        self.galaxylist.repaint()
 
         self.ui.show()
 
     def change_fit_type(self):
         self.fit_type = self.ui.fit_type_combo.currentText()
-        self.changegal(index=self.curr_gal_index)
+        self.changegal()
 
     def open_ds9(self, Dialog):
         print("Opening DS9...")
-        p = self.galpathlist[self.curr_gal_index]
+        p = Path(self.galaxylist.currentItem().text(1))
 
         # files = [os.path.join(p, f"image_{b}.fits") for b in "griz"]
         files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
         arg = ["ds9", "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config["ds9_limits"][0]}", f"{self.gui_config["ds9_limits"][1]}", "-cube", "3"]
         arg.extend(files)
         subprocess.Popen(arg)
-    
-    def next_galaxy(self):
-        self.curr_gal_index += 1
-        self.changegal(self.curr_gal_index)
     
     def changegal(self):
         galaxy = self.galaxylist.currentItem().text(0)
@@ -220,13 +211,13 @@ class MainWindow(QDialog):
 
     def refit(self):
         # Open a Fit Monitor dialog which runs IMFIT and streams stdout
-        path = self.galpathlist[self.curr_gal_index]
+        path = Path(self.galaxylist.currentItem().text(1))
         dlg = fit_monitor.FitMonitorDialog(path, self.band, self.solvertype, max_threads=self.gui_config["imfit_maxthreads"], fit_type=self.fit_type, parent=self)
         dlg.show()
         self.fit_dialogs.append(dlg)
 
         # Just refreshing the configs and stats and whatnot
-        self.changegal(index=self.curr_gal_index)
+        self.changegal()
     
     def cancel(self):
         # Try to cancel dialog-based fits first
@@ -247,19 +238,20 @@ class MainWindow(QDialog):
             print("No running IMFIT processes")
     
     def markgalaxy(self, markas):
-        self.galaxylist.item(self.curr_gal_index).setBackground(QColor(self.colors[markas]))
+        i = self.galaxylist.currentItem()
+        i.setBackground(0, QBrush(QColor(self.colors[markas])))
         self.galaxylist.repaint()
         
-        self.galmarks[self.galaxylist.item(self.curr_gal_index).text()] = markas
+        self.galmarks[i.text(0)] = markas
         with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json'), 'w') as fp:
             json.dump(self.galmarks, fp)
     
     def saveconfig(self):
-        p = self.galpathlist[self.curr_gal_index]
+        p = Path(self.galaxylist.currentItem().text(1))
         new_config = self.ui.config.toPlainText()
         print(new_config)
         if not(new_config == ""):
-            fit_type = self.fit_type_combo.currentText()
+            fit_type = self.ui.fit_type_combo.currentText()
             if os.path.isfile(os.path.join(p, f"{fit_type}_{self.band}.dat")):
                 shutil.copyfile(src=os.path.join(p, f"{fit_type}_{self.band}.dat"), dst=os.path.join(p, f"{fit_type}_{self.band}.dat.bak"))
             with open(os.path.join(p, f"{fit_type}_{self.band}.dat"), "w") as f:
@@ -268,16 +260,13 @@ class MainWindow(QDialog):
 def get_galaxies(p):
     structure = os.walk(p)
 
-    gal_pathlist = []
     gal_pathdict = {}
     for root, dirs, files in structure:
         if not(files == []):
             # Assumes data is at the end of the file tree
             galpath = Path(root)
             if galpath != None:
-                # gal_pathlist.append([galpath.parent.name, galpath])
                 try:
-                    # gal_pathdict[galpath.parent.name].append(galpath)
                     gal_pathdict[galpath.parent.name].append({"galname": galpath.name, "galpath": galpath})
                 except:
                     gal_pathdict[galpath.parent.name] = [{"galname": galpath.name, "galpath": galpath}]

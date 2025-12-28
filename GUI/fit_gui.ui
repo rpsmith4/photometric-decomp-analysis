@@ -377,13 +377,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
       <enum>QLayout::SizeConstraint::SetMaximumSize</enum>
      </property>
      <item>
-      <widget class="QPushButton" name="nextgalbutton">
-       <property name="text">
-        <string>Next &gt;&gt;</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="saveconfigbutton">
        <property name="text">
         <string>Save Config</string>
