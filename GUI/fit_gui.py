@@ -21,7 +21,7 @@ from astropy.visualization import ImageNormalize
 
 LOCAL_DIR = "GUI"
 MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
-sys.path.append(os.path.join(MAINDIR))
+sys.path.append(os.path.join(MAINDIR, "decomposer"))
 import imfit_run
 import fit_monitor
 
