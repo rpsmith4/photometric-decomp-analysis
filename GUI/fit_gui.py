@@ -286,7 +286,7 @@ class MainWindow(QDialog):
 
     def set_band(self, band):
         self.band = band
-        self.changegal(index=self.curr_gal_index)
+        self.changegal()
     
 
     def refit(self):
