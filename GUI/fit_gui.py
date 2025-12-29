@@ -46,6 +46,11 @@ class PlotCanvas(FigureCanvas):
             self.draw()
 
 class DirOnlyChildrenFileSystemModel(QFileSystemModel):
+    def __init__(self, mark_colors=None, galmarks=None, parent=None):
+        super().__init__(parent)
+        self.mark_colors = mark_colors or {}
+        self.galmarks = galmarks or {}
+
     def hasChildren(self, index):
         # For invalid indices, fall back to default behavior
         if not index.isValid():
@@ -73,6 +78,20 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
                     return None
             except Exception:
                 pass
+
+        # Color leaf directories based on galmarks
+        if role == QtCore.Qt.BackgroundRole:
+            try:
+                if self.isDir(index) and not self.hasChildren(index):
+                    name = Path(self.filePath(index)).name
+                    mark = self.galmarks.get(name)
+                    if mark:
+                        col = self.mark_colors.get(mark)
+                        if col:
+                            return QBrush(QColor(col))
+            except Exception:
+                pass
+
         return super().data(index, role)
 
 class MainWindow(QDialog):
@@ -132,22 +151,9 @@ class MainWindow(QDialog):
         self.galaxytree: QTreeView = self.ui.galaxytree
         self.galaxytree.setColumnHidden(1, True)
 
-        # Use a QFileSystemModel that only reports directories as having children
-        # if they contain subdirectories (so leaf folders won't be expandable).
-        model = DirOnlyChildrenFileSystemModel()
-        model.setRootPath(str(p))
-        self.galaxytree.setModel(model)
-        self.galaxytree.setRootIndex(model.index(str(p)))
-        self.galaxytree.setColumnHidden(1, True)
-        self.galaxytree.setColumnHidden(2, True)
-        self.galaxytree.setColumnHidden(3, True)
-
         # Track the currently selected lowest-level galaxy folder (Path) if any
         self.selected_galaxy_path = None
-        # Detect selections on the tree to identify when a leaf directory is selected
-        self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
 
-        self.colors = self.gui_config["mark_colors"]
 
         # Process list of currently running fits
         self.ps = []
@@ -164,6 +170,21 @@ class MainWindow(QDialog):
                 self.galmarks = json.load(f)
         except:
             self.galmarks = {}
+
+        # Ensure mark colors mapping exists
+        self.colors = self.gui_config.get("mark_colors", {})
+
+        # Use a QFileSystemModel that only reports directories as having children,
+        # hides folder icons for leaf directories, and applies background colors.
+        model = DirOnlyChildrenFileSystemModel(mark_colors=self.colors, galmarks=self.galmarks)
+        model.setRootPath(str(p))
+        self.galaxytree.setModel(model)
+        self.galaxytree.setRootIndex(model.index(str(p)))
+        self.galaxytree.setColumnHidden(1, True)
+        self.galaxytree.setColumnHidden(2, True)
+        self.galaxytree.setColumnHidden(3, True)
+        # Detect selections on the tree to identify when a leaf directory is selected
+        self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
 
         # Setting the colors of the marked galaxies
         # galnames = [os.path.basename(k["galname"]) for g in galpathlist.keys() for k in galpathlist[g]]
@@ -303,10 +324,16 @@ class MainWindow(QDialog):
         if getattr(self, "selected_galaxy_path", None) is None:
             return
         galname = self.selected_galaxy_path.name
-        # Save mark state; tree coloring for QFileSystemModel is not changed here
+        # Save mark state
         self.galmarks[galname] = markas
         with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json'), 'w') as fp:
             json.dump(self.galmarks, fp)
+        # Refresh the view so marked colors are updated
+        try:
+            model = self.galaxytree.model()
+            model.layoutChanged.emit()
+        except Exception:
+            pass
     
     def saveconfig(self):
         if getattr(self, "selected_galaxy_path", None) is None:
