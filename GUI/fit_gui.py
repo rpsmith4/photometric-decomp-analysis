@@ -64,6 +64,17 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
         except Exception:
             return super().hasChildren(index)
 
+    def data(self, index, role):
+        # Remove folder icon for leaf directories (galaxy folders)
+        if role == QtCore.Qt.DecorationRole:
+            try:
+                # If it's a directory but has no subdirectories (a leaf), don't show an icon
+                if self.isDir(index) and not self.hasChildren(index):
+                    return None
+            except Exception:
+                pass
+        return super().data(index, role)
+
 class MainWindow(QDialog):
     def __init__(self, galpathlist=None, p=None):
         super().__init__()
