@@ -1,4 +1,8 @@
 # Photometric Decomposition of Polar Structure Galaxies Analysis Code
+
+> [!NOTE] 
+> Please clone this project with ```git clone --recurse-submodules https://github.com/rpsmith4/photometric-decomp-analysis.git```, or make sure to include the IMAN submodule with ```git submodule update --init --recursive``` with an existing clone of this repo.
+
 This project is intended to be used for:
 
 - Downloading FITs image, PSFs (core and extended), inverse-variance maps, and jpg color images from DESI Legacy Survey
@@ -16,7 +20,7 @@ This project is intended to be used for:
 
 - [IMFIT](https://imfit.readthedocs.io/en/latest/imfit_tutorial.html) (Also, [here](https://www.mpe.mpg.de/~erwin/resources/imfit/imfit_howto.pdf) is some more documentation for IMFIT)
 - [Siena Galaxy Atlas FITs table](https://sga.legacysurvey.org/)
-- [IMAN](https://bitbucket.org/mosenkov/iman_new/src/master/)
+- [IMAN](https://bitbucket.org/mosenkov/iman_new/src/master/) (Now included as a submodule with my own slightly modified fork of these scripts)
 - Python 3.1X.XX
 - Some list of python packages (will add later)
 
