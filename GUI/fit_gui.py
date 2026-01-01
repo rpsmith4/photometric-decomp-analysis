@@ -95,7 +95,7 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
         return super().data(index, role)
 
 class MainWindow(QDialog):
-    def __init__(self, galpathlist=None, p=None):
+    def __init__(self, p=None):
         super().__init__()
         ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
         loader = QUiLoader()
@@ -111,7 +111,6 @@ class MainWindow(QDialog):
         self.params: QTextBrowser = self.ui.params
 
         # Initializing some variables
-        self.galpathlist = galpathlist
         self.curr_gal_index = 0
         self.solvertype = "LM"
         self.band = "g"
@@ -185,16 +184,6 @@ class MainWindow(QDialog):
         self.galaxytree.setColumnHidden(3, True)
         # Detect selections on the tree to identify when a leaf directory is selected
         self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
-
-        # Setting the colors of the marked galaxies
-        # galnames = [os.path.basename(k["galname"]) for g in galpathlist.keys() for k in galpathlist[g]]
-        # for gal in galnames:
-        #     if gal in self.galmarks.keys():
-        #         markas = self.galmarks[gal]
-        #         i = self.galaxylist.findItems(gal, QtCore.Qt.MatchFlag.MatchContains | QtCore.Qt.MatchFlag.MatchRecursive, 0)[0]
-        #         i.setBackground(0, QBrush(QColor(self.colors[markas])))
-        #         self.galaxylist.repaint()
-        # self.galaxylist.repaint()
 
         self.ui.show()
 
@@ -349,19 +338,6 @@ class MainWindow(QDialog):
             with open(os.path.join(p, f"{fit_type}_{self.band}.dat"), "w") as f:
                 f.write(new_config)
 
-def get_galaxies(p):
-    structure = os.walk(p)
-
-    gal_pathdict = {}
-    for root, dirs, files in structure:
-        if not(files == []):
-            # Assumes data is at the end of the file tree
-            galpath = Path(root)
-            if galpath != None:
-                gal_pathdict[galpath.name] = galpath
-
-    return gal_pathdict, p
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -373,6 +349,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     p = Path(args.p).resolve()
     app = QApplication(sys.argv)
-    r = get_galaxies(p)
-    main_win = MainWindow(p, r[1])
+    main_win = MainWindow(p)
     sys.exit(app.exec())
