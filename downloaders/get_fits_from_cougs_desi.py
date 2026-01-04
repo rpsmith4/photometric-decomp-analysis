@@ -18,7 +18,9 @@ def get_fits(file_names, RA, DEC, R26, psg_types, args):
     curr_root = Path(os.getcwd())
     # pixscale = 0.262
     # RR = int(np.ceil(R26[k]*60. * args.factor/pixscale))
-    for i in range(len(file_names)):
+    num_gals = len(file_names)
+    for i in range(num_gals):
+        print(f"Status: [{i}/{num_gals}] (%{i/num_gals*100:.2f})")
         file = file_names[i]
         psg_type = psg_types[i]
 
