@@ -13,49 +13,6 @@ from mpi4py import MPI
 from mpi4py.futures import MPIPoolExecutor
 from functools import partial
 
-# def get_fits(i, file_names, RA, DEC, R26, args):
-
-#     args.factor = float(args.factor)
-#     # pixscale = 0.262
-#     # RR = int(np.ceil(R26[k]*60. * args.factor/pixscale))
-#     for i, file in enumerate(file_names):
-#         print(R26[i])
-#         if not(args.no_make_folder):
-#             os.makedirs(file, exist_ok=True)
-#             os.chdir(file)
-#         if "fits" in args.files and (not any(os.path.isfile(f"image_{band}.fits") for band in args.bands) or args.overwrite):
-#             download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["fits"], bands=args.bands, dr=args.dr)
-
-#         if "psf" in args.files and (not any(os.path.isfile(f"psf_core_{band}.fits") for band in args.bands) or args.overwrite):
-#             download_legacy_DESI.main([file + "_psf"], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["psf"], bands=args.bands, dr=args.dr)
-
-
-#         if "mask" in args.files and (not(os.path.isfile("image_mask.fits")) or args.overwrite):
-#             pixscale = 0.262
-#             RR = int(np.ceil(R26[i]*60. * args.factor/pixscale))
-
-#             total_mask = np.zeros((RR*2, RR*2))
-
-#             for k, band in enumerate(args.bands):
-#                 try:
-#                     image_dat = fits.open("image_" + band + ".fits")[0].data
-#                     try:
-#                         image, mask, theta, sma, smb = get_mask.prepare_rotated(image_dat, subtract=False, rotate_ok=False)
-#                         total_mask += mask
-#                     except:
-#                         continue 
-#                 except:
-#                     continue
-
-#             total_mask[total_mask >= 1] = 1
-#             file_name = "image_mask.fits"
-#             fits.PrimaryHDU(total_mask).writeto(file_name, overwrite=args.overwrite)
-
-#         if "jpg" in args.files and (not(os.path.isfile(f"image.jpg")) or args.overwrite):
-#             download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["jpg"], bands=args.bands, dr=args.dr)
-#         if not(args.no_make_folder):
-#             os.chdir("..")
-
 def get_fits(file_names, RA, DEC, R26, psg_types, args):
     args.factor = float(args.factor)
     curr_root = Path(os.getcwd())
@@ -112,7 +69,6 @@ def get_quantities(files, data):
     return RA, DEC, R26
 
 def main(args):
-    # data = Table.read(args.c + "SGA-2020.fits")
     catalog = QTable.read("master_table.csv", data_start=2)
 
     if not(args.o == None):
@@ -120,7 +76,6 @@ def main(args):
         os.makedirs(output, exist_ok=True)
         os.chdir(output)
     
-    # print(catalog.colnames)
     file_names = catalog["NAME"]
     RA = np.array(catalog["RA"]).astype(np.float64)
     DEC = np.array(catalog["DEC"].astype(np.float64))
@@ -138,8 +93,6 @@ def main(args):
     # with MPIPoolExecutor(max_workers=1) as pool:
     #     pool.map(part, idx)
     get_fits(file_names=file_names, RA=RA, DEC=DEC, R26=R26, psg_types = types, args=args)
-
-    # get_fits(file_names, RA, DEC, R26, args)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
