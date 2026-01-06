@@ -85,7 +85,9 @@ def main(args):
     R26_IRAF = np.array([catalog["R26_G_IRAF"], catalog["R26_R_IRAF"], catalog["R26_I_IRAF"], catalog["R26_Z_IRAF"]])
     R26 = np.append(R26_IRAF, np.expand_dims(R26_SGA, 0), axis=0)
     R26 = np.nanmean(R26, axis=0, where=(R26 != 0))
-    # R26[R26 == 0] = 0.3 # Get rid of empty values
+    R26[R26 != 0] = catalog["D25_LEDA"] # Basically just the next best guess (I know this is not the 26 mag/arsec^2 isophote, but it is close enough)
+    R26[R26 != 0] = 0.3 # Just in case there are Nans still leftover
+    R26[R26 == 0] = 0.3 # Get rid of empty values
 
     types = catalog["PSG_TYPE_1"]
 
