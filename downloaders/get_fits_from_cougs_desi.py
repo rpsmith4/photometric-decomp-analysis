@@ -20,7 +20,6 @@ def get_fits(file_names, RA, DEC, R26, psg_types, args):
     # RR = int(np.ceil(R26[k]*60. * args.factor/pixscale))
     num_gals = len(file_names)
     for i in range(num_gals):
-        print(f"Status: [{i}/{num_gals}] (%{i/num_gals*100:.2f})")
         file = file_names[i]
         psg_type = psg_types[i]
 
@@ -61,14 +60,7 @@ def get_fits(file_names, RA, DEC, R26, psg_types, args):
             download_legacy_DESI.main([file], [RA[i]], [DEC[i]], R=[R26[i]*args.factor], file_types=["jpg"], bands=args.bands, dr=args.dr)
         if not(args.no_make_folder):
             os.chdir(curr_root)
-
-
-def get_quantities(files, data):
-    RA = [float(data[data["GALAXY"] == file]["RA"]) for file in files]
-    DEC = [float(data[data["GALAXY"] == file]["DEC"]) for file in files]
-    R26 = [float(data[data["GALAXY"] == file]["D26"])/2 for file in files]
-
-    return RA, DEC, R26
+        print(f"Status: [{i+1}/{num_gals}] (%{i/num_gals*100:.2f})")
 
 def main(args):
     catalog = QTable.read("master_table.csv", data_start=2)
@@ -85,8 +77,8 @@ def main(args):
     R26_IRAF = np.array([catalog["R26_G_IRAF"], catalog["R26_R_IRAF"], catalog["R26_I_IRAF"], catalog["R26_Z_IRAF"]])
     R26 = np.append(R26_IRAF, np.expand_dims(R26_SGA, 0), axis=0)
     R26 = np.nanmean(R26, axis=0, where=(R26 != 0))
-    R26[R26 != 0] = catalog["D25_LEDA"] # Basically just the next best guess (I know this is not the 26 mag/arsec^2 isophote, but it is close enough)
-    R26[R26 != 0] = 0.3 # Just in case there are Nans still leftover
+    R26[R26 == 0] = catalog["D25_LEDA"][R26 == 0] # Basically just the next best guess (I know this is not the 26 mag/arsec^2 isophote, but it is close enough)
+    R26[R26 != R26] = 0.3 # Just in case there are Nans still leftover
     R26[R26 == 0] = 0.3 # Get rid of empty values
 
     types = catalog["PSG_TYPE_1"]
