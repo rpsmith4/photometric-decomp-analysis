@@ -138,7 +138,7 @@ def fit_by_moffat(psf_file_name, target_size):
         imfit_config.write(config_str)
     call_str = f"imfit {psf_file_name} -c ./workdir/input_moffat.imfit " \
         "--save-params ./workdir/fitted_moffat.imfit --save-model ./workdir/fitted_star.fits "\
-        "--save-residual ./workdir/residuals.fits --de --mlr >/dev/null"
+        "--save-residual ./workdir/residuals.fits --de --mlr --max-threads 8 >/dev/null"
     subprocess.call(call_str, shell=True)
     fit_res = ImfitModel("./workdir/fitted_moffat.imfit")
     fit_res.recenter_all_components(x_new=target_size/2, y_new=target_size/2, dx=0, dy=0)
