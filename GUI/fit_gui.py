@@ -18,6 +18,9 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
 from astropy.visualization.stretch import LogStretch, LinearStretch
 from astropy.visualization import ImageNormalize
+import pyimfit
+import shutil
+import numpy as np
 
 LOCAL_DIR = "GUI"
 MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
@@ -33,17 +36,17 @@ class PlotCanvas(FigureCanvas):
         super().__init__(fig)
         self.setParent(parent)
 
-    def plot(self, galaxy_path, band, idx, fit_type, limits, cmap, stretch=LogStretch()):
+    def plot(self, im, limits, cmap, stretch=LogStretch()):
         self.ax.cla()
         self.ax.set_axis_off()
-        try:
-            im = fits.getdata(os.path.join(galaxy_path, f"{fit_type}_{band}_composed.fits"))[idx]
+        if im.any():
             norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
             self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
-        except:
-            self.ax.text(0,0.5,"Cannot find FITs composed image!")
-        finally:
-            self.draw()
+        else:
+            self.ax.text(0,0.5,"Cannot find FITs image!")
+        self.draw()
+
+
 
 class DirOnlyChildrenFileSystemModel(QFileSystemModel):
     def __init__(self, mark_colors=None, galmarks=None, parent=None):
@@ -162,6 +165,8 @@ class MainWindow(QDialog):
         self.img = PlotCanvas(parent=self.ui.galimg)
         self.model = PlotCanvas(parent=self.ui.galmodel)
         self.resid = PlotCanvas(parent=self.ui.galresid)
+        self.configimg = PlotCanvas(parent=self.ui.configimg)
+        self.configresid = PlotCanvas(parent=self.ui.configresid)
 
         # Loading the JSON file for the galaxy marks (whether fitted, need to return to, or can't fit)
         try:
@@ -198,6 +203,28 @@ class MainWindow(QDialog):
         arg.extend(files)
         subprocess.Popen(arg)
     
+    def get_composed_data(self, galaxy_path, band, idx, fit_type):
+        # idx = 0 -> Image with mask, 1 -> Model image, 2 -> Residual, 3 -> Percent residual, 4 Onwards -> Components of model
+        try:
+            im = fits.getdata(os.path.join(galaxy_path, f"{fit_type}_{band}_composed.fits"))[idx]
+        except:
+            im = np.array([])
+        return im
+
+    def getconfigim(self, galaxypath, band, fit_type, shape):
+        try:
+            model_desc = pyimfit.parse_config_file(os.path.join(galaxypath, f"{fit_type}_{band}.dat"))
+            psf = fits.getdata(os.path.join(galaxypath, f"psf_patched_{band}.fits"))
+            imfitter = pyimfit.Imfit(model_desc, psf=psf)
+            im = imfitter.getModelImage(shape=shape)
+        except:
+            im = np.array([])
+
+        return im
+    
+    def getconfigresid(self, im, imconfig):
+        return im - imconfig
+
     def changegal(self):
         # Update UI based on the currently selected leaf galaxy folder
         galaxypath = self.selected_galaxy_path
@@ -225,25 +252,24 @@ class MainWindow(QDialog):
 
         pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
         self.ui.galaxyjpg.setPixmap(pixmap)
-        self.img.plot(galaxypath, 
-                        self.band,
-                        idx=0,
-                        fit_type=self.fit_type, 
-                        limits=self.gui_config["plot_limits"], 
-                        cmap=self.gui_config["plot_cmap"])
-        self.model.plot(galaxypath, 
-                        self.band, 
-                        idx=1, 
-                        fit_type=self.fit_type, 
-                        limits=self.gui_config["plot_limits"],
-                        cmap=self.gui_config["plot_cmap"])
-        self.resid.plot(galaxypath, 
-                        self.band,
-                        idx=2, 
-                        fit_type=self.fit_type, 
-                        limits=self.gui_config["plot_resid_limits"], 
-                        cmap=self.gui_config["plot_resid_cmap"],
-                        stretch=LinearStretch())
+        
+
+        # self.img.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
+        img = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
+        self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+
+        model = self.get_composed_data(galaxypath, self.band, idx=1, fit_type=self.fit_type)
+        self.model.plot(model, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+
+        resid = self.get_composed_data(galaxypath, self.band, idx=2, fit_type=self.fit_type)
+        self.resid.plot(resid, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
+        
+        imconfig = self.getconfigim(galaxypath, self.band, self.fit_type, np.shape(img))
+        self.configimg.plot(imconfig, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+
+        imresidconfig = self.getconfigresid(img, imconfig)
+        self.configresid.plot(imresidconfig, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
+        
         
     def on_galaxytree_selection_changed(self, selected, deselected):
         """Called when the tree selection changes. If the selected item is a lowest-level
@@ -276,7 +302,6 @@ class MainWindow(QDialog):
     def set_band(self, band):
         self.band = band
         self.changegal()
-    
 
     def refit(self):
         # Open a Fit Monitor dialog which runs IMFIT and streams stdout
@@ -337,6 +362,9 @@ class MainWindow(QDialog):
                 shutil.copyfile(src=os.path.join(p, f"{fit_type}_{self.band}.dat"), dst=os.path.join(p, f"{fit_type}_{self.band}.dat.bak"))
             with open(os.path.join(p, f"{fit_type}_{self.band}.dat"), "w") as f:
                 f.write(new_config)
+        
+        # Basically want to refresh our config image and residual
+        self.changegal()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

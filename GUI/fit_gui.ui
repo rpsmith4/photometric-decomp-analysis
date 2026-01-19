@@ -242,6 +242,34 @@ li.checked::marker { content: &quot;\2612&quot;; }
      </item>
      <item>
       <layout class="QGridLayout" name="gridLayout_3">
+       <item row="1" column="1">
+        <widget class="QLabel" name="galresid">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>250</width>
+           <height>250</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>250</width>
+           <height>250</height>
+          </size>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="scaledContents">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
        <item row="0" column="0">
         <widget class="QLabel" name="galaxyjpg">
          <property name="sizePolicy">
@@ -326,14 +354,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
          </property>
         </widget>
        </item>
-       <item row="1" column="1">
-        <widget class="QLabel" name="galresid">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
+       <item row="2" column="0">
+        <widget class="QLabel" name="configimg">
          <property name="minimumSize">
           <size>
            <width>250</width>
@@ -349,8 +371,24 @@ li.checked::marker { content: &quot;\2612&quot;; }
          <property name="text">
           <string/>
          </property>
-         <property name="scaledContents">
-          <bool>true</bool>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QLabel" name="configresid">
+         <property name="minimumSize">
+          <size>
+           <width>250</width>
+           <height>250</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>250</width>
+           <height>250</height>
+          </size>
+         </property>
+         <property name="text">
+          <string/>
          </property>
         </widget>
        </item>
