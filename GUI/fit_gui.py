@@ -211,11 +211,12 @@ class MainWindow(QDialog):
             im = np.array([])
         return im
 
-    def getconfigim(self, galaxypath, band, fit_type, shape):
+    def getconfigim(self, galaxypath, band, fit_type, shape, maxThreads=4):
         try:
             model_desc = pyimfit.parse_config_file(os.path.join(galaxypath, f"{fit_type}_{band}.dat"))
             psf = fits.getdata(os.path.join(galaxypath, f"psf_patched_{band}.fits"))
-            imfitter = pyimfit.Imfit(model_desc, psf=psf)
+            # imfitter = pyimfit.Imfit(model_desc, psf=psf)
+            imfitter = pyimfit.Imfit(model_desc, maxThreads=maxThreads)
             im = imfitter.getModelImage(shape=shape)
         except:
             im = np.array([])
@@ -264,7 +265,7 @@ class MainWindow(QDialog):
         resid = self.get_composed_data(galaxypath, self.band, idx=2, fit_type=self.fit_type)
         self.resid.plot(resid, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
         
-        imconfig = self.getconfigim(galaxypath, self.band, self.fit_type, np.shape(img))
+        imconfig = self.getconfigim(galaxypath, self.band, self.fit_type, np.shape(img), maxThreads=self.gui_config["imfit_maxthreads"])
         self.configimg.plot(imconfig, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
 
         imresidconfig = self.getconfigresid(img, imconfig)
