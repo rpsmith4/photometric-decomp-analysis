@@ -97,7 +97,7 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
 
         return super().data(index, role)
 
-class MainWindow(QDialog):
+class MainWindow(QMainWindow):
     def __init__(self, p=None):
         super().__init__()
         ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
@@ -110,7 +110,7 @@ class MainWindow(QDialog):
 
         # Initializing widget types to make my autocomplete work
         self.currentgalaxytext: QTextBrowser = self.ui.currentgalaxytext
-        self.config: QTextBrowser = self.ui.config
+        # self.config: QTextBrowser = self.ui.config
         self.params: QTextBrowser = self.ui.params
 
         # Initializing some variables
@@ -189,7 +189,26 @@ class MainWindow(QDialog):
         self.galaxytree.setColumnHidden(3, True)
         # Detect selections on the tree to identify when a leaf directory is selected
         self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
+        
+        layout: QVBoxLayout = self.ui.configsliders
+        l = QHBoxLayout()
+        text = QTextBrowser()
+        text.setText("Hello")
+        text.setFixedSize(100, 30)
+        text.setAlignment(QtCore.Qt.AlignCenter)
+        slider = QSlider(QtCore.Qt.Orientation.Horizontal)
 
+        l.addWidget(text)
+        
+        n = QHBoxLayout()
+        n.addWidget(slider)
+        spinbox = QDoubleSpinBox()
+        spinbox.setValue(50)
+        n.addWidget(spinbox)
+
+        layout.addLayout(l)
+        layout.addLayout(n)
+        
         self.ui.show()
 
     def change_fit_type(self):
