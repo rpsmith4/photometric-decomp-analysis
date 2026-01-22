@@ -190,24 +190,24 @@ class MainWindow(QMainWindow):
         # Detect selections on the tree to identify when a leaf directory is selected
         self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
         
-        layout: QVBoxLayout = self.ui.configsliders
-        l = QHBoxLayout()
-        text = QTextBrowser()
-        text.setText("Hello")
-        text.setFixedSize(100, 30)
-        text.setAlignment(QtCore.Qt.AlignCenter)
-        slider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        # layout: QVBoxLayout = self.ui.configsliders
+        # l = QHBoxLayout()
+        # text = QTextBrowser()
+        # text.setText("Hello")
+        # text.setFixedSize(100, 30)
+        # text.setAlignment(QtCore.Qt.AlignCenter)
+        # slider = QSlider(QtCore.Qt.Orientation.Horizontal)
 
-        l.addWidget(text)
+        # l.addWidget(text)
         
-        n = QHBoxLayout()
-        n.addWidget(slider)
-        spinbox = QDoubleSpinBox()
-        spinbox.setValue(50)
-        n.addWidget(spinbox)
+        # n = QHBoxLayout()
+        # n.addWidget(slider)
+        # spinbox = QDoubleSpinBox()
+        # spinbox.setValue(50)
+        # n.addWidget(spinbox)
 
-        layout.addLayout(l)
-        layout.addLayout(n)
+        # layout.addLayout(l)
+        # layout.addLayout(n)
         
         self.ui.show()
 
@@ -245,6 +245,7 @@ class MainWindow(QMainWindow):
     def getconfigresid(self, im, imconfig):
         return im - imconfig
 
+
     def changegal(self):
         # Update UI based on the currently selected leaf galaxy folder
         galaxypath = self.selected_galaxy_path
@@ -252,14 +253,32 @@ class MainWindow(QMainWindow):
         self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
         self.currentgalaxytext.repaint()
 
+        # try:
+        #     with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat"), "r") as f:
+        #         config_file = f.readlines()
+        #     self.config.setPlainText("".join(config_file))
+        #     self.config.repaint()
+        # except:
+        #     self.config.setPlainText("Config file not found!")
+        #     self.config.repaint()
+        config_file = pyimfit.parse_config_file(os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")).getModelAsDict()
+        function_list = config_file["function_sets"][0]["function_list"]
+        layout: QVBoxLayout = self.ui.configsliders
+        # Reset the layout first
         try:
-            with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat"), "r") as f:
-                config_file = f.readlines()
-            self.config.setPlainText("".join(config_file))
-            self.config.repaint()
-        except:
-            self.config.setPlainText("Config file not found!")
-            self.config.repaint()
+            self.clearLayout(layout)
+        except Exception as e:
+            print(e)
+            pass
+        for func in function_list:
+            params = func["parameters"]
+            # Will likely also want a label
+            for param in params.keys():
+                initval = params[param][0] 
+                lowlim = params[param][1]
+                hilim = params[param][2]
+                self.draw_params(initval, lowlim, hilim, param, layout)
+
 
         try:
             with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
@@ -289,7 +308,38 @@ class MainWindow(QMainWindow):
 
         imresidconfig = self.getconfigresid(img, imconfig)
         self.configresid.plot(imresidconfig, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
+
+    def clearLayout(self, layout):
+        if isinstance(layout, QLayout):
+            while layout.count():
+                item = layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+                    # layout.removeWidget(widget)
+                else:
+                    self.clearLayout(item.layout())
+                    # layout.removeItem(item)
+ 
+    def draw_params(self, initval, lowlim, hilim, paramname, layout):
+
+        l = QHBoxLayout()
+        text = QTextBrowser()
+        text.setText(paramname)
+        text.setFixedSize(100, 30)
+        text.setAlignment(QtCore.Qt.AlignCenter)
+        slider = QSlider(QtCore.Qt.Orientation.Horizontal)
+
+        l.addWidget(text)
         
+        n = QHBoxLayout()
+        n.addWidget(slider)
+        spinbox = QDoubleSpinBox()
+        spinbox.setValue(50)
+        n.addWidget(spinbox)
+
+        layout.addLayout(l)
+        layout.addLayout(n)
         
     def on_galaxytree_selection_changed(self, selected, deselected):
         """Called when the tree selection changes. If the selected item is a lowest-level
