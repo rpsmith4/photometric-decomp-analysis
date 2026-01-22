@@ -330,9 +330,10 @@ class MainWindow(QMainWindow):
         text.setAlignment(QtCore.Qt.AlignCenter)
         slider = QSlider(QtCore.Qt.Orientation.Horizontal)
 
-        l.addWidget(text)
+        # l.addWidget(text)
         
         n = QHBoxLayout()
+        n.addWidget(text)
         n.addWidget(slider)
         spinbox = QDoubleSpinBox()
         spinbox.setValue(50)
