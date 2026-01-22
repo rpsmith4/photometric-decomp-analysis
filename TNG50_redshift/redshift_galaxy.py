@@ -192,7 +192,8 @@ def load_data_and_run(galaxy_name, p, psf_path, out_path, lerp_scheme):
         mu = 0
         stddevs = np.array([0.00247579, 0.00247579, 0.0037597, 0.0074736, 0.0108026]) # Taken from a DESI image; u, g, r, i, and z band
 
-        sky_shape = (np.shape(im)[0]*3, np.shape(im)[1]*3) # Adjust as needed to make the code not error out if the sky is too small
+        # sky_shape = (np.shape(im)[0]*3, np.shape(im)[1]*3) # Adjust as needed to make the code not error out if the sky is too small
+        sky_shape = (np.shape(im)[0]*10, np.shape(im)[1]*10) # Adjust as needed to make the code not error out if the sky is too small
         sky = rng.normal(mu, stddevs, size=(sky_shape[0], sky_shape[1], 5)) # nmgy
         # sky = 100*sky # Needed to make it even visible (may have to change thi or something)
 

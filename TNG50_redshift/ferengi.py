@@ -5,7 +5,7 @@ from scipy.optimize import curve_fit
 from astropy.io import fits
 from astropy.cosmology import FlatLambdaCDM
 import matplotlib.pyplot as plt
-import kcorrect.kcorrect
+# import kcorrect.kcorrect
 import redshift_galaxy
 import astropy
 import os
