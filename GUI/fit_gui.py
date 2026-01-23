@@ -247,6 +247,8 @@ class MainWindow(QMainWindow):
 
 
     def changegal(self):
+        # Store the current config model for later editing
+        self.current_config_model = None
         # Update UI based on the currently selected leaf galaxy folder
         galaxypath = self.selected_galaxy_path
         galaxy = galaxypath.name
@@ -261,7 +263,10 @@ class MainWindow(QMainWindow):
         # except:
         #     self.config.setPlainText("Config file not found!")
         #     self.config.repaint()
-        config_file = pyimfit.parse_config_file(os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")).getModelAsDict()
+        config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
+        config_model = pyimfit.parse_config_file(config_path)
+        self.current_config_model = config_model
+        config_file = config_model.getModelAsDict()
         function_list = config_file["function_sets"][0]["function_list"]
         layout: QVBoxLayout = self.ui.configsliders
         # Reset the layout first
@@ -270,14 +275,14 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(e)
             pass
-        for func in function_list:
+        for func_idx, func in enumerate(function_list):
             params = func["parameters"]
-            # Will likely also want a label
             for param in params.keys():
-                initval = params[param][0] 
+                initval = params[param][0]
                 lowlim = params[param][1]
                 hilim = params[param][2]
-                self.draw_params(initval, lowlim, hilim, param, layout)
+                # Use (func_idx, param) as key to distinguish duplicate param names
+                self.draw_params(initval, lowlim, hilim, (func_idx, param), layout)
 
 
         try:
@@ -321,8 +326,8 @@ class MainWindow(QMainWindow):
                     self.clearLayout(item.layout())
                     # layout.removeItem(item)
  
-    def draw_params(self, initval, lowlim, hilim, paramname, layout):
-        # Keep track of widgets for each parameter
+    def draw_params(self, initval, lowlim, hilim, paramkey, layout):
+        # paramkey is (func_idx, paramname)
         if not hasattr(self, 'param_widgets'):
             self.param_widgets = {}
 
@@ -331,11 +336,11 @@ class MainWindow(QMainWindow):
 
         l = QHBoxLayout()
         text = QTextBrowser()
-        text.setText(paramname)
+        text.setText(str(paramkey[1]))
         text.setFixedSize(100, 30)
         text.setAlignment(QtCore.Qt.AlignCenter)
         slider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        slider.setRange(int(lowlim * scale), int(hilim * scale)) # Qt sliders don't like non-integer values
+        slider.setRange(int(lowlim * scale), int(hilim * scale))
         slider.setTickInterval(5)
         slider.setValue(int(initval * scale))
 
@@ -345,12 +350,11 @@ class MainWindow(QMainWindow):
 
         x = QHBoxLayout()
 
-
         minspinbox = QDoubleSpinBox()
         minspinbox.setDecimals(ndigits)
         minspinbox.setValue(lowlim)
         minspinbox.setMaximum(hilim)
-        minspinbox.setMinimum(-1e9)  # Arbitrary large negative
+        minspinbox.setMinimum(-1e9)
 
         valspinbox = QDoubleSpinBox()
         valspinbox.setDecimals(ndigits)
@@ -362,7 +366,7 @@ class MainWindow(QMainWindow):
         maxspinbox.setDecimals(ndigits)
         maxspinbox.setValue(hilim)
         maxspinbox.setMinimum(lowlim)
-        maxspinbox.setMaximum(1e9)  # Arbitrary large positive
+        maxspinbox.setMaximum(1e9)
 
         x.addWidget(minspinbox)
         x.addWidget(valspinbox)
@@ -372,8 +376,8 @@ class MainWindow(QMainWindow):
         layout.addLayout(l)
         layout.addLayout(n)
 
-        # Store widgets for this parameter
-        self.param_widgets[paramname] = {
+        # Store widgets for this parameter, using (func_idx, paramname) as key
+        self.param_widgets[paramkey] = {
             'slider': slider,
             'valspinbox': valspinbox,
             'minspinbox': minspinbox,
@@ -382,7 +386,6 @@ class MainWindow(QMainWindow):
             'scale': scale
         }
 
-        # Synchronize slider and spinbox
         def slider_changed(value):
             float_val = value / scale
             valspinbox.blockSignals(True)
@@ -396,22 +399,18 @@ class MainWindow(QMainWindow):
             slider.blockSignals(False)
 
         def minspinbox_changed(new_min):
-            # Update slider and valspinbox minimum
             slider.setMinimum(int(new_min * scale))
             valspinbox.setMinimum(new_min)
             maxspinbox.setMinimum(new_min)
-            # If value is out of new range, clamp
             if valspinbox.value() < new_min:
                 valspinbox.setValue(new_min)
             if slider.value() < int(new_min * scale):
                 slider.setValue(int(new_min * scale))
 
         def maxspinbox_changed(new_max):
-            # Update slider and valspinbox maximum
             slider.setMaximum(int(new_max * scale))
             valspinbox.setMaximum(new_max)
             minspinbox.setMaximum(new_max)
-            # If value is out of new range, clamp
             if valspinbox.value() > new_max:
                 valspinbox.setValue(new_max)
             if slider.value() > int(new_max * scale):
@@ -505,16 +504,44 @@ class MainWindow(QMainWindow):
             print("No galaxy selected to save config")
             return
         p = self.selected_galaxy_path
-        new_config = self.ui.config.toPlainText()
-        print(new_config)
-        if not(new_config == ""):
-            fit_type = self.ui.fit_type_combo.currentText()
-            if os.path.isfile(os.path.join(p, f"{fit_type}_{self.band}.dat")):
-                shutil.copyfile(src=os.path.join(p, f"{fit_type}_{self.band}.dat"), dst=os.path.join(p, f"{fit_type}_{self.band}.dat.bak"))
-            with open(os.path.join(p, f"{fit_type}_{self.band}.dat"), "w") as f:
-                f.write(new_config)
-        
-        # Basically want to refresh our config image and residual
+        fit_type = self.ui.fit_type_combo.currentText()
+        config_path = os.path.join(p, f"{fit_type}_{self.band}.dat")
+
+        # If we have a config model and param_widgets, update the config model with the new values
+        if hasattr(self, 'current_config_model') and hasattr(self, 'param_widgets') and self.current_config_model is not None:
+            model_dict = self.current_config_model.getModelAsDict()
+            function_list = model_dict["function_sets"][0]["function_list"]
+            # Update parameter values from widgets
+            for func_idx, func in enumerate(function_list):
+                params = func["parameters"]
+                for param in params.keys():
+                    key = (func_idx, param)
+                    if key in self.param_widgets:
+                        val = self.param_widgets[key]['valspinbox'].value()
+                        low = self.param_widgets[key]['minspinbox'].value()
+                        high = self.param_widgets[key]['maxspinbox'].value()
+                        params[param][0] = val
+                        params[param][1] = low
+                        params[param][2] = high
+            # Rebuild the config description from the updated dict
+            new_model = pyimfit.ModelDescription.dict_to_ModelDescription(model_dict)
+            config_text = "".join(new_model.getStringDescription())
+            # Backup old config
+            if os.path.isfile(config_path):
+                shutil.copyfile(src=config_path, dst=config_path + ".bak")
+            with open(config_path, "w") as f:
+                f.write(config_text)
+        else:
+            # Fallback: use the text in the config editor if present
+            new_config = self.ui.config.toPlainText()
+            print(new_config)
+            if not(new_config == ""):
+                if os.path.isfile(config_path):
+                    shutil.copyfile(src=config_path, dst=config_path + ".bak")
+                with open(config_path, "w") as f:
+                    f.write(new_config)
+
+        # Refresh config image and residual
         self.changegal()
 
 if __name__ == "__main__":
