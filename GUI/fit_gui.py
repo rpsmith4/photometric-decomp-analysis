@@ -322,8 +322,12 @@ class MainWindow(QMainWindow):
                     # layout.removeItem(item)
  
     def draw_params(self, initval, lowlim, hilim, paramname, layout):
+        # Keep track of widgets for each parameter
+        if not hasattr(self, 'param_widgets'):
+            self.param_widgets = {}
 
         ndigits = 3
+        scale = 10 ** ndigits
 
         l = QHBoxLayout()
         text = QTextBrowser()
@@ -331,30 +335,35 @@ class MainWindow(QMainWindow):
         text.setFixedSize(100, 30)
         text.setAlignment(QtCore.Qt.AlignCenter)
         slider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        # Essentially making a 2 decimal place float and just taking the digits because QSlider only likes takes integers
-        slider.setRange(int(lowlim * 10**ndigits), int(hilim * 10**ndigits)) 
-        # slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+        slider.setRange(int(lowlim * scale), int(hilim * scale)) # Qt sliders don't like non-integer values
         slider.setTickInterval(5)
-        slider.setValue(int(initval * 10**ndigits))
+        slider.setValue(int(initval * scale))
 
         n = QHBoxLayout()
         n.addWidget(text)
         n.addWidget(slider)
-        
+
         x = QHBoxLayout()
 
+
         minspinbox = QDoubleSpinBox()
+        minspinbox.setDecimals(ndigits)
         minspinbox.setValue(lowlim)
+        minspinbox.setMaximum(hilim)
+        minspinbox.setMinimum(-1e9)  # Arbitrary large negative
 
         valspinbox = QDoubleSpinBox()
-        valspinbox.setValue(50)
+        valspinbox.setDecimals(ndigits)
         valspinbox.setMaximum(hilim)
         valspinbox.setMinimum(lowlim)
         valspinbox.setValue(initval)
 
         maxspinbox = QDoubleSpinBox()
+        maxspinbox.setDecimals(ndigits)
         maxspinbox.setValue(hilim)
-        
+        maxspinbox.setMinimum(lowlim)
+        maxspinbox.setMaximum(1e9)  # Arbitrary large positive
+
         x.addWidget(minspinbox)
         x.addWidget(valspinbox)
         x.addWidget(maxspinbox)
@@ -362,6 +371,56 @@ class MainWindow(QMainWindow):
         n.addLayout(x)
         layout.addLayout(l)
         layout.addLayout(n)
+
+        # Store widgets for this parameter
+        self.param_widgets[paramname] = {
+            'slider': slider,
+            'valspinbox': valspinbox,
+            'minspinbox': minspinbox,
+            'maxspinbox': maxspinbox,
+            'ndigits': ndigits,
+            'scale': scale
+        }
+
+        # Synchronize slider and spinbox
+        def slider_changed(value):
+            float_val = value / scale
+            valspinbox.blockSignals(True)
+            valspinbox.setValue(float_val)
+            valspinbox.blockSignals(False)
+
+        def spinbox_changed(value):
+            int_val = int(round(value * scale))
+            slider.blockSignals(True)
+            slider.setValue(int_val)
+            slider.blockSignals(False)
+
+        def minspinbox_changed(new_min):
+            # Update slider and valspinbox minimum
+            slider.setMinimum(int(new_min * scale))
+            valspinbox.setMinimum(new_min)
+            maxspinbox.setMinimum(new_min)
+            # If value is out of new range, clamp
+            if valspinbox.value() < new_min:
+                valspinbox.setValue(new_min)
+            if slider.value() < int(new_min * scale):
+                slider.setValue(int(new_min * scale))
+
+        def maxspinbox_changed(new_max):
+            # Update slider and valspinbox maximum
+            slider.setMaximum(int(new_max * scale))
+            valspinbox.setMaximum(new_max)
+            minspinbox.setMaximum(new_max)
+            # If value is out of new range, clamp
+            if valspinbox.value() > new_max:
+                valspinbox.setValue(new_max)
+            if slider.value() > int(new_max * scale):
+                slider.setValue(int(new_max * scale))
+
+        slider.valueChanged.connect(slider_changed)
+        valspinbox.valueChanged.connect(spinbox_changed)
+        minspinbox.valueChanged.connect(minspinbox_changed)
+        maxspinbox.valueChanged.connect(maxspinbox_changed)
         
     def on_galaxytree_selection_changed(self, selected, deselected):
         """Called when the tree selection changes. If the selected item is a lowest-level
