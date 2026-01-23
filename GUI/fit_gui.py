@@ -329,16 +329,34 @@ class MainWindow(QMainWindow):
         text.setFixedSize(100, 30)
         text.setAlignment(QtCore.Qt.AlignCenter)
         slider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        slider.setValue(initval)
+        slider.setMaximum(hilim)
+        slider.setMinimum(lowlim)
+        slider.setTickInterval(1000)
 
-        # l.addWidget(text)
-        
         n = QHBoxLayout()
         n.addWidget(text)
         n.addWidget(slider)
-        spinbox = QDoubleSpinBox()
-        spinbox.setValue(50)
-        n.addWidget(spinbox)
+        
+        x = QHBoxLayout()
 
+        minspinbox = QDoubleSpinBox()
+        minspinbox.setValue(lowlim)
+
+        valspinbox = QDoubleSpinBox()
+        valspinbox.setValue(50)
+        valspinbox.setMaximum(hilim)
+        valspinbox.setMinimum(lowlim)
+        valspinbox.setValue(initval)
+
+        maxspinbox = QDoubleSpinBox()
+        maxspinbox.setValue(hilim)
+        
+        x.addWidget(minspinbox)
+        x.addWidget(valspinbox)
+        x.addWidget(maxspinbox)
+
+        n.addLayout(x)
         layout.addLayout(l)
         layout.addLayout(n)
         
