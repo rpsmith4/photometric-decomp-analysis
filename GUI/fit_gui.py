@@ -323,16 +323,19 @@ class MainWindow(QMainWindow):
  
     def draw_params(self, initval, lowlim, hilim, paramname, layout):
 
+        ndigits = 3
+
         l = QHBoxLayout()
         text = QTextBrowser()
         text.setText(paramname)
         text.setFixedSize(100, 30)
         text.setAlignment(QtCore.Qt.AlignCenter)
         slider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        slider.setValue(initval)
-        slider.setMaximum(hilim)
-        slider.setMinimum(lowlim)
-        slider.setTickInterval(1000)
+        # Essentially making a 2 decimal place float and just taking the digits because QSlider only likes takes integers
+        slider.setRange(int(lowlim * 10**ndigits), int(hilim * 10**ndigits)) 
+        # slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+        slider.setTickInterval(5)
+        slider.setValue(int(initval * 10**ndigits))
 
         n = QHBoxLayout()
         n.addWidget(text)
