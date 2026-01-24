@@ -97,6 +97,114 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
 
         return super().data(index, role)
 
+class ParamSliderWidget(QWidget):
+    def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None):
+        super().__init__(parent)
+        self.paramname = paramname
+        self.ndigits = ndigits
+        self.scale = 10 ** ndigits
+        self.fixed = fixed
+
+        l = QHBoxLayout()
+        text = QTextBrowser()
+        text.setText(str(paramname))
+        text.setFixedSize(100, 30)
+        text.setAlignment(QtCore.Qt.AlignCenter)
+
+        self.fixed_checkbox = QCheckBox("Fixed")
+        self.fixed_checkbox.setChecked(fixed)
+
+        self.slider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.slider.setRange(int(lowlim * self.scale), int(hilim * self.scale))
+        self.slider.setTickInterval(5)
+        self.slider.setValue(int(initval * self.scale))
+
+        l.addWidget(text)
+        l.addWidget(self.slider)
+        l.addWidget(self.fixed_checkbox)
+
+        x = QHBoxLayout()
+        self.minspinbox = QDoubleSpinBox()
+        self.minspinbox.setDecimals(ndigits)
+        self.minspinbox.setValue(lowlim)
+        self.minspinbox.setMaximum(hilim)
+        self.minspinbox.setMinimum(-1e9)
+
+        self.valspinbox = QDoubleSpinBox()
+        self.valspinbox.setDecimals(ndigits)
+        self.valspinbox.setMaximum(hilim)
+        self.valspinbox.setMinimum(lowlim)
+        self.valspinbox.setValue(initval)
+
+        self.maxspinbox = QDoubleSpinBox()
+        self.maxspinbox.setDecimals(ndigits)
+        self.maxspinbox.setValue(hilim)
+        self.maxspinbox.setMinimum(lowlim)
+        self.maxspinbox.setMaximum(1e9)
+
+        x.addWidget(self.minspinbox)
+        x.addWidget(self.valspinbox)
+        x.addWidget(self.maxspinbox)
+
+        l.addLayout(x)
+        self.setLayout(l)
+
+        self.set_fixed_state(fixed)
+
+        self.slider.valueChanged.connect(self.slider_changed)
+        self.valspinbox.valueChanged.connect(self.spinbox_changed)
+        self.minspinbox.valueChanged.connect(self.minspinbox_changed)
+        self.maxspinbox.valueChanged.connect(self.maxspinbox_changed)
+        self.fixed_checkbox.stateChanged.connect(self.fixed_checkbox_changed)
+
+    def set_fixed_state(self, is_fixed):
+        self.minspinbox.setEnabled(not is_fixed)
+        self.maxspinbox.setEnabled(not is_fixed)
+        self.slider.setEnabled(not is_fixed)
+        self.valspinbox.setEnabled(not is_fixed)
+
+    def slider_changed(self, value):
+        float_val = value / self.scale
+        self.valspinbox.blockSignals(True)
+        self.valspinbox.setValue(float_val)
+        self.valspinbox.blockSignals(False)
+
+    def spinbox_changed(self, value):
+        int_val = int(round(value * self.scale))
+        self.slider.blockSignals(True)
+        self.slider.setValue(int_val)
+        self.slider.blockSignals(False)
+
+    def minspinbox_changed(self, new_min):
+        self.slider.setMinimum(int(new_min * self.scale))
+        self.valspinbox.setMinimum(new_min)
+        self.maxspinbox.setMinimum(new_min)
+        if self.valspinbox.value() < new_min:
+            self.valspinbox.setValue(new_min)
+        if self.slider.value() < int(new_min * self.scale):
+            self.slider.setValue(int(new_min * self.scale))
+
+    def maxspinbox_changed(self, new_max):
+        self.slider.setMaximum(int(new_max * self.scale))
+        self.valspinbox.setMaximum(new_max)
+        self.minspinbox.setMaximum(new_max)
+        if self.valspinbox.value() > new_max:
+            self.valspinbox.setValue(new_max)
+        if self.slider.value() > int(new_max * self.scale):
+            self.slider.setValue(int(new_max * self.scale))
+
+    def fixed_checkbox_changed(self, state):
+        is_fixed = state == 2
+        self.set_fixed_state(is_fixed)
+
+    def get_values(self):
+        return {
+            'value': self.valspinbox.value(),
+            'min': self.minspinbox.value(),
+            'max': self.maxspinbox.value(),
+            'fixed': self.fixed_checkbox.isChecked()
+        }
+
 class MainWindow(QMainWindow):
     def __init__(self, p=None):
         super().__init__()
@@ -279,16 +387,23 @@ class MainWindow(QMainWindow):
             params = func["parameters"]
             for param in params.keys():
                 initval = params[param][0]
-                lowlim = params[param][1]
-                hilim = params[param][2]
+                fixed = False
+                if params[param][1] == 'fixed':
+                    lowlim = initval
+                    hilim = initval
+                    fixed = True
+                else:
+                    lowlim = params[param][1]
+                    hilim = params[param][2]
+
                 # Use (func_idx, param) as key to distinguish duplicate param names
-                self.draw_params(initval, lowlim, hilim, (func_idx, param), layout)
+                self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), layout)
 
 
         try:
             with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
-                config_file = f.readlines()
-            self.params.setPlainText("".join(config_file))
+                params_file = f.readlines()
+            self.params.setPlainText("".join(params_file))
             self.params.repaint()
         except:
             self.params.setPlainText("Fit Params not found!")
@@ -326,100 +441,14 @@ class MainWindow(QMainWindow):
                     self.clearLayout(item.layout())
                     # layout.removeItem(item)
  
-    def draw_params(self, initval, lowlim, hilim, paramkey, layout):
-        # paramkey is (func_idx, paramname)
+    def draw_params(self, initval, lowlim, hilim, fixed, paramkey, layout):
         if not hasattr(self, 'param_widgets'):
             self.param_widgets = {}
-
+        func_idx, paramname = paramkey
         ndigits = 3
-        scale = 10 ** ndigits
-
-        l = QHBoxLayout()
-        text = QTextBrowser()
-        text.setText(str(paramkey[1]))
-        text.setFixedSize(100, 30)
-        text.setAlignment(QtCore.Qt.AlignCenter)
-        slider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        slider.setRange(int(lowlim * scale), int(hilim * scale))
-        slider.setTickInterval(5)
-        slider.setValue(int(initval * scale))
-
-        n = QHBoxLayout()
-        n.addWidget(text)
-        n.addWidget(slider)
-
-        x = QHBoxLayout()
-
-        minspinbox = QDoubleSpinBox()
-        minspinbox.setDecimals(ndigits)
-        minspinbox.setValue(lowlim)
-        minspinbox.setMaximum(hilim)
-        minspinbox.setMinimum(-1e9)
-
-        valspinbox = QDoubleSpinBox()
-        valspinbox.setDecimals(ndigits)
-        valspinbox.setMaximum(hilim)
-        valspinbox.setMinimum(lowlim)
-        valspinbox.setValue(initval)
-
-        maxspinbox = QDoubleSpinBox()
-        maxspinbox.setDecimals(ndigits)
-        maxspinbox.setValue(hilim)
-        maxspinbox.setMinimum(lowlim)
-        maxspinbox.setMaximum(1e9)
-
-        x.addWidget(minspinbox)
-        x.addWidget(valspinbox)
-        x.addWidget(maxspinbox)
-
-        n.addLayout(x)
-        layout.addLayout(l)
-        layout.addLayout(n)
-
-        # Store widgets for this parameter, using (func_idx, paramname) as key
-        self.param_widgets[paramkey] = {
-            'slider': slider,
-            'valspinbox': valspinbox,
-            'minspinbox': minspinbox,
-            'maxspinbox': maxspinbox,
-            'ndigits': ndigits,
-            'scale': scale
-        }
-
-        def slider_changed(value):
-            float_val = value / scale
-            valspinbox.blockSignals(True)
-            valspinbox.setValue(float_val)
-            valspinbox.blockSignals(False)
-
-        def spinbox_changed(value):
-            int_val = int(round(value * scale))
-            slider.blockSignals(True)
-            slider.setValue(int_val)
-            slider.blockSignals(False)
-
-        def minspinbox_changed(new_min):
-            slider.setMinimum(int(new_min * scale))
-            valspinbox.setMinimum(new_min)
-            maxspinbox.setMinimum(new_min)
-            if valspinbox.value() < new_min:
-                valspinbox.setValue(new_min)
-            if slider.value() < int(new_min * scale):
-                slider.setValue(int(new_min * scale))
-
-        def maxspinbox_changed(new_max):
-            slider.setMaximum(int(new_max * scale))
-            valspinbox.setMaximum(new_max)
-            minspinbox.setMaximum(new_max)
-            if valspinbox.value() > new_max:
-                valspinbox.setValue(new_max)
-            if slider.value() > int(new_max * scale):
-                slider.setValue(int(new_max * scale))
-
-        slider.valueChanged.connect(slider_changed)
-        valspinbox.valueChanged.connect(spinbox_changed)
-        minspinbox.valueChanged.connect(minspinbox_changed)
-        maxspinbox.valueChanged.connect(maxspinbox_changed)
+        widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits)
+        layout.addWidget(widget)
+        self.param_widgets[paramkey] = widget
         
     def on_galaxytree_selection_changed(self, selected, deselected):
         """Called when the tree selection changes. If the selected item is a lowest-level
@@ -517,13 +546,15 @@ class MainWindow(QMainWindow):
                 for param in params.keys():
                     key = (func_idx, param)
                     if key in self.param_widgets:
-                        val = self.param_widgets[key]['valspinbox'].value()
-                        low = self.param_widgets[key]['minspinbox'].value()
-                        high = self.param_widgets[key]['maxspinbox'].value()
-                        params[param][0] = val
-                        params[param][1] = low
-                        params[param][2] = high
+                        values = self.param_widgets[key].get_values()
+                        if values['fixed']:
+                            # Only value and 'fixed' string
+                            params[param] = [values['value'], 'fixed']
+                        else:
+                            # Value, min, max
+                            params[param] = [values['value'], values['min'], values['max']]
             # Rebuild the config description from the updated dict
+            print(model_dict)
             new_model = pyimfit.ModelDescription.dict_to_ModelDescription(model_dict)
             config_text = "".join(new_model.getStringDescription())
             # Backup old config
