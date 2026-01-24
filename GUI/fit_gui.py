@@ -298,25 +298,6 @@ class MainWindow(QMainWindow):
         # Detect selections on the tree to identify when a leaf directory is selected
         self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
         
-        # layout: QVBoxLayout = self.ui.configsliders
-        # l = QHBoxLayout()
-        # text = QTextBrowser()
-        # text.setText("Hello")
-        # text.setFixedSize(100, 30)
-        # text.setAlignment(QtCore.Qt.AlignCenter)
-        # slider = QSlider(QtCore.Qt.Orientation.Horizontal)
-
-        # l.addWidget(text)
-        
-        # n = QHBoxLayout()
-        # n.addWidget(slider)
-        # spinbox = QDoubleSpinBox()
-        # spinbox.setValue(50)
-        # n.addWidget(spinbox)
-
-        # layout.addLayout(l)
-        # layout.addLayout(n)
-        
         self.ui.show()
 
     def change_fit_type(self):
@@ -363,14 +344,6 @@ class MainWindow(QMainWindow):
         self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
         self.currentgalaxytext.repaint()
 
-        # try:
-        #     with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat"), "r") as f:
-        #         config_file = f.readlines()
-        #     self.config.setPlainText("".join(config_file))
-        #     self.config.repaint()
-        # except:
-        #     self.config.setPlainText("Config file not found!")
-        #     self.config.repaint()
         config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
         config_model = pyimfit.parse_config_file(config_path)
         self.current_config_model = config_model
