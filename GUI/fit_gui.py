@@ -126,9 +126,9 @@ class ParamSliderWidget(QWidget):
         x = QHBoxLayout()
         self.minspinbox = QDoubleSpinBox()
         self.minspinbox.setDecimals(ndigits)
-        self.minspinbox.setValue(lowlim)
         self.minspinbox.setMaximum(hilim)
         self.minspinbox.setMinimum(-1e9)
+        self.minspinbox.setValue(lowlim)
 
         self.valspinbox = QDoubleSpinBox()
         self.valspinbox.setDecimals(ndigits)
@@ -138,9 +138,9 @@ class ParamSliderWidget(QWidget):
 
         self.maxspinbox = QDoubleSpinBox()
         self.maxspinbox.setDecimals(ndigits)
-        self.maxspinbox.setValue(hilim)
         self.maxspinbox.setMinimum(lowlim)
         self.maxspinbox.setMaximum(1e9)
+        self.maxspinbox.setValue(hilim)
 
         x.addWidget(self.minspinbox)
         x.addWidget(self.valspinbox)
@@ -194,7 +194,7 @@ class ParamSliderWidget(QWidget):
             self.slider.setValue(int(new_max * self.scale))
 
     def fixed_checkbox_changed(self, state):
-        is_fixed = state == 2
+        is_fixed = (state == 2)
         self.set_fixed_state(is_fixed)
 
     def get_values(self):
@@ -374,8 +374,8 @@ class MainWindow(QMainWindow):
         config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
         config_model = pyimfit.parse_config_file(config_path)
         self.current_config_model = config_model
-        config_file = config_model.getModelAsDict()
-        function_list = config_file["function_sets"][0]["function_list"]
+        config_dict = config_model.getModelAsDict()
+        function_list = config_dict["function_sets"][0]["function_list"]
         layout: QVBoxLayout = self.ui.configsliders
         # Reset the layout first
         try:
@@ -554,7 +554,6 @@ class MainWindow(QMainWindow):
                             # Value, min, max
                             params[param] = [values['value'], values['min'], values['max']]
             # Rebuild the config description from the updated dict
-            print(model_dict)
             new_model = pyimfit.ModelDescription.dict_to_ModelDescription(model_dict)
             config_text = "".join(new_model.getStringDescription())
             # Backup old config
@@ -571,6 +570,7 @@ class MainWindow(QMainWindow):
                     shutil.copyfile(src=config_path, dst=config_path + ".bak")
                 with open(config_path, "w") as f:
                     f.write(new_config)
+        if f: f.close()
 
         # Refresh config image and residual
         self.changegal()
