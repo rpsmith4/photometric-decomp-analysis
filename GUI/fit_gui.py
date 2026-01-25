@@ -155,13 +155,13 @@ class ParamSliderWidget(QWidget):
         self.valspinbox.valueChanged.connect(self.spinbox_changed)
         self.minspinbox.valueChanged.connect(self.minspinbox_changed)
         self.maxspinbox.valueChanged.connect(self.maxspinbox_changed)
-        self.fixed_checkbox.stateChanged.connect(self.fixed_checkbox_changed)
+        self.fixed_checkbox.stateChanged.connect(lambda state: self.set_fixed_state(state==2))
 
     def set_fixed_state(self, is_fixed):
         self.minspinbox.setEnabled(not is_fixed)
         self.maxspinbox.setEnabled(not is_fixed)
-        self.slider.setEnabled(not is_fixed)
-        self.valspinbox.setEnabled(not is_fixed)
+        # self.slider.setEnabled(not is_fixed)
+        # self.valspinbox.setEnabled(not is_fixed)
 
     def slider_changed(self, value):
         float_val = value / self.scale
@@ -192,10 +192,6 @@ class ParamSliderWidget(QWidget):
             self.valspinbox.setValue(new_max)
         if self.slider.value() > int(new_max * self.scale):
             self.slider.setValue(int(new_max * self.scale))
-
-    def fixed_checkbox_changed(self, state):
-        is_fixed = (state == 2)
-        self.set_fixed_state(is_fixed)
 
     def get_values(self):
         return {
