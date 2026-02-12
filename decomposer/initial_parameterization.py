@@ -18,9 +18,9 @@ import textwrap
 
 # --- file discovery ---------------------------------------------------------
 
-def get_galaxy_files(name: str, base: str = "./GalaxyFiles", fltr: str = "r") -> Dict[str, Optional[str]]:
+def get_galaxy_files(name: str, base: str = "./", fltr: str = "r") -> Dict[str, Optional[str]]:
     """
-    Return paths to key .fits files for galaxy `name` in ./GalaxyFiles/<name>/.
+    Return paths to key .fits files for galaxy `name` in base.
 
     Returns dict with keys: science, invvar, psf, mask (some may be None).
     Raises if `science` is missing.
@@ -83,14 +83,14 @@ def _safe_ellipticity(d: Dict, fallback: float = 0.3) -> float:
     return fallback
 
 
-def gather_parameters(name: str, fltr: str = "r") -> tuple[str, float, float]:
+def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -> tuple[str, float, float]:
     """
     Generate an imfit 2xSersic config using:
       - geometry (center, PA, ellipticity) from ellipse_fit()
       - photometric shape (n, Re_arcsec, mu_e) from dual_component_slits_and_sersic()
         in photometric_cut.py
 
-    Writes: ./GalaxyFiles/<name>/two_sersic_<fltr>.imfit
+    Writes: path/<name>/two_sersic_<fltr>.imfit
     Returns: (output_path, pixel_scale_arcsec_per_pix, zeropoint_mag)
     """
     import math
@@ -98,7 +98,7 @@ def gather_parameters(name: str, fltr: str = "r") -> tuple[str, float, float]:
     from pathlib import Path
 
     import table_info
-    table_info.set_directory()
+    # table_info.set_directory()
 
     # ---------- helpers (local, from scratch) ----------
     def clamp(x, lo, hi):
@@ -145,7 +145,7 @@ def gather_parameters(name: str, fltr: str = "r") -> tuple[str, float, float]:
         return I_as2 * (float(pixscale_arcsec) ** 2)
 
     # ---------- inputs: files + ellipse geometry ----------
-    files = get_galaxy_files(name, fltr=fltr)
+    files = get_galaxy_files(name, base=path, fltr=fltr)
     sci_fits = files["science"]
     mask_fits = files.get("mask", None)
     invvar_fits = files.get("invvar", None)
@@ -217,6 +217,8 @@ def gather_parameters(name: str, fltr: str = "r") -> tuple[str, float, float]:
     c_tol = 5.0
     x0_lo, x0_hi = cx - c_tol, cx + c_tol
     y0_lo, y0_hi = cy - c_tol, cy + c_tol
+
+    # We should also provide some justifications as to why we choose these bounds
 
     # PA bounds (deg)
     pa_tol = 10.0

@@ -256,7 +256,8 @@ def photometric_cut(
     if psf_fits is not None:
         psf = load_fits_array(psf_fits)
         psf = _normalize_kernel(psf)
-        sci = fftconvolve(np.nan_to_num(sci, nan=0.0), psf, mode="same")
+        # sci = fftconvolve(np.nan_to_num(sci, nan=0.0), psf, mode="same") # DO NOT DO THIS !!!! 
+                                                                         # Sci already contains the actual science data, so don't convolve again
         # mask left as-is; invvar left as-is (uncertainties become approximate)
 
     # Optionally refine center via folding metric (uses your helper)
@@ -269,7 +270,7 @@ def photometric_cut(
         rk.setdefault("subtract_background", subtract_background)
         rk.setdefault("background_region", background_region)
 
-        best_center, best_metric = refine_center_by_folding(
+        best_center, best_metric = refine_center_by_folding( # What is this even doing ??? We already know that the center of the image is the center of the galaxy
             sci_fits=sci_fits,
             mask_fits=mask_fits,
             pa_deg=pa_deg,
@@ -287,7 +288,7 @@ def photometric_cut(
         center_xy_used = (float(best_center[0]), float(best_center[1]))
         center_refine_metric = float(best_metric) if best_metric is not None else None
 
-    # Background subtraction (estimated from slit endcaps)
+    # Background subtraction (estimated from slit endcaps) # Background is already removed, though there is sensor noise, but can't really subtract that since its a gaussian with mean 0
     background_estimate: Optional[float] = None
     background_sigma_robust: Optional[float] = None
 
@@ -1107,11 +1108,12 @@ def dual_component_slits_and_sersic(
     )
 
     # Fold -> radial profiles
-    Rh, muh, muh_err, host_mask_used = fold_cut_to_radial_profile(host_cut, min_frac_good=min_frac_good)
+    Rh, muh, muh_err, host_mask_used = fold_cut_to_radial_profile(host_cut, min_frac_good=min_frac_good) # I gotta figure out what this does
     Rp, mup, mup_err, polar_mask_used = fold_cut_to_radial_profile(polar_cut, min_frac_good=min_frac_good)
 
     # Fit host Sérsic
-    host_fit = fit_sersic_mu(Rh, muh, muh_err, R_min_arcsec=host_R_min_arcsec)
+    host_fit = fit_sersic_mu(Rh, muh, muh_err, R_min_arcsec=host_R_min_arcsec) # While I think this is a good idea, its also verging on
+    # just "fitting before the fitting". It is something I trid but it doesn't really work well, unless this is just a 1d fit
 
     # Decide polar inner cutoff
     polar_Rmin_used = None
