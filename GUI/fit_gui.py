@@ -105,11 +105,12 @@ class ParamSliderWidget(QWidget):
         self.scale = 10 ** ndigits
         self.fixed = fixed
 
-        l = QHBoxLayout()
-        text = QTextBrowser()
-        text.setText(str(paramname))
-        text.setFixedSize(100, 30)
-        text.setAlignment(QtCore.Qt.AlignCenter)
+        parameter_adjust_layout = QHBoxLayout()
+
+        self.text = QTextBrowser()
+        self.text.setText(str(paramname))
+        self.text.setFixedSize(50, 30)
+        self.text.setAlignment(QtCore.Qt.AlignCenter)
 
         self.fixed_checkbox = QCheckBox("Fixed")
         self.fixed_checkbox.setChecked(fixed)
@@ -119,35 +120,38 @@ class ParamSliderWidget(QWidget):
         self.slider.setTickInterval(5)
         self.slider.setValue(int(initval * self.scale))
 
-        l.addWidget(text)
-        l.addWidget(self.slider)
-        l.addWidget(self.fixed_checkbox)
+        parameter_adjust_layout.addWidget(self.text)
+        parameter_adjust_layout.addWidget(self.slider)
+        parameter_adjust_layout.addWidget(self.fixed_checkbox)
 
-        x = QHBoxLayout()
+        spinboxes_layout = QHBoxLayout()
         self.minspinbox = QDoubleSpinBox()
         self.minspinbox.setDecimals(ndigits)
         self.minspinbox.setMaximum(hilim)
         self.minspinbox.setMinimum(-1e9)
         self.minspinbox.setValue(lowlim)
+        self.minspinbox.setMaximumWidth(65)
 
         self.valspinbox = QDoubleSpinBox()
         self.valspinbox.setDecimals(ndigits)
         self.valspinbox.setMaximum(hilim)
         self.valspinbox.setMinimum(lowlim)
         self.valspinbox.setValue(initval)
+        self.valspinbox.setMaximumWidth(65)
 
         self.maxspinbox = QDoubleSpinBox()
         self.maxspinbox.setDecimals(ndigits)
         self.maxspinbox.setMinimum(lowlim)
         self.maxspinbox.setMaximum(1e9)
         self.maxspinbox.setValue(hilim)
+        self.maxspinbox.setMaximumWidth(65)
 
-        x.addWidget(self.minspinbox)
-        x.addWidget(self.valspinbox)
-        x.addWidget(self.maxspinbox)
+        spinboxes_layout.addWidget(self.minspinbox)
+        spinboxes_layout.addWidget(self.valspinbox)
+        spinboxes_layout.addWidget(self.maxspinbox)
 
-        l.addLayout(x)
-        self.setLayout(l)
+        parameter_adjust_layout.addLayout(spinboxes_layout)
+        self.setLayout(parameter_adjust_layout)
 
         self.set_fixed_state(fixed)
 
