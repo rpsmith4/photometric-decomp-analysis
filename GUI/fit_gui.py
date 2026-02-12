@@ -97,7 +97,115 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
 
         return super().data(index, role)
 
-class MainWindow(QDialog):
+class ParamSliderWidget(QWidget):
+    def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None):
+        super().__init__(parent)
+        self.paramname = paramname
+        self.ndigits = ndigits
+        self.scale = 10 ** ndigits
+        self.fixed = fixed
+
+        parameter_adjust_layout = QHBoxLayout()
+
+        self.text = QTextBrowser()
+        self.text.setText(str(paramname))
+        self.text.setFixedSize(50, 30)
+        self.text.setAlignment(QtCore.Qt.AlignCenter)
+
+        self.fixed_checkbox = QCheckBox("Fixed")
+        self.fixed_checkbox.setChecked(fixed)
+
+        self.slider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.slider.setRange(int(lowlim * self.scale), int(hilim * self.scale))
+        self.slider.setTickInterval(5)
+        self.slider.setValue(int(initval * self.scale))
+
+        parameter_adjust_layout.addWidget(self.text)
+        parameter_adjust_layout.addWidget(self.slider)
+        parameter_adjust_layout.addWidget(self.fixed_checkbox)
+
+        spinboxes_layout = QHBoxLayout()
+        self.minspinbox = QDoubleSpinBox()
+        self.minspinbox.setDecimals(ndigits)
+        self.minspinbox.setMaximum(hilim)
+        self.minspinbox.setMinimum(-1e9)
+        self.minspinbox.setValue(lowlim)
+        self.minspinbox.setMaximumWidth(65)
+
+        self.valspinbox = QDoubleSpinBox()
+        self.valspinbox.setDecimals(ndigits)
+        self.valspinbox.setMaximum(hilim)
+        self.valspinbox.setMinimum(lowlim)
+        self.valspinbox.setValue(initval)
+        self.valspinbox.setMaximumWidth(65)
+
+        self.maxspinbox = QDoubleSpinBox()
+        self.maxspinbox.setDecimals(ndigits)
+        self.maxspinbox.setMinimum(lowlim)
+        self.maxspinbox.setMaximum(1e9)
+        self.maxspinbox.setValue(hilim)
+        self.maxspinbox.setMaximumWidth(65)
+
+        spinboxes_layout.addWidget(self.minspinbox)
+        spinboxes_layout.addWidget(self.valspinbox)
+        spinboxes_layout.addWidget(self.maxspinbox)
+
+        parameter_adjust_layout.addLayout(spinboxes_layout)
+        self.setLayout(parameter_adjust_layout)
+
+        self.set_fixed_state(fixed)
+
+        self.slider.valueChanged.connect(self.slider_changed)
+        self.valspinbox.valueChanged.connect(self.spinbox_changed)
+        self.minspinbox.valueChanged.connect(self.minspinbox_changed)
+        self.maxspinbox.valueChanged.connect(self.maxspinbox_changed)
+        self.fixed_checkbox.stateChanged.connect(lambda state: self.set_fixed_state(state==2))
+
+    def set_fixed_state(self, is_fixed):
+        self.minspinbox.setEnabled(not is_fixed)
+        self.maxspinbox.setEnabled(not is_fixed)
+        # self.slider.setEnabled(not is_fixed)
+        # self.valspinbox.setEnabled(not is_fixed)
+
+    def slider_changed(self, value):
+        float_val = value / self.scale
+        self.valspinbox.blockSignals(True)
+        self.valspinbox.setValue(float_val)
+        self.valspinbox.blockSignals(False)
+
+    def spinbox_changed(self, value):
+        int_val = int(round(value * self.scale))
+        self.slider.blockSignals(True)
+        self.slider.setValue(int_val)
+        self.slider.blockSignals(False)
+
+    def minspinbox_changed(self, new_min):
+        self.slider.setMinimum(int(new_min * self.scale))
+        self.valspinbox.setMinimum(new_min)
+        self.maxspinbox.setMinimum(new_min)
+        if self.valspinbox.value() < new_min:
+            self.valspinbox.setValue(new_min)
+        if self.slider.value() < int(new_min * self.scale):
+            self.slider.setValue(int(new_min * self.scale))
+
+    def maxspinbox_changed(self, new_max):
+        self.slider.setMaximum(int(new_max * self.scale))
+        self.valspinbox.setMaximum(new_max)
+        self.minspinbox.setMaximum(new_max)
+        if self.valspinbox.value() > new_max:
+            self.valspinbox.setValue(new_max)
+        if self.slider.value() > int(new_max * self.scale):
+            self.slider.setValue(int(new_max * self.scale))
+
+    def get_values(self):
+        return {
+            'value': self.valspinbox.value(),
+            'min': self.minspinbox.value(),
+            'max': self.maxspinbox.value(),
+            'fixed': self.fixed_checkbox.isChecked()
+        }
+
+class MainWindow(QMainWindow):
     def __init__(self, p=None):
         super().__init__()
         ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
@@ -110,7 +218,7 @@ class MainWindow(QDialog):
 
         # Initializing widget types to make my autocomplete work
         self.currentgalaxytext: QTextBrowser = self.ui.currentgalaxytext
-        self.config: QTextBrowser = self.ui.config
+        # self.config: QTextBrowser = self.ui.config
         self.params: QTextBrowser = self.ui.params
 
         # Initializing some variables
@@ -189,7 +297,7 @@ class MainWindow(QDialog):
         self.galaxytree.setColumnHidden(3, True)
         # Detect selections on the tree to identify when a leaf directory is selected
         self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
-
+        
         self.ui.show()
 
     def change_fit_type(self):
@@ -226,26 +334,49 @@ class MainWindow(QDialog):
     def getconfigresid(self, im, imconfig):
         return im - imconfig
 
+
     def changegal(self):
+        # Store the current config model for later editing
+        self.current_config_model = None
         # Update UI based on the currently selected leaf galaxy folder
         galaxypath = self.selected_galaxy_path
         galaxy = galaxypath.name
         self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
         self.currentgalaxytext.repaint()
 
+        config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
+        config_model = pyimfit.parse_config_file(config_path)
+        self.current_config_model = config_model
+        config_dict = config_model.getModelAsDict()
+        function_list = config_dict["function_sets"][0]["function_list"]
+        layout: QVBoxLayout = self.ui.configsliders
+        # Reset the layout first
         try:
-            with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat"), "r") as f:
-                config_file = f.readlines()
-            self.config.setPlainText("".join(config_file))
-            self.config.repaint()
-        except:
-            self.config.setPlainText("Config file not found!")
-            self.config.repaint()
+            self.clearLayout(layout)
+        except Exception as e:
+            print(e)
+            pass
+        for func_idx, func in enumerate(function_list):
+            params = func["parameters"]
+            for param in params.keys():
+                initval = params[param][0]
+                fixed = False
+                if params[param][1] == 'fixed':
+                    lowlim = initval
+                    hilim = initval
+                    fixed = True
+                else:
+                    lowlim = params[param][1]
+                    hilim = params[param][2]
+
+                # Use (func_idx, param) as key to distinguish duplicate param names
+                self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), layout)
+
 
         try:
             with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
-                config_file = f.readlines()
-            self.params.setPlainText("".join(config_file))
+                params_file = f.readlines()
+            self.params.setPlainText("".join(params_file))
             self.params.repaint()
         except:
             self.params.setPlainText("Fit Params not found!")
@@ -270,7 +401,27 @@ class MainWindow(QDialog):
 
         imresidconfig = self.getconfigresid(img, imconfig)
         self.configresid.plot(imresidconfig, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
-        
+
+    def clearLayout(self, layout):
+        if isinstance(layout, QLayout):
+            while layout.count():
+                item = layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+                    # layout.removeWidget(widget)
+                else:
+                    self.clearLayout(item.layout())
+                    # layout.removeItem(item)
+ 
+    def draw_params(self, initval, lowlim, hilim, fixed, paramkey, layout):
+        if not hasattr(self, 'param_widgets'):
+            self.param_widgets = {}
+        func_idx, paramname = paramkey
+        ndigits = 3
+        widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits)
+        layout.addWidget(widget)
+        self.param_widgets[paramkey] = widget
         
     def on_galaxytree_selection_changed(self, selected, deselected):
         """Called when the tree selection changes. If the selected item is a lowest-level
@@ -355,16 +506,46 @@ class MainWindow(QDialog):
             print("No galaxy selected to save config")
             return
         p = self.selected_galaxy_path
-        new_config = self.ui.config.toPlainText()
-        print(new_config)
-        if not(new_config == ""):
-            fit_type = self.ui.fit_type_combo.currentText()
-            if os.path.isfile(os.path.join(p, f"{fit_type}_{self.band}.dat")):
-                shutil.copyfile(src=os.path.join(p, f"{fit_type}_{self.band}.dat"), dst=os.path.join(p, f"{fit_type}_{self.band}.dat.bak"))
-            with open(os.path.join(p, f"{fit_type}_{self.band}.dat"), "w") as f:
-                f.write(new_config)
-        
-        # Basically want to refresh our config image and residual
+        fit_type = self.ui.fit_type_combo.currentText()
+        config_path = os.path.join(p, f"{fit_type}_{self.band}.dat")
+
+        # If we have a config model and param_widgets, update the config model with the new values
+        if hasattr(self, 'current_config_model') and hasattr(self, 'param_widgets') and self.current_config_model is not None:
+            model_dict = self.current_config_model.getModelAsDict()
+            function_list = model_dict["function_sets"][0]["function_list"]
+            # Update parameter values from widgets
+            for func_idx, func in enumerate(function_list):
+                params = func["parameters"]
+                for param in params.keys():
+                    key = (func_idx, param)
+                    if key in self.param_widgets:
+                        values = self.param_widgets[key].get_values()
+                        if values['fixed']:
+                            # Only value and 'fixed' string
+                            params[param] = [values['value'], 'fixed']
+                        else:
+                            # Value, min, max
+                            params[param] = [values['value'], values['min'], values['max']]
+            # Rebuild the config description from the updated dict
+            new_model = pyimfit.ModelDescription.dict_to_ModelDescription(model_dict)
+            config_text = "".join(new_model.getStringDescription())
+            # Backup old config
+            if os.path.isfile(config_path):
+                shutil.copyfile(src=config_path, dst=config_path + ".bak")
+            with open(config_path, "w") as f:
+                f.write(config_text)
+        else:
+            # Fallback: use the text in the config editor if present
+            new_config = self.ui.config.toPlainText()
+            print(new_config)
+            if not(new_config == ""):
+                if os.path.isfile(config_path):
+                    shutil.copyfile(src=config_path, dst=config_path + ".bak")
+                with open(config_path, "w") as f:
+                    f.write(new_config)
+        if f: f.close()
+
+        # Refresh config image and residual
         self.changegal()
 
 if __name__ == "__main__":
