@@ -25,7 +25,7 @@ from scipy.optimize import least_squares
 from scipy.signal import fftconvolve
 
 from table_info import get_galaxy_info
-from initial_parameterization import get_galaxy_files
+from sersic_init_conf import get_galaxy_files
 
 
 # =====================================================================
@@ -57,7 +57,7 @@ def _get_fits_header(hdu_or_path):
 
 def pixel_scale_from_header_arcsec_per_pix(sci_fits, return_axes=False):
     """Arcsec/pixel (geometric mean) from WCS; optionally the axes scales."""
-    hdr = _get_fits_header(sci_fits)
+    hdr = sci_fits.header
     w = WCS(hdr, naxis=2)  # force 2D celestial WCS
     scales_deg = proj_plane_pixel_scales(w)  # deg/pix
     scales_as = np.abs(scales_deg[:2]) * 3600.0
