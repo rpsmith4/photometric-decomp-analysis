@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1269</width>
-    <height>826</height>
+    <height>864</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -46,20 +46,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
       </widget>
      </item>
      <item>
-      <widget class="QPlainTextEdit" name="config">
-       <property name="minimumSize">
-        <size>
-         <width>353</width>
-         <height>308</height>
-        </size>
-       </property>
-       <property name="frameShape">
-        <enum>QFrame::Shape::WinPanel</enum>
-       </property>
-       <property name="frameShadow">
-        <enum>QFrame::Shadow::Sunken</enum>
-       </property>
-      </widget>
+      <layout class="QVBoxLayout" name="configsliders"/>
      </item>
      <item>
       <widget class="QTextBrowser" name="bestfittext">
