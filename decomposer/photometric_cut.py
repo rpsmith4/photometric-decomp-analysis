@@ -219,7 +219,7 @@ def photometric_cut(
       - frac_good
       - background_estimate, background_sigma_robust (if computed)
     """
-    sci = load_fits_array(sci_fits)
+    sci = sci_fits.data
 
     if sci.ndim != 2:
         raise ValueError(f"sci must be 2D; got shape {sci.shape}")
@@ -237,8 +237,8 @@ def photometric_cut(
         raise ValueError("pixel_scale_arcsec could not be inferred; pass pixel_scale_arcsec explicitly.")
 
     # Optional arrays
-    msk = load_fits_array(mask_fits) if mask_fits is not None else None
-    inv = load_fits_array(invvar_fits) if invvar_fits is not None else None
+    msk = mask_fits if mask_fits is not None else None
+    inv = invvar_fits if invvar_fits is not None else None
 
     if msk is not None and msk.shape != sci.shape:
         raise ValueError(f"mask shape {msk.shape} != sci shape {sci.shape}")
@@ -1029,8 +1029,10 @@ def fit_sersic_mu(
 def dual_component_slits_and_sersic(
     *,
     sci_fits,
-    host_ellipse_results: dict,
-    polar_ellipse_results: dict,
+    host_center,
+    host_pa,
+    polar_center,
+    polar_pa,
     mask_fits=None,
     invvar_fits=None,
     psf_fits=None,
@@ -1057,12 +1059,6 @@ def dual_component_slits_and_sersic(
 ):
     if pixel_scale_arcsec is None:
         pixel_scale_arcsec = pixel_scale_from_header_arcsec_per_pix(sci_fits)
-
-    host_center = tuple(map(float, host_ellipse_results["center"]))
-    host_pa = float(host_ellipse_results["PA"])
-
-    polar_center = tuple(map(float, polar_ellipse_results["center"]))
-    polar_pa = float(polar_ellipse_results["PA"])
 
     host_report = f"{report_prefix}_host.txt" if report_prefix else None
     polar_report = f"{report_prefix}_polar.txt" if report_prefix else None
@@ -1370,7 +1366,7 @@ def main():
     import glob
     import os
     from photometric_cut_helpers import ellipse_fit
-    from initial_parameterization import get_galaxy_files
+    from sersic_init_conf import get_galaxy_files
     from table_info import get_galaxy_info
     import numpy as np
     import matplotlib.pyplot as plt

@@ -16,6 +16,10 @@ from typing import Dict, Tuple, Optional
 import os
 import textwrap
 
+import pyimfit
+import numpy as np
+import pandas as pd
+
 # --- file discovery ---------------------------------------------------------
 
 def get_galaxy_files(name: str, base: str = "./", fltr: str = "r") -> Dict[str, Optional[str]]:
@@ -83,15 +87,15 @@ def _safe_ellipticity(d: Dict, fallback: float = 0.3) -> float:
     return fallback
 
 
-def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -> tuple[str, float, float]:
+# def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -> tuple[str, float, float]:
+def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None) -> tuple[str, float, float]:
     """
     Generate an imfit 2xSersic config using:
       - geometry (center, PA, ellipticity) from ellipse_fit()
       - photometric shape (n, Re_arcsec, mu_e) from dual_component_slits_and_sersic()
         in photometric_cut.py
 
-    Writes: path/<name>/two_sersic_<fltr>.imfit
-    Returns: (output_path, pixel_scale_arcsec_per_pix, zeropoint_mag)
+    Returns: (model, pixel_scale_arcsec_per_pix, zeropoint_mag)
     """
     import math
     import textwrap
@@ -123,15 +127,6 @@ def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -
             return clamp(1.0 - q, 0.0, 0.95)
         return clamp(float(fallback), 0.0, 0.95)
 
-    def fmt_param(name, val, lo=None, hi=None, comment=""):
-        if lo is not None and hi is not None:
-            core = f"{name} {val:.6f} {lo:.6f},{hi:.6f}"
-        else:
-            core = f"{name} {val:.6f}"
-        if comment:
-            return f"{core:<38}# {comment}"
-        return core
-
     def pa_to_imfit(pa_deg):
         # User-requested conversion: add 90 deg.
         # Keep in [0,180) because PA has 180-deg degeneracy for ellipses.
@@ -144,30 +139,32 @@ def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -
         I_as2 = 10.0 ** ((float(zeropoint) - float(mu_e)) / 2.5)
         return I_as2 * (float(pixscale_arcsec) ** 2)
 
-    # ---------- inputs: files + ellipse geometry ----------
-    files = get_galaxy_files(name, base=path, fltr=fltr)
-    sci_fits = files["science"]
-    mask_fits = files.get("mask", None)
-    invvar_fits = files.get("invvar", None)
-    psf_fits = files.get("psf", None)
-
+    # ---------- ellipse geometry ----------
     from photometric_cut_helpers import ellipse_fit, pixel_scale_from_header_arcsec_per_pix
-    host_e, polar_e = ellipse_fit(name)
+
+    ellipse_fit_data["ell"] = 1-ellipse_fit_data["axis_ratio"]
+    host_e = ellipse_fit_data[ellipse_fit_data["label"] == "Host"]
+    polar_e = ellipse_fit_data[ellipse_fit_data["label"] == "Polar"]
+    # host_e, polar_e = ellipse_fit(name)
 
     pixel_scale = float(pixel_scale_from_header_arcsec_per_pix(sci_fits))
     zeropoint = 22.5  # keep consistent with your 1-D mu conversion unless you intentionally change it
 
     # Geometry from ellipse fitting
-    cx, cy = map(float, host_e["center"])  # shared center
-    host_pa_imfit = pa_to_imfit(host_e["PA"])
-    polar_pa_imfit = pa_to_imfit(polar_e["PA"])
-    host_ell = get_ellipticity(host_e, fallback=0.3)
-    polar_ell = get_ellipticity(polar_e, fallback=0.8)
+    cx, cy = host_e["x_center"], host_e["y_center"]  # shared center
+    host_pa_imfit = pa_to_imfit(host_e["angle"])
+    polar_pa_imfit = pa_to_imfit(polar_e["angle"])
+    # host_ell = get_ellipticity(host_e, fallback=0.3)
+    # polar_ell = get_ellipticity(polar_e, fallback=0.8)
+    host_ell = host_e["ell"]
+    polar_ell = polar_e["ell"]
 
     # Choose slit lengths from ellipse sizes if available, else defaults.
     # (These are ONLY for the 1-D estimate step.)
-    host_a = safe_float(host_e.get("semi_major_axis", None), None)
-    polar_a = safe_float(polar_e.get("semi_major_axis", None), None)
+    # host_a = safe_float(host_e.get("semi_major_axis", None), None)
+    # polar_a = safe_float(polar_e.get("semi_major_axis", None), None)
+    host_a = host_e["semi_major"].iloc[0] # Jank at the moment, don't want to just index into the series, probably will just select single values some other way idk
+    polar_a = polar_e["semi_major"].iloc[0]
     host_len = int(max(200, 2.5 * host_a)) if host_a is not None else 300
     polar_len = int(max(250, 2.5 * polar_a)) if polar_a is not None else 450
 
@@ -177,8 +174,10 @@ def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -
 
     results = dual_component_slits_and_sersic(
         sci_fits=sci_fits,
-        host_ellipse_results=host_e,
-        polar_ellipse_results=polar_e,
+        host_center=(cx, cy),
+        host_pa=host_pa_imfit,
+        polar_center=(polar_e["x_center"], polar_e["y_center"]),
+        polar_pa=polar_pa_imfit,
         mask_fits=mask_fits,
         invvar_fits=invvar_fits,
         psf_fits=psf_fits,
@@ -221,7 +220,7 @@ def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -
     # We should also provide some justifications as to why we choose these bounds
 
     # PA bounds (deg)
-    pa_tol = 10.0
+    pa_tol = 2.0 # 10 was too much I think
     # Note: wrap issues at 0/180 are annoying; simplest is to allow a broad range.
     # We’ll just clamp to [0,180] and let the solver move.
     def pa_bounds(pa):
@@ -231,8 +230,9 @@ def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -
     polar_pa_lo, polar_pa_hi = pa_bounds(polar_pa_imfit)
 
     # Ellipticity bounds
-    host_ell_lo, host_ell_hi = clamp(host_ell - 0.10, 0.0, 0.95), clamp(host_ell + 0.10, 0.0, 0.95)
-    polar_ell_lo, polar_ell_hi = clamp(polar_ell - 0.10, 0.0, 0.95), clamp(polar_ell + 0.10, 0.0, 0.95)
+    ell_tol = 0.05
+    host_ell_lo, host_ell_hi = clamp(host_ell - ell_tol, 0.0, 0.95), clamp(host_ell + ell_tol, 0.0, 0.95)
+    polar_ell_lo, polar_ell_hi = clamp(polar_ell - ell_tol, 0.0, 0.95), clamp(polar_ell + ell_tol, 0.0, 0.95)
 
     # Sérsic n bounds
     host_n_lo, host_n_hi = _frac_bounds(host_n, 2)
@@ -258,42 +258,34 @@ def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -
     polar_ie_lo, polar_ie_hi = ie_bounds(polar_Ie_pix)
 
     # ---------- write config ----------
-    lines = []
-    lines.append("# Two-component Sérsic model")
-    lines.append("# NOTE: PA here uses your requested +90deg conversion relative to ellipse-fit PA.")
-    lines.append("# Sérsic uses I_e (counts/pixel), not mu_e; values below were converted from mu_e.")
-    lines.append("")
+    model = pyimfit.SimpleModelDescription()
+    model.x0.setValue(cx, [x0_lo, x0_hi])
+    model.y0.setValue(cy, [y0_lo, y0_hi])
+    
+    host = pyimfit.make_imfit_function("Sersic", label="Host")
+    
+    # Shouldn't these be fixed though?? At least, I think a \pm 10 offset is likely too much
+    # I've changed it to like 2 deg in either direction for the time being
+    host.PA.setValue(host_pa_imfit, [host_pa_lo, host_pa_hi])
+    # Same here, this should either be fixed or just have a really small tolerance
+    # I've put an 0.05 tolerance on it for now
+    host.ell.setValue(host_ell, [host_ell_lo, host_ell_hi])
+    host.n.setValue(host_n, [host_n_lo, host_n_hi])
+    host.I_e.setValue(host_Ie_pix, [host_ie_lo, host_ie_hi])
+    host.r_e.setValue(host_Re_pix, [host_re_lo, host_re_hi])
 
-    lines.append(fmt_param("X0", cx, x0_lo, x0_hi, "shared center x (pix)"))
-    lines.append(fmt_param("Y0", cy, y0_lo, y0_hi, "shared center y (pix)"))
-    lines.append("")
 
-    # Function labels are supported by imfit (handy in outputs). :contentReference[oaicite:2]{index=2}
-    lines.append("FUNCTION Sersic  # LABEL host")
-    lines.append(fmt_param("PA", host_pa_imfit, host_pa_lo, host_pa_hi, "host PA (deg)"))
-    lines.append(fmt_param("ell", host_ell, host_ell_lo, host_ell_hi, "host ellipticity"))
-    lines.append(fmt_param("n", host_n, host_n_lo, host_n_hi, "host Sérsic n"))
-    lines.append(fmt_param("I_e", host_Ie_pix, host_ie_lo, host_ie_hi, "host I_e (cts/pix)"))
-    lines.append(fmt_param("r_e", host_Re_pix, host_re_lo, host_re_hi, "host r_e (pix)"))
-    lines.append("")
+    polar = pyimfit.make_imfit_function("Sersic", label="Polar")
+    polar.PA.setValue(polar_pa_imfit, [polar_pa_lo, polar_pa_hi])
+    polar.ell.setValue(polar_ell, [polar_ell_lo, polar_ell_hi])
+    polar.n.setValue(polar_n, [polar_n_lo, polar_n_hi])
+    polar.I_e.setValue(polar_Ie_pix, [polar_ie_lo, polar_ie_hi])
+    polar.r_e.setValue(polar_Re_pix, [polar_re_lo, polar_re_hi])
+    
+    model.addFunction(host)
+    model.addFunction(polar)
 
-    lines.append("FUNCTION Sersic  # LABEL polar")
-    lines.append(fmt_param("PA", polar_pa_imfit, polar_pa_lo, polar_pa_hi, "polar PA (deg)"))
-    lines.append(fmt_param("ell", polar_ell, polar_ell_lo, polar_ell_hi, "polar ellipticity"))
-    lines.append(fmt_param("n", polar_n, polar_n_lo, polar_n_hi, "polar Sérsic n"))
-    lines.append(fmt_param("I_e", polar_Ie_pix, polar_ie_lo, polar_ie_hi, "polar I_e (cts/pix)"))
-    lines.append(fmt_param("r_e", polar_Re_pix, polar_re_lo, polar_re_hi, "polar r_e (pix)"))
-    lines.append("")
-
-    model_text = textwrap.dedent("\n".join(lines)).strip() + "\n"
-
-    out_dir = Path("./GalaxyFiles") / name
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"two_sersic_{fltr}.imfit"
-    out_path.write_text(model_text)
-
-    print(f"Wrote {out_path}")
-    return str(out_path), pixel_scale, zeropoint
+    return model, pixel_scale, zeropoint
 
 
 def main():
