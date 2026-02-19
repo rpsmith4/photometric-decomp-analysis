@@ -1064,6 +1064,11 @@ def dual_component_slits_and_sersic(
     polar_center = tuple(map(float, polar_ellipse_results["center"]))
     polar_pa = float(polar_ellipse_results["PA"])
 
+    # Need to adjust how the center is found, because currently it is NOT good.
+    # s=1/4.35
+    # host_center = tuple(s * x for x in host_center)
+    # polar_center = tuple(s * x for x in polar_center)
+
     host_report = f"{report_prefix}_host.txt" if report_prefix else None
     polar_report = f"{report_prefix}_polar.txt" if report_prefix else None
 
@@ -1386,7 +1391,10 @@ def main():
     # print("Host results:", host_ellipse_results)
     # print("Polar results:", polar_ellipse_results)
 
-    TestFiles = get_galaxy_files(test_galaxy, fltr="r")
+    TestFiles = get_galaxy_files(test_galaxy, base = "./GalaxyFiles/", fltr="r")
+    print(TestFiles)
+
+
     sci_fits = TestFiles["science"]
     mask_fits = TestFiles["mask"]
     invvar_fits = TestFiles.get("invvar", None)

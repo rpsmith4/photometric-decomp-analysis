@@ -37,7 +37,7 @@ def get_galaxy_files(name: str, base: str = "./", fltr: str = "r") -> Dict[str, 
         return None
 
     files = {
-        "science": first_match([f"image*{fltr}*interp.fits"]),
+        "science": first_match([f"image_{fltr}.fits"]),# first_match([f"image*{fltr}*interp.fits"]),
         "invvar":  first_match([f"*image*{fltr}*invvar.fits"]),
         "psf":     first_match([f"psf_patched*{fltr}.fits"]),
         "mask":    first_match(["*mask_all.fits"]),
