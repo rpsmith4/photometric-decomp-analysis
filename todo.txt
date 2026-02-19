@@ -1,0 +1,12 @@
+See how position angle effects the effective intensity and radius (or maybe it doesn't?)
+Also should probably move the parsing code in the plot_parameters file into its own thing
+
+Make it so that updating the config shows what that galaxy would look like
+May also want to auto-save or at least check if saved when you run refit
+Also reduce the number of digits in the config file
+May also want to add things like sliders or something instead of just manually typing things in
+
+May also want to add some labels to the functions as well as some column indicators to make it easier to tell what is going on
+
+
+Use pyimfit to make changing the parameters easier
