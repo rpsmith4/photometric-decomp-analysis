@@ -238,7 +238,7 @@ def photometric_cut(
 
     # Optional arrays
     msk = mask_fits if mask_fits is not None else None
-    inv = invvar_fits if invvar_fits is not None else None
+    inv = invvar_fits.data if invvar_fits is not None else None
 
     if msk is not None and msk.shape != sci.shape:
         raise ValueError(f"mask shape {msk.shape} != sci shape {sci.shape}")
@@ -564,7 +564,7 @@ def plot_dual_slit_mu_figure(
     data_color = "0.35"      # gray dots
 
     # --- load image/mask ---
-    sci = load_fits_array(sci_fits)
+    sci = sci_fits.data
     msk = load_fits_array(mask_fits) if mask_fits is not None else None
     bad = (msk > 0) if msk is not None else np.zeros_like(sci, dtype=bool)
 
@@ -1376,7 +1376,7 @@ def main():
     GalaxyDirectories = glob.glob("./GalaxyFiles/*")
 
     filenames = [os.path.basename(f) for f in GalaxyDirectories]
-    test_galaxy = filenames[0]
+    test_galaxy = filenames[2]
 
     host_ellipse_results, polar_ellipse_results = ellipse_fit(test_galaxy)
     # print("Host results:", host_ellipse_results)
@@ -1394,7 +1394,29 @@ def main():
     psg_type = get_galaxy_info(test_galaxy)["psg_type"]
 
     # Calibration
-    pixel_scale = pixel_scale_from_header_arcsec_per_pix(sci_fits)
+    # pixel_scale = pixel_scale_from_header_arcsec_per_pix(sci_fits)
+    pixel_scale = 0.262 # Should be true of all galaxies in our sample, so we probably can get rid of the pixel scale from wcs if desired
+    host_pa = host_ellipse_results["PA"]
+    polar_pa = polar_ellipse_results["PA"]
+
+    from astropy.io import fits # Getting centers from ellipses doesn't work as far as I've been able to test. I'll just use the centers of the science images taken from their headers
+
+
+    # with fits.open(sci_fits) as hdul:
+    #     header_info = hdul[0].header
+    #     xc = header_info["CRPIX1"]
+    #     yc = header_info["CRPIX2"]
+    #     host_center = (xc, yc)
+    #     polar_center = (xc, yc)
+    sci_fits = fits.open(sci_fits)[0]
+    sci_header_info = sci_fits.header
+    xc = sci_header_info["CRPIX1"]
+    yc = sci_header_info["CRPIX2"]
+    host_center = (xc, yc)
+    polar_center = (xc, yc)
+
+    invvar_fits = fits.open(invvar_fits)[0]
+
 
 
 
@@ -1408,8 +1430,10 @@ def main():
 
     results = dual_component_slits_and_sersic(
         sci_fits=sci_fits,
-        host_ellipse_results=host_ellipse_results,
-        polar_ellipse_results=polar_ellipse_results,
+        host_center= host_center,
+        host_pa= host_pa,
+        polar_center= polar_center,
+        polar_pa= polar_pa,
         mask_fits=mask_fits,
         invvar_fits=invvar_fits,
         psf_fits=psf_fits,

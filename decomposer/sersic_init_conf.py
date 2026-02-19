@@ -19,6 +19,7 @@ import textwrap
 import pyimfit
 import numpy as np
 import pandas as pd
+from astropy.io import fits
 
 # --- file discovery ---------------------------------------------------------
 
@@ -151,13 +152,17 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     zeropoint = 22.5  # keep consistent with your 1-D mu conversion unless you intentionally change it
 
     # Geometry from ellipse fitting
-    cx, cy = host_e["x_center"], host_e["y_center"]  # shared center
-    host_pa_imfit = pa_to_imfit(host_e["angle"])
-    polar_pa_imfit = pa_to_imfit(polar_e["angle"])
+    # cx, cy = host_e["x_center"].iloc[0], host_e["y_center"].iloc[0]  # shared center from ellipse results, in my experience this is usually NOT aligned with the actual image centers
+    sci_header = sci_fits.header
+    cx, cy = sci_header["CRPIX1"], sci_header["CRPIX2"]
+    
+
+    host_pa_imfit = pa_to_imfit(host_e["angle"].iloc[0])
+    polar_pa_imfit = pa_to_imfit(polar_e["angle"].iloc[0])
     # host_ell = get_ellipticity(host_e, fallback=0.3)
     # polar_ell = get_ellipticity(polar_e, fallback=0.8)
-    host_ell = host_e["ell"]
-    polar_ell = polar_e["ell"]
+    host_ell = host_e["ell"].iloc[0]
+    polar_ell = polar_e["ell"].iloc[0]
 
     # Choose slit lengths from ellipse sizes if available, else defaults.
     # (These are ONLY for the 1-D estimate step.)
@@ -176,7 +181,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
         sci_fits=sci_fits,
         host_center=(cx, cy),
         host_pa=host_pa_imfit,
-        polar_center=(polar_e["x_center"], polar_e["y_center"]),
+        polar_center=(cx, cy),#(polar_e["x_center"], polar_e["y_center"]),
         polar_pa=polar_pa_imfit,
         mask_fits=mask_fits,
         invvar_fits=invvar_fits,
