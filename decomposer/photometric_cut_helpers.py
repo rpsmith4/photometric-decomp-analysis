@@ -55,7 +55,7 @@ def _get_fits_header(hdu_or_path):
         raise TypeError("sci_fits must be a FITS filepath or HDU-like with header") from e
 
 
-def pixel_scale_from_header_arcsec_per_pix(sci_fits, return_axes=False):
+def pixel_scale_from_header_arcsec_per_pix(sci_fits, return_axes=False): # Should probably be 0.262 arcsec/pix for all galaxies in our sample.
     """Arcsec/pixel (geometric mean) from WCS; optionally the axes scales."""
     hdr = sci_fits.header
     w = WCS(hdr, naxis=2)  # force 2D celestial WCS

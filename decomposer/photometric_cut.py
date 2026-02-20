@@ -238,7 +238,7 @@ def photometric_cut(
 
     # Optional arrays
     msk = mask_fits if mask_fits is not None else None
-    inv = invvar_fits if invvar_fits is not None else None
+    inv = invvar_fits.data if invvar_fits is not None else None
 
     if msk is not None and msk.shape != sci.shape:
         raise ValueError(f"mask shape {msk.shape} != sci shape {sci.shape}")
@@ -564,7 +564,7 @@ def plot_dual_slit_mu_figure(
     data_color = "0.35"      # gray dots
 
     # --- load image/mask ---
-    sci = load_fits_array(sci_fits)
+    sci = sci_fits.data
     msk = load_fits_array(mask_fits) if mask_fits is not None else None
     bad = (msk > 0) if msk is not None else np.zeros_like(sci, dtype=bool)
 
