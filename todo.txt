@@ -10,3 +10,5 @@ May also want to add some labels to the functions as well as some column indicat
 
 
 Use pyimfit to make changing the parameters easier
+
+May also want to allow users to copy certain parameters from other bands to simplify things, or at least to be able to quickly open the galaxy folder in a file explorer
