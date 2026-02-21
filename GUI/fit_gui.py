@@ -21,6 +21,7 @@ from astropy.visualization import ImageNormalize
 import pyimfit
 import shutil
 import numpy as np
+import re
 
 LOCAL_DIR = "GUI"
 MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
@@ -205,6 +206,22 @@ class ParamSliderWidget(QWidget):
             'fixed': self.fixed_checkbox.isChecked()
         }
 
+def read_function_labels(config_path):
+    """
+    Reads function labels from a config file and returns a list of labels in order.
+    Each FUNCTION line may have a '# LABEL <label>' comment.
+    """
+    labels = []
+    with open(config_path, 'r') as f:
+        for line in f:
+            if line.strip().startswith('FUNCTION'):
+                m = re.search(r'# LABEL\s*(\S+)', line)
+                if m:
+                    labels.append(m.group(1))
+                else:
+                    labels.append(None)
+    return labels
+
 class MainWindow(QMainWindow):
     def __init__(self, p=None):
         super().__init__()
@@ -215,6 +232,7 @@ class MainWindow(QMainWindow):
         with open(os.path.join(MAINDIR, LOCAL_DIR, 'config.json')) as config:
             self.gui_config = json.load(config)
             config.close()
+    
 
         # Initializing widget types to make my autocomplete work
         self.currentgalaxytext: QTextBrowser = self.ui.currentgalaxytext
@@ -316,7 +334,11 @@ class MainWindow(QMainWindow):
         try:
             im = fits.getdata(os.path.join(galaxy_path, f"{fit_type}_{band}_composed.fits"))[idx]
         except:
-            im = np.array([])
+            # Regualar image fallback
+            if idx != 0:
+                im = np.array([])
+            else:
+                im = fits.getdata(os.path.join(galaxy_path, f"image_{band}.fits"))
         return im
 
     def getconfigim(self, galaxypath, band, fit_type, shape, maxThreads=4):
@@ -348,7 +370,14 @@ class MainWindow(QMainWindow):
         config_model = pyimfit.parse_config_file(config_path)
         self.current_config_model = config_model
         config_dict = config_model.getModelAsDict()
+        # Add function labels to config_dict
+        labels = read_function_labels(config_path)
         function_list = config_dict["function_sets"][0]["function_list"]
+        for i, func in enumerate(function_list):
+            if i < len(labels):
+                func['label'] = labels[i]
+            else:
+                func['label'] = None
         layout: QVBoxLayout = self.ui.configsliders
         # Reset the layout first
         try:
@@ -358,6 +387,14 @@ class MainWindow(QMainWindow):
             pass
         for func_idx, func in enumerate(function_list):
             params = func["parameters"]
+            label = func["label"]
+
+            label_text = QTextBrowser()
+            label_text.setText(label)
+            label_text.setFixedHeight(30)
+            label_text.setAlignment(QtCore.Qt.AlignCenter)
+            layout.addWidget(label_text)
+
             for param in params.keys():
                 initval = params[param][0]
                 fixed = False
@@ -370,7 +407,7 @@ class MainWindow(QMainWindow):
                     hilim = params[param][2]
 
                 # Use (func_idx, param) as key to distinguish duplicate param names
-                self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), layout)
+                self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), label, layout)
 
 
         try:
@@ -414,7 +451,7 @@ class MainWindow(QMainWindow):
                     self.clearLayout(item.layout())
                     # layout.removeItem(item)
  
-    def draw_params(self, initval, lowlim, hilim, fixed, paramkey, layout):
+    def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
         if not hasattr(self, 'param_widgets'):
             self.param_widgets = {}
         func_idx, paramname = paramkey
