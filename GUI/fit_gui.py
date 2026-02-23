@@ -345,8 +345,8 @@ class MainWindow(QMainWindow):
         try:
             model_desc = pyimfit.parse_config_file(os.path.join(galaxypath, f"{fit_type}_{band}.dat"))
             psf = fits.getdata(os.path.join(galaxypath, f"psf_patched_{band}.fits"))
-            # imfitter = pyimfit.Imfit(model_desc, psf=psf)
-            imfitter = pyimfit.Imfit(model_desc, maxThreads=maxThreads)
+            imfitter = pyimfit.Imfit(model_desc, psf=psf, maxThreads=maxThreads)
+            # imfitter = pyimfit.Imfit(model_desc, maxThreads=maxThreads)
             im = imfitter.getModelImage(shape=shape)
         except:
             im = np.array([])
