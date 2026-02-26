@@ -276,6 +276,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="fileexplorerbutton">
+       <property name="text">
+        <string>Open in (F)ile Explorer</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer name="verticalSpacer">
        <property name="orientation">
         <enum>Qt::Orientation::Vertical</enum>

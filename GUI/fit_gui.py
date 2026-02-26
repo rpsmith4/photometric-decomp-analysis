@@ -23,6 +23,19 @@ import shutil
 import numpy as np
 import re
 
+def open_folder(path): 
+    path = os.path.abspath(path) 
+    if sys.platform.startswith('win'): 
+        os.startfile(path)                   # Windows Explorer 
+    elif sys.platform == 'darwin': 
+        subprocess.run(['open', path])      # Finder on macOS 
+    else: 
+        # Linux: try xdg-open, then sensible-browser as fallback 
+        try: 
+            subprocess.run(['xdg-open', path], check=True) 
+        except Exception: 
+            subprocess.run(['gio', 'open', path], check=False) 
+
 LOCAL_DIR = "GUI"
 MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
 sys.path.append(os.path.join(MAINDIR, "decomposer"))
@@ -271,6 +284,10 @@ class MainWindow(QMainWindow):
         self.ui.cancelbutton.clicked.connect(self.cancel)
         self.ui.cancelbutton.setShortcut(QKeySequence("CTRL+C"))
 
+        self.ui.fileexplorerbutton.clicked.connect(self.open_gal_fileexplorer)
+        self.ui.fileexplorerbutton.setShortcut(QKeySequence("CTRL+F"))
+        
+
         # Get the fit type
         self.ui.fit_type_combo.currentTextChanged.connect(self.change_fit_type)
         self.fit_type = self.ui.fit_type_combo.currentText()
@@ -317,6 +334,9 @@ class MainWindow(QMainWindow):
         self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
         
         self.ui.show()
+
+    def open_gal_fileexplorer(self):
+        open_folder(self.selected_galaxy_path)
 
     def change_fit_type(self):
         self.fit_type = self.ui.fit_type_combo.currentText()
