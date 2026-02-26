@@ -1382,7 +1382,7 @@ def main():
     # print("Host results:", host_ellipse_results)
     # print("Polar results:", polar_ellipse_results)
 
-    TestFiles = get_galaxy_files(test_galaxy, fltr="r")
+    TestFiles = get_galaxy_files(test_galaxy, base="./GalaxyFiles", fltr = "r")
     sci_fits = TestFiles["science"]
     mask_fits = TestFiles["mask"]
     invvar_fits = TestFiles.get("invvar", None)
