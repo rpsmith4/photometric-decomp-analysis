@@ -41,7 +41,7 @@ def get_galaxy_files(name: str, base: str = "./", fltr: str = "r") -> Dict[str, 
         return None
 
     files = {
-        "science": first_match([f"image*{fltr}*interp.fits"]),
+        "science": first_match([f"image_{fltr}.fits"]),
         "invvar":  first_match([f"*image*{fltr}*invvar.fits"]),
         "psf":     first_match([f"psf_patched*{fltr}.fits"]),
         "mask":    first_match(["*mask_all.fits"]),
@@ -155,9 +155,10 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     sci_header = sci_fits.header
     cx, cy = sci_header["CRPIX1"], sci_header["CRPIX2"]
     
-
-    host_pa_imfit = pa_to_imfit(host_e["angle"].iloc[0])
-    polar_pa_imfit = pa_to_imfit(polar_e["angle"].iloc[0])
+    host_pa = host_e["angle"].iloc[0]
+    polar_pa = polar_e["angle"].iloc[0]
+    host_pa_imfit = pa_to_imfit(host_pa)
+    polar_pa_imfit = pa_to_imfit(polar_pa)
 
     host_ell = host_e["ell"].iloc[0]
     polar_ell = polar_e["ell"].iloc[0]
@@ -178,9 +179,9 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     results = dual_component_slits_and_sersic(
         sci_fits=sci_fits,
         host_center=(cx, cy),
-        host_pa=host_pa_imfit,
+        host_pa=host_pa,
         polar_center=(cx,cy),
-        polar_pa=polar_pa_imfit,
+        polar_pa=polar_pa,
         mask_fits=mask_fits,
         invvar_fits=invvar_fits,
         psf_fits=psf_fits,
@@ -195,6 +196,16 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
         refine_center=False,
         refine_kwargs=None,
         report_prefix=None,
+    )
+    from photometric_cut import plot_dual_slit_mu_figure
+
+    plot_dual_slit_mu_figure(
+        sci_fits=sci_fits,
+        mask_fits=mask_fits,
+        results=results,
+        title="Simultaneous Sérsic fit to Host & Polar cuts",
+        savepath=f"./test_fit.png",
+        show=True,
     )
 
     host_fit = results["host"]["fit"]
