@@ -238,6 +238,23 @@ def read_function_labels(config_path):
 class MainWindow(QMainWindow):
     def __init__(self, p=None):
         super().__init__()
+        # Apply global scaling for the application
+        scale_factor = 0.8  # Adjust this value for more/less scaling
+        app = QApplication.instance()
+        if app is not None:
+            # Set a global style sheet for smaller fonts and widgets
+            app.setStyleSheet(f"""
+                QWidget {{ font-size: {int(10*scale_factor)}pt; }}
+                QAbstractButton, QComboBox, QLineEdit, QTextEdit, QTextBrowser, QSpinBox, QDoubleSpinBox, QSlider {{
+                    min-height: {int(22*scale_factor)}px;
+                    min-width: {int(22*scale_factor)}px;
+                }}
+                QTreeView {{ font-size: {int(9*scale_factor)}pt; }}
+            """)
+        # Optionally, set a fixed window scale
+        self.setMinimumWidth(int(800*scale_factor))
+        self.setMinimumHeight(int(600*scale_factor))
+
         ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
         loader = QUiLoader()
         self.ui = loader.load(ui_file)
@@ -412,6 +429,7 @@ class MainWindow(QMainWindow):
             label_text = QTextBrowser()
             label_text.setText(label)
             label_text.setFixedHeight(30)
+            label_text.setMinimumWidth(50)
             label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
             label_text.setAlignment(QtCore.Qt.AlignCenter)
             layout.addWidget(label_text)
@@ -479,6 +497,7 @@ class MainWindow(QMainWindow):
         ndigits = 3
         widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits)
         # widget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Maximum)
+        widget.setMinimumWidth(100)
         layout.addWidget(widget)
         self.param_widgets[paramkey] = widget
         
