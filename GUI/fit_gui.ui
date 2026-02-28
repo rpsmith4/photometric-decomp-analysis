@@ -17,6 +17,9 @@
    <bool>false</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout" columnstretch="0,0,0,1">
+   <property name="sizeConstraint">
+    <enum>QLayout::SizeConstraint::SetNoConstraint</enum>
+   </property>
    <item row="2" column="3">
     <layout class="QVBoxLayout" name="verticalLayout_2">
      <item>

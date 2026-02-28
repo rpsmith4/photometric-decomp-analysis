@@ -412,6 +412,7 @@ class MainWindow(QMainWindow):
             label_text = QTextBrowser()
             label_text.setText(label)
             label_text.setFixedHeight(30)
+            label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
             label_text.setAlignment(QtCore.Qt.AlignCenter)
             layout.addWidget(label_text)
 
@@ -477,6 +478,7 @@ class MainWindow(QMainWindow):
         func_idx, paramname = paramkey
         ndigits = 3
         widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits)
+        # widget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Maximum)
         layout.addWidget(widget)
         self.param_widgets[paramkey] = widget
         
