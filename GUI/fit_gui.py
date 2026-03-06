@@ -43,7 +43,7 @@ import imfit_run
 import fit_monitor
 
 class PlotCanvas(FigureCanvas):
-    def __init__(self, parent=None):
+    def __init__(self, parent = None):
         fig = Figure(figsize=(250/100, 250/100), dpi=100)
         self.ax = fig.add_subplot(111)
         fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
@@ -120,10 +120,13 @@ class ParamSliderWidget(QWidget):
         self.fixed = fixed
 
         parameter_adjust_layout = QHBoxLayout()
+        parameter_adjust_layout.setContentsMargins(0,0,0,0)
 
         self.text = QTextBrowser()
         self.text.setText(str(paramname))
-        self.text.setFixedSize(50, 30)
+        self.text.setStyleSheet('font-size: 10px')
+        self.text.setMaximumSize(45,25)
+        self.text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum,QtWidgets.QSizePolicy.Policy.Maximum)
         self.text.setAlignment(QtCore.Qt.AlignCenter)
 
         self.fixed_checkbox = QCheckBox("Fixed")
@@ -238,8 +241,14 @@ def read_function_labels(config_path):
 class MainWindow(QMainWindow):
     def __init__(self, p=None):
         super().__init__()
+
+        # Loading the config file for the GUI
+        with open(os.path.join(MAINDIR, LOCAL_DIR, 'config.json')) as config:
+            self.gui_config = json.load(config)
+            config.close()
+
         # Apply global scaling for the application
-        scale_factor = 0.8  # Adjust this value for more/less scaling
+        scale_factor = self.gui_config["ui_scale"]
         app = QApplication.instance()
         if app is not None:
             # Set a global style sheet for smaller fonts and widgets
@@ -258,11 +267,6 @@ class MainWindow(QMainWindow):
         ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
         loader = QUiLoader()
         self.ui = loader.load(ui_file)
-        # Loading the config file for the GUI
-        with open(os.path.join(MAINDIR, LOCAL_DIR, 'config.json')) as config:
-            self.gui_config = json.load(config)
-            config.close()
-    
 
         # Initializing widget types to make my autocomplete work
         self.currentgalaxytext: QTextBrowser = self.ui.currentgalaxytext
@@ -428,7 +432,7 @@ class MainWindow(QMainWindow):
 
             label_text = QTextBrowser()
             label_text.setText(label)
-            label_text.setFixedHeight(30)
+            label_text.setMaximumHeight(30)
             label_text.setMinimumWidth(50)
             label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
             label_text.setAlignment(QtCore.Qt.AlignCenter)
