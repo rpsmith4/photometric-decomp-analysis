@@ -16,11 +16,11 @@
   <property name="autoFillBackground">
    <bool>false</bool>
   </property>
-  <layout class="QGridLayout" name="gridLayout" columnstretch="0,0,0,0">
+  <layout class="QGridLayout" name="gridLayout" columnstretch="0,0,0,0,0">
    <property name="sizeConstraint">
     <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
    </property>
-   <item row="2" column="2">
+   <item row="2" column="3">
     <layout class="QVBoxLayout" name="verticalLayout_3">
      <property name="spacing">
       <number>3</number>
@@ -322,7 +322,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
      </item>
     </layout>
    </item>
-   <item row="2" column="3">
+   <item row="2" column="4">
     <widget class="QScrollArea" name="scrollArea">
      <property name="minimumSize">
       <size>
@@ -446,7 +446,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
      </widget>
     </widget>
    </item>
-   <item row="2" column="0">
+   <item row="2" column="2">
     <widget class="QScrollArea" name="scrollArea_2">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
