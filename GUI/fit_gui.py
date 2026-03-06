@@ -43,7 +43,7 @@ import imfit_run
 import fit_monitor
 
 class PlotCanvas(FigureCanvas):
-    def __init__(self, parent=None):
+    def __init__(self, parent = None):
         fig = Figure(figsize=(250/100, 250/100), dpi=100)
         self.ax = fig.add_subplot(111)
         fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
@@ -120,10 +120,13 @@ class ParamSliderWidget(QWidget):
         self.fixed = fixed
 
         parameter_adjust_layout = QHBoxLayout()
+        parameter_adjust_layout.setContentsMargins(0,0,0,0)
 
         self.text = QTextBrowser()
         self.text.setText(str(paramname))
-        self.text.setFixedSize(50, 30)
+        self.text.setStyleSheet('font-size: 10px')
+        self.text.setMaximumSize(45,25)
+        self.text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum,QtWidgets.QSizePolicy.Policy.Maximum)
         self.text.setAlignment(QtCore.Qt.AlignCenter)
 
         self.fixed_checkbox = QCheckBox("Fixed")
@@ -239,21 +242,21 @@ class MainWindow(QMainWindow):
     def __init__(self, p=None):
         super().__init__()
         # Apply global scaling for the application
-        scale_factor = 0.8  # Adjust this value for more/less scaling
-        app = QApplication.instance()
-        if app is not None:
-            # Set a global style sheet for smaller fonts and widgets
-            app.setStyleSheet(f"""
-                QWidget {{ font-size: {int(10*scale_factor)}pt; }}
-                QAbstractButton, QComboBox, QLineEdit, QTextEdit, QTextBrowser, QSpinBox, QDoubleSpinBox, QSlider {{
-                    min-height: {int(22*scale_factor)}px;
-                    min-width: {int(22*scale_factor)}px;
-                }}
-                QTreeView {{ font-size: {int(9*scale_factor)}pt; }}
-            """)
-        # Optionally, set a fixed window scale
-        self.setMinimumWidth(int(800*scale_factor))
-        self.setMinimumHeight(int(600*scale_factor))
+        # scale_factor = 0.9  # Adjust this value for more/less scaling
+        # app = QApplication.instance()
+        # if app is not None:
+        #     # Set a global style sheet for smaller fonts and widgets
+        #     app.setStyleSheet(f"""
+        #         QWidget {{ font-size: {int(10*scale_factor)}pt; }}
+        #         QAbstractButton, QComboBox, QLineEdit, QTextEdit, QTextBrowser, QSpinBox, QDoubleSpinBox, QSlider {{
+        #             min-height: {int(22*scale_factor)}px;
+        #             min-width: {int(22*scale_factor)}px;
+        #         }}
+        #         QTreeView {{ font-size: {int(9*scale_factor)}pt; }}
+        #     """)
+        # # Optionally, set a fixed window scale
+        # self.setMinimumWidth(int(800*scale_factor))
+        # self.setMinimumHeight(int(600*scale_factor))
 
         ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
         loader = QUiLoader()
@@ -428,7 +431,7 @@ class MainWindow(QMainWindow):
 
             label_text = QTextBrowser()
             label_text.setText(label)
-            label_text.setFixedHeight(30)
+            label_text.setMaximumHeight(30)
             label_text.setMinimumWidth(50)
             label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
             label_text.setAlignment(QtCore.Qt.AlignCenter)
