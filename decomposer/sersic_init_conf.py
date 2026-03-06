@@ -54,18 +54,19 @@ def get_galaxy_files(name: str, base: str = "./", fltr: str = "r") -> Dict[str, 
 
 
 # --- parameterization & model writing --------------------------------------
-
+# This one is just used to get scaled bounds within a certain ratio of the original value rather than a fixed offset
 def _frac_bounds(val: float, frac: float, lo: Optional[float] = None, hi: Optional[float] = None) -> Tuple[float, float]:
     lower = max(lo if lo is not None else 0.0, val * (1 - frac))
     upper = min(hi if hi is not None else float("inf"), val * (1 + frac))
     return lower, upper
 
 
+# I'm pretty sure this function can go
 def _pad_comment(line: str, comment: str, width: int = 40) -> str:
     """Pad each parameter line so comments align at a fixed column."""
     return f"{line:<{width}}# {comment}"
 
-
+# Same with this one
 def _safe_ellipticity(d: Dict, fallback: float = 0.3) -> float:
     """
     Prefer 'ellipticity' if present/finite; else derive from axis_ratio if numeric; else fallback.
@@ -88,7 +89,7 @@ def _safe_ellipticity(d: Dict, fallback: float = 0.3) -> float:
 
 
 # def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -> tuple[str, float, float]:
-def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None) -> tuple[str, float, float]:
+def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None, zeropoint: float = None, pixel_scale: float = None) -> tuple[str, float, float]:
     """
     Generate an imfit 2xSersic config using:
       - geometry (center, PA, ellipticity) from ellipse_fit()
@@ -98,11 +99,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     Returns: (model, pixel_scale_arcsec_per_pix, zeropoint_mag)
     """
     import math
-    import textwrap
     from pathlib import Path
-
-    import table_info
-    # table_info.set_directory()
 
     # ---------- helpers (local, from scratch) ----------
     def clamp(x, lo, hi):
@@ -117,21 +114,24 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
             pass
         return default
 
-    def get_ellipticity(d, fallback=0.3):
-        # Prefer ellipticity; else derive from axis_ratio (b/a); else fallback.
-        e = safe_float(d.get("ellipticity", None), None)
-        if e is not None:
-            return clamp(e, 0.0, 0.95)
-        q = safe_float(d.get("axis_ratio", None), None)
-        if q is not None and q > 0:
-            return clamp(1.0 - q, 0.0, 0.95)
-        return clamp(float(fallback), 0.0, 0.95)
+    # # Pretty sure we always end up getting what we need without this one now and so it can probably be eliminated
+    # def get_ellipticity(d, fallback=0.3):
+    #     # Prefer ellipticity; else derive from axis_ratio (b/a); else fallback.
+    #     e = safe_float(d.get("ellipticity", None), None)
+    #     if e is not None:
+    #         return clamp(e, 0.0, 0.95)
+    #     q = safe_float(d.get("axis_ratio", None), None)
+    #     if q is not None and q > 0:
+    #         return clamp(1.0 - q, 0.0, 0.95)
+    #     return clamp(float(fallback), 0.0, 0.95)
 
+    # This one is a simple one to convert between the PA from the ellipse fit results to the PA used by imfit, I don't know why they are fundamentally offset but they are.
     def pa_to_imfit(pa_deg):
         # User-requested conversion: add 90 deg.
         # Keep in [0,180) because PA has 180-deg degeneracy for ellipses.
         return (float(pa_deg) + 90.0) % 180.0
 
+    # Every now and then it seems really helpful to convert between magnitude and intensity space.
     def mu_e_to_Ie_pix(mu_e, zeropoint, pixscale_arcsec):
         # mu [mag/arcsec^2] = ZP - 2.5 log10(I_arcsec2)
         # => I_arcsec2 = 10^((ZP - mu)/2.5)
@@ -140,20 +140,23 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
         return I_as2 * (float(pixscale_arcsec) ** 2)
 
     # ---------- ellipse geometry ----------
-    from photometric_cut_helpers import ellipse_fit, pixel_scale_from_header_arcsec_per_pix
+    from photometric_cut_helpers import pixel_scale_from_header_arcsec_per_pix# , ellipse_fit <- now passing in as pd.DataFrame explicitly before this point.
 
+    # ellipse_fit_data["ell"] = 1-ellipse_fit_data["axis_ratio"]
     ellipse_fit_data["ell"] = 1-ellipse_fit_data["axis_ratio"]
     host_e = ellipse_fit_data[ellipse_fit_data["label"] == "Host"]
     polar_e = ellipse_fit_data[ellipse_fit_data["label"] == "Polar"]
-    # host_e, polar_e = ellipse_fit(name)
+ 
+    if pixel_scale is None:
+        pixel_scale = float(pixel_scale_from_header_arcsec_per_pix(sci_fits))
 
-    pixel_scale = float(pixel_scale_from_header_arcsec_per_pix(sci_fits))
-    zeropoint = 22.5  # keep consistent with your 1-D mu conversion unless you intentionally change it
+    if zeropoint is None: 
+        zeropoint = 22.5  # This is the magnitude zeropoint from DESI data. I assume that for our purposes, we are always going to use DESI-downloaded images, but I think for generalization purposes, it would be good to be able to pass in explicitly as an option.
 
     # Geometry from ellipse fitting
     # cx, cy = host_e["x_center"], host_e["y_center"]  # shared center
     sci_header = sci_fits.header
-    cx, cy = sci_header["CRPIX1"], sci_header["CRPIX2"]
+    cx, cy = sci_header["CRPIX1"], sci_header["CRPIX2"] # IMO this is the best method to try to find the center. Perhaps with a centroiding algorithm to add in.
     
     host_pa = host_e["angle"].iloc[0]
     polar_pa = polar_e["angle"].iloc[0]
@@ -169,9 +172,26 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     # polar_a = safe_float(polar_e.get("semi_major_axis", None), None)
     host_a = host_e["semi_major"].iloc[0] # Jank at the moment, don't want to just index into the series, probably will just select single values some other way idk
     polar_a = polar_e["semi_major"].iloc[0]
+
     host_len = int(max(200, 2.5 * host_a)) if host_a is not None else 300
     polar_len = int(max(250, 2.5 * polar_a)) if polar_a is not None else 450
 
+    pa_diff = host_e["pa_diff"].iloc[0]
+    # Trying to refine the 1-D fitting by getting better constraints on the bounds in which to fit both host and polar components. Make it so that it stops failing. There's a lot of work to be done here:
+    if host_a < polar_a:
+        polar_rmin = host_a*(1-polar_ell)/np.sqrt((1-host_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2)
+        if polar_a > 8*polar_rmin:
+            polar_rmin *= 4
+        host_rmin = 0*host_a
+    if polar_a < host_a:
+        host_rmin = polar_a*(1-polar_ell)/np.sqrt((1-polar_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2)
+        if host_a > 8*host_rmin:
+            host_rmin *= 4
+        polar_rmin = 0*polar_a
+    host_rmin *= pixel_scale
+    polar_rmin *= pixel_scale
+    # print((host_rmin, polar_rmin)) # Just to test how it's doing
+    
     # ---------- photometric estimates (n, Re_arcsec, mu_e) ----------
     # This calls your new machinery in photometric_cut.py
     from photometric_cut import dual_component_slits_and_sersic
@@ -191,23 +211,25 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
         polar_length_pix=polar_len,
         width_pix=7.0,
         oversample=2,
-        subtract_background=False,
-        background_region="ends",
+        #subtract_background=False,
+        #background_region="ends",
         refine_center=False,
         refine_kwargs=None,
         report_prefix=None,
+        host_R_min_arcsec=host_rmin,
+        polar_R_min_arcsec=polar_rmin,
     )
     from photometric_cut import plot_dual_slit_mu_figure
 
-    plot_dual_slit_mu_figure(
-        sci_fits=sci_fits,
-        mask_fits=mask_fits,
-        results=results,
-        title="Simultaneous Sérsic fit to Host & Polar cuts",
-        savepath=f"./test_fit.png",
-        show=True,
-    )
-
+    # plot_dual_slit_mu_figure(
+    #     sci_fits=sci_fits,
+    #     mask_fits=mask_fits,
+    #     results=results,
+    #     title="Simultaneous Sérsic fit to Host & Polar cuts",
+    #     savepath=f"./test_fit.png",
+    #     show=True,
+    # )
+    
     host_fit = results["host"]["fit"]
     polar_fit = results["polar"]["fit"]
 
@@ -232,6 +254,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     y0_lo, y0_hi = cy - c_tol, cy + c_tol
 
     # We should also provide some justifications as to why we choose these bounds
+    # Jonah: I'll test a few and see how the bounds are looking to determine appropriate, reasonable bounds based off of what seems truly impactful for the fit.
 
     # PA bounds (deg)
     pa_tol = 2.0 # 10 was too much I think
@@ -310,12 +333,35 @@ def main():
     import table_info 
     table_info.set_directory()
     import glob
+   # from photometric_cut_helpers import ellipse_fit
 
     galaxy_dirs = glob.glob("./GalaxyFiles/*")
     if not galaxy_dirs:
         raise RuntimeError("No ./GalaxyFiles/* directories found.")
     test_galaxy = os.path.basename(galaxy_dirs[0])
-    _ = gather_parameters(test_galaxy, fltr="r")
+    
+
+    # gather ellipse fit results
+    csvs = glob.glob(os.path.join(Path("./EllipseFitResults/", "*.csv")))
+    ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
+    for csv in csvs:
+        dat = pd.read_csv(csv)
+        ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+    ellipse_fit_data_gal = ellipse_fit_data[ellipse_fit_data["file"] == test_galaxy]
+
+    # gather infromation from the master_table.csv (currently unused)
+    master_table_csv = "master_table.csv"
+    master_table_data = pd.DataFrame(columns=["NAME", "PSG_TYPE_1","PSG_TYPE_2", "CATEGORY_1", "CATEGORY_2", "MORPHTYPE"])
+    dat_master_table = pd.read_csv(master_table_csv)
+    master_table_data = pd.concat([master_table_data, dat_master_table])
+    master_table_data_gal = master_table_data[master_table_data["NAME"] == test_galaxy]
+    print(master_table_data_gal)
+    print("Host Morphological Type: " + master_table_data_gal["MORPHTYPE"].iloc[0])
+
+    from astropy.io import fits
+    gal_file = "./GalaxyFiles/" + test_galaxy + "/image_g.fits"
+    sci_fits = fits.open(gal_file)[0]
+    _ = gather_parameters('r', sci_fits, ellipse_fit_data=ellipse_fit_data_gal, zeropoint = 22.5, pixel_scale= 0.262)
     return
 
 
