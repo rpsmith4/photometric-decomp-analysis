@@ -241,31 +241,32 @@ def read_function_labels(config_path):
 class MainWindow(QMainWindow):
     def __init__(self, p=None):
         super().__init__()
-        # Apply global scaling for the application
-        # scale_factor = 0.9  # Adjust this value for more/less scaling
-        # app = QApplication.instance()
-        # if app is not None:
-        #     # Set a global style sheet for smaller fonts and widgets
-        #     app.setStyleSheet(f"""
-        #         QWidget {{ font-size: {int(10*scale_factor)}pt; }}
-        #         QAbstractButton, QComboBox, QLineEdit, QTextEdit, QTextBrowser, QSpinBox, QDoubleSpinBox, QSlider {{
-        #             min-height: {int(22*scale_factor)}px;
-        #             min-width: {int(22*scale_factor)}px;
-        #         }}
-        #         QTreeView {{ font-size: {int(9*scale_factor)}pt; }}
-        #     """)
-        # # Optionally, set a fixed window scale
-        # self.setMinimumWidth(int(800*scale_factor))
-        # self.setMinimumHeight(int(600*scale_factor))
 
-        ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
-        loader = QUiLoader()
-        self.ui = loader.load(ui_file)
         # Loading the config file for the GUI
         with open(os.path.join(MAINDIR, LOCAL_DIR, 'config.json')) as config:
             self.gui_config = json.load(config)
             config.close()
-    
+
+        # Apply global scaling for the application
+        scale_factor = self.gui_config["ui_scale"]
+        app = QApplication.instance()
+        if app is not None:
+            # Set a global style sheet for smaller fonts and widgets
+            app.setStyleSheet(f"""
+                QWidget {{ font-size: {int(10*scale_factor)}pt; }}
+                QAbstractButton, QComboBox, QLineEdit, QTextEdit, QTextBrowser, QSpinBox, QDoubleSpinBox, QSlider {{
+                    min-height: {int(22*scale_factor)}px;
+                    min-width: {int(22*scale_factor)}px;
+                }}
+                QTreeView {{ font-size: {int(9*scale_factor)}pt; }}
+            """)
+        # Optionally, set a fixed window scale
+        self.setMinimumWidth(int(800*scale_factor))
+        self.setMinimumHeight(int(600*scale_factor))
+
+        ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_gui.ui'))
+        loader = QUiLoader()
+        self.ui = loader.load(ui_file)
 
         # Initializing widget types to make my autocomplete work
         self.currentgalaxytext: QTextBrowser = self.ui.currentgalaxytext

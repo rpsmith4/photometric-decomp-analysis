@@ -13,5 +13,6 @@
         "return": "#bdba35",
         "unable": "#bd3535"
     },
-    "imfit_maxthreads" : 4
+    "imfit_maxthreads" : 4,
+    "ui_scale": 1
 }
