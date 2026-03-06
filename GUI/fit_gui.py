@@ -133,35 +133,48 @@ class ParamSliderWidget(QWidget):
         self.fixed_checkbox.setChecked(fixed)
 
         self.slider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.slider.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,QtWidgets.QSizePolicy.Policy.Maximum)
         self.slider.setRange(int(lowlim * self.scale), int(hilim * self.scale))
-        self.slider.setTickInterval(5)
+        # self.slider.setTickInterval(5)
+        self.slider.setSingleStep(1)
         self.slider.setValue(int(initval * self.scale))
 
         parameter_adjust_layout.addWidget(self.text)
         parameter_adjust_layout.addWidget(self.slider)
         parameter_adjust_layout.addWidget(self.fixed_checkbox)
+        parameter_adjust_layout.setStretchFactor(self.slider, 2)
 
         spinboxes_layout = QHBoxLayout()
-        self.minspinbox = QDoubleSpinBox()
-        self.minspinbox.setDecimals(ndigits)
+        from scientific_spinbox import ScientificDoubleSpinBox
+        self.minspinbox = ScientificDoubleSpinBox()
+        # self.minspinbox.setDecimals(ndigits)
+        spinbox_minwidth = 10
         self.minspinbox.setMaximum(hilim)
         self.minspinbox.setMinimum(-1e9)
         self.minspinbox.setValue(lowlim)
-        self.minspinbox.setMaximumWidth(65)
+        self.minspinbox.setMaximumWidth(100)
+        self.minspinbox.setMinimumWidth(spinbox_minwidth)
+        self.minspinbox.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
-        self.valspinbox = QDoubleSpinBox()
-        self.valspinbox.setDecimals(ndigits)
+        self.valspinbox = ScientificDoubleSpinBox()
+        # self.valspinbox.setDecimals(ndigits)
         self.valspinbox.setMaximum(hilim)
         self.valspinbox.setMinimum(lowlim)
         self.valspinbox.setValue(initval)
-        self.valspinbox.setMaximumWidth(65)
+        self.valspinbox.setMaximumWidth(100)
+        self.valspinbox.setMinimumWidth(spinbox_minwidth)
+        self.valspinbox.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
-        self.maxspinbox = QDoubleSpinBox()
-        self.maxspinbox.setDecimals(ndigits)
+        self.maxspinbox = ScientificDoubleSpinBox()
+        # self.maxspinbox.setDecimals(ndigits)
+        self.maxspinbox.setSingleStep(1e-2)
         self.maxspinbox.setMinimum(lowlim)
         self.maxspinbox.setMaximum(1e9)
         self.maxspinbox.setValue(hilim)
-        self.maxspinbox.setMaximumWidth(65)
+        self.maxspinbox.setMaximumWidth(100)
+        self.maxspinbox.setMinimumWidth(spinbox_minwidth)
+        self.maxspinbox.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        # self.maxspinbox.setFont("arial: size=20px")
 
         spinboxes_layout.addWidget(self.minspinbox)
         spinboxes_layout.addWidget(self.valspinbox)
@@ -499,7 +512,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'param_widgets'):
             self.param_widgets = {}
         func_idx, paramname = paramkey
-        ndigits = 3
+        ndigits = 6
         widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits)
         # widget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Maximum)
         widget.setMinimumWidth(100)
