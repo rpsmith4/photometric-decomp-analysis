@@ -297,6 +297,7 @@ class MainWindow(QMainWindow):
         self.ui.markunable.clicked.connect(lambda: self.markgalaxy("unable"))
         self.ui.markunable.setShortcut(QKeySequence("u"))
         self.ui.saveconfigbutton.clicked.connect(self.saveconfig)
+        self.ui.saveconfigbutton.setShortcut(QKeySequence("CTRL+S"))
 
         self.ui.opends9button.clicked.connect(self.open_ds9)
         self.ui.opends9button.setShortcut(QKeySequence("O"))
