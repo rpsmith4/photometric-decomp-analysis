@@ -49,7 +49,7 @@ from photometric_cut_helpers import (
 
 ArrayLike = Union[np.ndarray, str, Path]
 
-
+# I'm pretty sure the PSF is typically normalized already, so I'll check if this is actually at all important
 def _normalize_kernel(psf: np.ndarray) -> np.ndarray:
     psf = np.asarray(psf, float)
     psf = np.where(np.isfinite(psf), psf, 0.0)
@@ -58,57 +58,58 @@ def _normalize_kernel(psf: np.ndarray) -> np.ndarray:
         raise ValueError("PSF kernel sum <= 0; cannot normalize.")
     return psf / s
 
+# # Pretty sure the background is also usually dealt with prior to any of this work. I think it is safe to remove background estimation and just make sure that processed .fits files are what is passed in.
+# def _estimate_background(img: np.ndarray, region_mask: np.ndarray) -> Tuple[float, float]:
+#     """
+#     Robust-ish background estimate from selected pixels.
+#     Returns (median, robust_sigma).
+#     """
+#     vals = img[region_mask & np.isfinite(img)]
+#     if vals.size < 50:
+#         return 0.0, np.nan
+#     med = float(np.nanmedian(vals))
+#     mad = float(np.nanmedian(np.abs(vals - med)))
+#     sigma = 1.4826 * mad if np.isfinite(mad) else np.nan
+#     return med, sigma
 
-def _estimate_background(img: np.ndarray, region_mask: np.ndarray) -> Tuple[float, float]:
-    """
-    Robust-ish background estimate from selected pixels.
-    Returns (median, robust_sigma).
-    """
-    vals = img[region_mask & np.isfinite(img)]
-    if vals.size < 50:
-        return 0.0, np.nan
-    med = float(np.nanmedian(vals))
-    mad = float(np.nanmedian(np.abs(vals - med)))
-    sigma = 1.4826 * mad if np.isfinite(mad) else np.nan
-    return med, sigma
+# # This is also only used in the background subtraction which I don't think is important at all, and will certainly break when I do other work. If background subtraction is needed later, then that can be a separate step before all of this is done.
+# def _build_endcaps_region_mask(
+#     shape: Tuple[int, int],
+#     center_xy: Tuple[float, float],
+#     pa_deg: float,
+#     length_pix: float,
+#     width_pix: float,
+#     endcap_frac: float = 0.18,
+# ) -> np.ndarray:
+#     """
+#     Select “ends of slit” pixels (a rectangular endcap at each end) in a raster sense.
+#     Used for background estimation. This is approximate but works well in practice.
+#     """
+#     ny, nx = shape
+#     x0, y0 = center_xy
+#     th = np.deg2rad(pa_deg)
+#     u = np.array([np.cos(th), np.sin(th)])       # along slit
+#     v = np.array([-np.sin(th), np.cos(th)])      # across slit
+
+#     L2 = 0.5 * float(length_pix)
+#     W = 0.5 * float(width_pix)
+#     cap = float(endcap_frac) * (2 * L2)
+#     cap = max(cap, 5.0)
+
+#     # Coordinate grid
+#     yy, xx = np.mgrid[0:ny, 0:nx]
+#     dx = xx - x0
+#     dy = yy - y0
+
+#     s = dx * u[0] + dy * u[1]   # along-axis coordinate
+#     t = dx * v[0] + dy * v[1]   # cross-axis coordinate
+
+#     in_width = np.abs(t) <= W
+#     in_ends = (np.abs(s) >= (L2 - cap)) & (np.abs(s) <= L2)
+#     return in_width & in_ends
 
 
-def _build_endcaps_region_mask(
-    shape: Tuple[int, int],
-    center_xy: Tuple[float, float],
-    pa_deg: float,
-    length_pix: float,
-    width_pix: float,
-    endcap_frac: float = 0.18,
-) -> np.ndarray:
-    """
-    Select “ends of slit” pixels (a rectangular endcap at each end) in a raster sense.
-    Used for background estimation. This is approximate but works well in practice.
-    """
-    ny, nx = shape
-    x0, y0 = center_xy
-    th = np.deg2rad(pa_deg)
-    u = np.array([np.cos(th), np.sin(th)])       # along slit
-    v = np.array([-np.sin(th), np.cos(th)])      # across slit
-
-    L2 = 0.5 * float(length_pix)
-    W = 0.5 * float(width_pix)
-    cap = float(endcap_frac) * (2 * L2)
-    cap = max(cap, 5.0)
-
-    # Coordinate grid
-    yy, xx = np.mgrid[0:ny, 0:nx]
-    dx = xx - x0
-    dy = yy - y0
-
-    s = dx * u[0] + dy * u[1]   # along-axis coordinate
-    t = dx * v[0] + dy * v[1]   # cross-axis coordinate
-
-    in_width = np.abs(t) <= W
-    in_ends = (np.abs(s) >= (L2 - cap)) & (np.abs(s) <= L2)
-    return in_width & in_ends
-
-
+# Conversions between intensity and flux are helpful.
 def _mu_from_I(I: np.ndarray, zeropoint: float, pixscale_arcsec: float) -> np.ndarray:
     """
     Convert linear flux per pixel to mag/arcsec^2.
@@ -132,10 +133,10 @@ def _write_cut_report_txt(
     refine_center: bool,
     center_init: Tuple[float, float],
     center_final: Tuple[float, float],
-    subtract_background: bool,
-    background_region: str,
-    background_estimate: Optional[float],
-    background_sigma: Optional[float],
+    #subtract_background: bool,
+    #background_region: str,
+    #background_estimate: Optional[float],
+    #background_sigma: Optional[float],
     refine_metric: Optional[float] = None,
     note: Optional[str] = None,
 ):
@@ -155,17 +156,17 @@ def _write_cut_report_txt(
     else:
         lines.append(f"refine_metric: {float(refine_metric):.8g}")
     lines.append("")
-    lines.append("[background]")
-    lines.append(f"subtract_background: {bool(subtract_background)}")
-    lines.append(f"background_region: {str(background_region)}")
-    if background_estimate is None:
-        lines.append("background_estimate: None (not computed)")
-    else:
-        lines.append(f"background_estimate: {float(background_estimate):.8g}   # image units per pixel")
-    if background_sigma is None:
-        lines.append("background_sigma_robust: None")
-    else:
-        lines.append(f"background_sigma_robust: {float(background_sigma):.8g}   # robust sigma (MAD*1.4826)")
+    # lines.append("[background]")
+    # lines.append(f"subtract_background: {bool(subtract_background)}")
+    # lines.append(f"background_region: {str(background_region)}")
+    # if background_estimate is None:
+    #     lines.append("background_estimate: None (not computed)")
+    # else:
+    #     lines.append(f"background_estimate: {float(background_estimate):.8g}   # image units per pixel")
+    # if background_sigma is None:
+    #     lines.append("background_sigma_robust: None")
+    # else:
+    #     lines.append(f"background_sigma_robust: {float(background_sigma):.8g}   # robust sigma (MAD*1.4826)")
     if note:
         lines.append("")
         lines.append("[note]")
@@ -191,10 +192,10 @@ def photometric_cut(
     # photometric calibration (only needed for mu; relative ZP is fine)
     zeropoint: float = 22.5,
     pixel_scale_arcsec: Optional[float] = None,
-    # background handling
-    subtract_background: bool = False,
-    background_region: str = "ends",   # "ends" or "none"
-    endcap_frac: float = 0.18,
+    # # background handling
+    # subtract_background: bool = False,
+    # background_region: str = "ends",   # "ends" or "none"
+    #endcap_frac: float = 0.18,
     # interpolation
     interpolation_order: int = 1,
     # center refinement (folding metric)
@@ -267,8 +268,8 @@ def photometric_cut(
         rk.setdefault("search_radius_pix", 8)
         rk.setdefault("step_pix", 1)
         rk.setdefault("oversample", oversample)
-        rk.setdefault("subtract_background", subtract_background)
-        rk.setdefault("background_region", background_region)
+        #rk.setdefault("subtract_background", subtract_background)
+        #rk.setdefault("background_region", background_region)
 
         best_center, best_metric = refine_center_by_folding( # What is this even doing ??? We already know that the center of the image is the center of the galaxy
             sci_fits=sci_fits,
@@ -289,29 +290,29 @@ def photometric_cut(
         center_refine_metric = float(best_metric) if best_metric is not None else None
 
     # Background subtraction (estimated from slit endcaps) # Background is already removed, though there is sensor noise, but can't really subtract that since its a gaussian with mean 0
-    background_estimate: Optional[float] = None
-    background_sigma_robust: Optional[float] = None
+    #background_estimate: Optional[float] = None
+    #background_sigma_robust: Optional[float] = None
 
-    if subtract_background and str(background_region).lower() == "ends":
-        region_mask = _build_endcaps_region_mask(
-            shape=sci.shape,
-            center_xy=center_xy_used,
-            pa_deg=pa_deg,
-            length_pix=length_pix,
-            width_pix=width_pix,
-            endcap_frac=endcap_frac,
-        )
-        region_mask = region_mask & (~bad)
+    # if subtract_background and str(background_region).lower() == "ends":
+    #     region_mask = _build_endcaps_region_mask(
+    #         shape=sci.shape,
+    #         center_xy=center_xy_used,
+    #         pa_deg=pa_deg,
+    #         length_pix=length_pix,
+    #         width_pix=width_pix,
+    #         endcap_frac=endcap_frac,
+    #     )
+    #     region_mask = region_mask & (~bad)
 
-        bg, bg_sigma = _estimate_background(sci, region_mask)
-        # Treat non-finite as "not computed"
-        if np.isfinite(bg):
-            background_estimate = float(bg)
-            background_sigma_robust = float(bg_sigma) if np.isfinite(bg_sigma) else None
-            sci = sci - background_estimate
-        else:
-            background_estimate = None
-            background_sigma_robust = None
+        # bg, bg_sigma = _estimate_background(sci, region_mask)
+        # # Treat non-finite as "not computed"
+        # if np.isfinite(bg):
+        #     background_estimate = float(bg)
+        #     background_sigma_robust = float(bg_sigma) if np.isfinite(bg_sigma) else None
+        #     sci = sci - background_estimate
+        # else:
+        #     background_estimate = None
+        #     background_sigma_robust = None
 
     # Debug overlay
     if show_slit or slit_overlay_savepath:
@@ -428,8 +429,8 @@ def photometric_cut(
         "mu": mu,
         "mu_err": mu_err,
         "frac_good": frac_good,
-        "background_estimate": background_estimate,
-        "background_sigma_robust": background_sigma_robust,
+        #"background_estimate": background_estimate,
+        #"background_sigma_robust": background_sigma_robust,
     }
 
     out["valid"] = np.isfinite(I) & (frac_good > 0)
@@ -443,10 +444,10 @@ def photometric_cut(
             refine_center=bool(refine_center),
             center_init=center_xy_initial,
             center_final=center_xy_used,
-            subtract_background=bool(subtract_background),
-            background_region=str(background_region),
-            background_estimate=background_estimate,
-            background_sigma=background_sigma_robust,
+            #subtract_background=bool(subtract_background),
+            #background_region=str(background_region),
+            #background_estimate=background_estimate,
+            #background_sigma=background_sigma_robust,
             refine_metric=center_refine_metric,
             note=report_note,
         )
@@ -819,8 +820,8 @@ def refine_center_by_folding(
     center_xy_init,
     zeropoint=22.5,
     oversample=1,
-    subtract_background=True,
-    background_region="ends",
+    #subtract_background=True,
+    #background_region="ends",
     # search controls
     search_radius_pix=8,
     step_pix=1,
@@ -875,9 +876,9 @@ def refine_center_by_folding(
             psf_fits=psf_fits,
             zeropoint=zeropoint,
             pixel_scale_arcsec=pixel_scale,
-            subtract_background=subtract_background,
-            background_region=background_region,
-            endcap_frac=0.18,  # keep default unless you add as an arg
+            #subtract_background=subtract_background,
+            #background_region=background_region,
+            #endcap_frac=0.18,  # keep default unless you add as an arg
             interpolation_order=interpolation_order,
             refine_center=False,     # <-- critical: prevent recursion
             refine_kwargs=None,
@@ -1045,12 +1046,12 @@ def dual_component_slits_and_sersic(
     oversample=2,
     # fitting controls
     host_R_min_arcsec=0.0,
-    polar_R_min_arcsec=None,          # if set, overrides scaling rule
+    polar_R_min_arcsec=0.0,          # if set, overrides scaling rule
     polar_R_min_hostRe_factor=3.5,    # default: exclude inner 3.5 * host Re
     min_frac_good=0.5,
     # background (you defaulted off; keep explicit)
-    subtract_background=False,
-    background_region="ends",
+    #subtract_background=False,
+    #background_region="ends",
     # center refine options (optional)
     refine_center=False,
     refine_kwargs=None,
@@ -1075,8 +1076,8 @@ def dual_component_slits_and_sersic(
         psf_fits=psf_fits,
         zeropoint=zeropoint,
         pixel_scale_arcsec=pixel_scale_arcsec,
-        subtract_background=subtract_background,
-        background_region=background_region,
+        #subtract_background=subtract_background,
+        #background_region=background_region,
         refine_center=refine_center,
         refine_kwargs=refine_kwargs,
         report_txt_path=host_report,
@@ -1095,8 +1096,8 @@ def dual_component_slits_and_sersic(
         psf_fits=psf_fits,
         zeropoint=zeropoint,
         pixel_scale_arcsec=pixel_scale_arcsec,
-        subtract_background=subtract_background,
-        background_region=background_region,
+        #subtract_background=subtract_background,
+        #background_region=background_region,
         refine_center=refine_center,
         refine_kwargs=refine_kwargs,
         report_txt_path=polar_report,
@@ -1110,12 +1111,13 @@ def dual_component_slits_and_sersic(
     # Fit host Sérsic
     host_fit = fit_sersic_mu(Rh, muh, muh_err, R_min_arcsec=host_R_min_arcsec) # While I think this is a good idea, its also verging on
     # just "fitting before the fitting". It is something I trid but it doesn't really work well, unless this is just a 1d fit
+    # Jonah: It is just a 1-D fit
 
     # Decide polar inner cutoff
     polar_Rmin_used = None
     if polar_R_min_arcsec is not None:
         polar_Rmin_used = float(polar_R_min_arcsec)
-    else:
+    else: # Need to adjust this cutoff as for many objects it ends up being much to stringent. I'm playing around with what to do atm.
         if host_fit.get("success", False):
             f = float(polar_R_min_hostRe_factor)
             polar_Rmin_used = f * float(host_fit["Re_arcsec"])
@@ -1420,8 +1422,6 @@ def main():
         polar_R_min_arcsec=None,          # if set, overrides scaling rule
         polar_R_min_hostRe_factor=3.5,    # default: exclude inner 3.5 * host Re
         min_frac_good=0.5,
-        subtract_background=False,
-        background_region="ends",
         refine_center=False,      # keep False for first test; turn on after you like the behavior
         refine_kwargs=None,
         report_prefix=report_prefix,
