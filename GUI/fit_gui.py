@@ -257,6 +257,127 @@ def read_function_labels(config_path):
                     labels.append(None)
     return labels
 
+class CopyParametersDialog(QDialog):
+    """Dialog for copying parameters from one band to another."""
+    
+    def __init__(self, galaxy_path, current_band, fit_type, parent=None):
+        super().__init__(parent)
+        self.galaxy_path = galaxy_path
+        self.current_band = current_band
+        self.fit_type = fit_type
+        self.source_band = None
+        self.source_config = None
+        self.setWindowTitle("Copy Parameters From Band")
+        self.setMinimumWidth(400)
+        self.setMinimumHeight(500)
+        
+        layout = QVBoxLayout()
+        
+        # Band selection
+        band_layout = QHBoxLayout()
+        band_label = QLabel("Copy from band:")
+        self.band_combo = QComboBox()
+        available_bands = [b for b in ["g", "r", "i", "z"] if b != current_band]
+        self.band_combo.addItems(available_bands)
+        self.band_combo.currentTextChanged.connect(self.on_band_changed)
+        band_layout.addWidget(band_label)
+        band_layout.addWidget(self.band_combo)
+        band_layout.addStretch()
+        layout.addLayout(band_layout)
+        
+        # Parameter list with checkboxes
+        param_label = QLabel("Select parameters to copy:")
+        layout.addWidget(param_label)
+        
+        self.param_list = QListWidget()
+        self.param_list.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        layout.addWidget(self.param_list)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        select_all_btn = QPushButton("Select All")
+        select_all_btn.clicked.connect(self.select_all)
+        clear_all_btn = QPushButton("Clear All")
+        clear_all_btn.clicked.connect(self.clear_all)
+        button_layout.addWidget(select_all_btn)
+        button_layout.addWidget(clear_all_btn)
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+        
+        # Dialog buttons
+        dialog_button_layout = QHBoxLayout()
+        copy_btn = QPushButton("Copy Selected")
+        cancel_btn = QPushButton("Cancel")
+        copy_btn.clicked.connect(self.accept)
+        cancel_btn.clicked.connect(self.reject)
+        dialog_button_layout.addStretch()
+        dialog_button_layout.addWidget(copy_btn)
+        dialog_button_layout.addWidget(cancel_btn)
+        layout.addLayout(dialog_button_layout)
+        
+        self.setLayout(layout)
+        
+        # Load initial band
+        self.on_band_changed(self.band_combo.currentText())
+    
+    def on_band_changed(self, band):
+        """Load parameters from the selected source band."""
+        self.source_band = band
+        self.param_list.clear()
+        
+        config_path = os.path.join(self.galaxy_path, f"{self.fit_type}_{band}.dat")
+        try:
+            self.source_config = pyimfit.parse_config_file(config_path)
+            config_dict = self.source_config.getModelAsDict()
+            function_list = config_dict["function_sets"][0]["function_list"]
+            
+            # Load function labels
+            labels = read_function_labels(config_path)
+            
+            # Populate the list
+            for func_idx, func in enumerate(function_list):
+                params = func["parameters"]
+                label = labels[func_idx] if func_idx < len(labels) else None
+                
+                # Add header for function
+                label_text = f"{label}" if label else f"Function {func_idx}"
+                header_item = QListWidgetItem(label_text)
+                header_item.setFlags(header_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
+                header_font = header_item.font()
+                header_font.setBold(True)
+                header_item.setFont(header_font)
+                self.param_list.addItem(header_item)
+                
+                # Add parameters
+                for param_name in params.keys():
+                    item_text = f"  └─ {param_name}"
+                    item = QListWidgetItem(item_text)
+                    item.setData(QtCore.Qt.UserRole, (func_idx, param_name))
+                    self.param_list.addItem(item)
+        
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Could not load config from band {band}: {str(e)}")
+    
+    def select_all(self):
+        """Select all parameter items (exclude headers)."""
+        for i in range(self.param_list.count()):
+            item = self.param_list.item(i)
+            if item.data(QtCore.Qt.UserRole) is not None:
+                self.param_list.setItemSelected(item, True)
+    
+    def clear_all(self):
+        """Deselect all items."""
+        self.param_list.clearSelection()
+    
+    def get_selected_parameters(self):
+        """Return list of selected (func_idx, param_name) tuples."""
+        selected = []
+        for item in self.param_list.selectedItems():
+            data = item.data(QtCore.Qt.UserRole)
+            if data is not None:
+                selected.append(data)
+        return selected
+
 class MainWindow(QMainWindow):
     def __init__(self, p=None):
         super().__init__()
@@ -328,6 +449,9 @@ class MainWindow(QMainWindow):
         self.ui.fileexplorerbutton.clicked.connect(self.open_gal_fileexplorer)
         self.ui.fileexplorerbutton.setShortcut(QKeySequence("CTRL+F"))
         
+        # Connect Copy From Band button
+        self.ui.copyparamsbutton.clicked.connect(self.copy_parameters_from_band)
+        self.ui.copyparamsbutton.setShortcut(QKeySequence("CTRL+P"))
 
         # Get the fit type
         self.ui.fit_type_combo.currentTextChanged.connect(self.change_fit_type)
@@ -649,6 +773,83 @@ class MainWindow(QMainWindow):
 
         # Refresh config image and residual
         self.changegal()
+    
+    def copy_parameters_from_band(self):
+        """Open dialog to copy parameters from another band to current band."""
+        if getattr(self, "selected_galaxy_path", None) is None:
+            QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
+            return
+        
+        # Open the copy parameters dialog
+        dlg = CopyParametersDialog(
+            self.selected_galaxy_path,
+            self.band,
+            self.fit_type,
+            parent=self
+        )
+        
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            source_band = dlg.source_band
+            selected_params = dlg.get_selected_parameters()
+            
+            if not selected_params:
+                QMessageBox.information(self, "No Parameters", "No parameters selected to copy.")
+                return
+            
+            try:
+                # Get source config
+                source_config_path = os.path.join(
+                    self.selected_galaxy_path,
+                    f"{self.fit_type}_{source_band}.dat"
+                )
+                source_config = pyimfit.parse_config_file(source_config_path)
+                source_dict = source_config.getModelAsDict()
+                source_functions = source_dict["function_sets"][0]["function_list"]
+                
+                # Get current config
+                current_config_path = os.path.join(
+                    self.selected_galaxy_path,
+                    f"{self.fit_type}_{self.band}.dat"
+                )
+                current_config = pyimfit.parse_config_file(current_config_path)
+                current_dict = current_config.getModelAsDict()
+                current_functions = current_dict["function_sets"][0]["function_list"]
+                
+                # Copy selected parameters
+                copied_count = 0
+                for func_idx, param_name in selected_params:
+                    try:
+                        if func_idx < len(source_functions) and func_idx < len(current_functions):
+                            source_param = source_functions[func_idx]["parameters"].get(param_name)
+                            if source_param is not None:
+                                # Copy the parameter value and constraints
+                                current_functions[func_idx]["parameters"][param_name] = source_param.copy()
+                                copied_count += 1
+                    except Exception as e:
+                        print(f"Warning: Could not copy {param_name} from function {func_idx}: {e}")
+                
+                if copied_count == 0:
+                    QMessageBox.warning(self, "Copy Failed", "No parameters could be copied. Function count mismatch?")
+                    return
+                
+                # Save updated config
+                new_model = pyimfit.ModelDescription.dict_to_ModelDescription(current_dict)
+                config_text = "".join(new_model.getStringDescription())
+                
+                # Backup old config
+                if os.path.isfile(current_config_path):
+                    shutil.copyfile(src=current_config_path, dst=current_config_path + ".bak")
+                
+                with open(current_config_path, "w") as f:
+                    f.write(config_text)
+                
+                QMessageBox.information(self, "Success", f"Copied {copied_count} parameter(s) from band {source_band}.")
+                
+                # Refresh the UI with new parameters
+                self.changegal()
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to copy parameters: {str(e)}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
