@@ -363,7 +363,8 @@ class CopyParametersDialog(QDialog):
         for i in range(self.param_list.count()):
             item = self.param_list.item(i)
             if item.data(QtCore.Qt.UserRole) is not None:
-                self.param_list.setItemSelected(item, True)
+                # self.param_list.setItemSelected(item, True)
+                self.param_list.selectAll()
     
     def clear_all(self):
         """Deselect all items."""
