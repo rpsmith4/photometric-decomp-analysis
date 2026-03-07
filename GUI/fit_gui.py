@@ -268,8 +268,8 @@ class CopyParametersDialog(QDialog):
         self.source_band = None
         self.source_config = None
         self.setWindowTitle("Copy Parameters From Band")
-        self.setMinimumWidth(400)
-        self.setMinimumHeight(500)
+        # self.setMinimumWidth(400)
+        # self.setMinimumHeight(500)
         
         layout = QVBoxLayout()
         
@@ -310,9 +310,9 @@ class CopyParametersDialog(QDialog):
         cancel_btn = QPushButton("Cancel")
         copy_btn.clicked.connect(self.accept)
         cancel_btn.clicked.connect(self.reject)
-        dialog_button_layout.addStretch()
         dialog_button_layout.addWidget(copy_btn)
         dialog_button_layout.addWidget(cancel_btn)
+        dialog_button_layout.addStretch()
         layout.addLayout(dialog_button_layout)
         
         self.setLayout(layout)
@@ -360,11 +360,7 @@ class CopyParametersDialog(QDialog):
     
     def select_all(self):
         """Select all parameter items (exclude headers)."""
-        for i in range(self.param_list.count()):
-            item = self.param_list.item(i)
-            if item.data(QtCore.Qt.UserRole) is not None:
-                # self.param_list.setItemSelected(item, True)
-                self.param_list.selectAll()
+        self.param_list.selectAll()
     
     def clear_all(self):
         """Deselect all items."""
@@ -808,6 +804,8 @@ class MainWindow(QMainWindow):
                 source_functions = source_dict["function_sets"][0]["function_list"]
                 source_functions_labels = read_function_labels(source_config_path)
 
+                # Not super necessary to get these labels, but perhaps I may
+                # Want to check that both the source and current have the same labels
                 for i, func in enumerate(source_functions):
                     if i < len(source_functions_labels):
                         func['label'] = source_functions_labels[i]
@@ -830,6 +828,9 @@ class MainWindow(QMainWindow):
                     else:
                         func['label'] = None
                 
+                if current_functions_labels != source_functions_labels:
+                    raise ValueError(f"Bad function labels!\nSource has labels: {source_functions_labels}\nCurrent has labels: {current_functions_labels}")
+            
                 # Copy selected parameters
                 copied_count = 0
                 for func_idx, param_name in selected_params:
