@@ -777,7 +777,7 @@ class MainWindow(QMainWindow):
     
     def copy_parameters_from_band(self):
         """Open dialog to copy parameters from another band to current band."""
-        if getattr(self, "selected_galaxy_path", None) is None:
+        if self.selected_galaxy_path is None:
             QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
             return
         
@@ -806,6 +806,13 @@ class MainWindow(QMainWindow):
                 source_config = pyimfit.parse_config_file(source_config_path)
                 source_dict = source_config.getModelAsDict()
                 source_functions = source_dict["function_sets"][0]["function_list"]
+                source_functions_labels = read_function_labels(source_config_path)
+
+                for i, func in enumerate(source_functions):
+                    if i < len(source_functions_labels):
+                        func['label'] = source_functions_labels[i]
+                    else:
+                        func['label'] = None
                 
                 # Get current config
                 current_config_path = os.path.join(
@@ -815,17 +822,23 @@ class MainWindow(QMainWindow):
                 current_config = pyimfit.parse_config_file(current_config_path)
                 current_dict = current_config.getModelAsDict()
                 current_functions = current_dict["function_sets"][0]["function_list"]
+                current_functions_labels = read_function_labels(current_config_path)
+
+                for i, func in enumerate(current_functions):
+                    if i < len(current_functions_labels):
+                        func['label'] = current_functions_labels[i]
+                    else:
+                        func['label'] = None
                 
                 # Copy selected parameters
                 copied_count = 0
                 for func_idx, param_name in selected_params:
                     try:
-                        if func_idx < len(source_functions) and func_idx < len(current_functions):
-                            source_param = source_functions[func_idx]["parameters"].get(param_name)
-                            if source_param is not None:
-                                # Copy the parameter value and constraints
-                                current_functions[func_idx]["parameters"][param_name] = source_param.copy()
-                                copied_count += 1
+                        source_param = source_functions[func_idx]["parameters"][param_name]
+                        if source_param is not None:
+                            # Copy the parameter value and constraints
+                            current_functions[func_idx]["parameters"][param_name] = source_param.copy()
+                            copied_count += 1
                     except Exception as e:
                         print(f"Warning: Could not copy {param_name} from function {func_idx}: {e}")
                 
@@ -864,4 +877,5 @@ if __name__ == "__main__":
     p = Path(args.p).resolve()
     app = QApplication(sys.argv)
     main_win = MainWindow(p)
+    app.setWindowIcon(QtGui.QIcon(os.path.join(Path(__file__).parent, "./car.png")))
     sys.exit(app.exec())
