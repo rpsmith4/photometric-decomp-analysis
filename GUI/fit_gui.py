@@ -560,6 +560,10 @@ class MainWindow(QMainWindow):
                 func['label'] = labels[i]
             else:
                 func['label'] = None
+        
+        # Want to ensure that I actually keep the labels since pyimift is incapable of doing so for some reason
+        self.current_config_dict = config_dict   
+
         layout: QVBoxLayout = self.ui.configsliders
         # Reset the layout first
         try:
@@ -733,39 +737,30 @@ class MainWindow(QMainWindow):
         config_path = os.path.join(p, f"{fit_type}_{self.band}.dat")
 
         # If we have a config model and param_widgets, update the config model with the new values
-        if hasattr(self, 'current_config_model') and hasattr(self, 'param_widgets') and self.current_config_model is not None:
-            model_dict = self.current_config_model.getModelAsDict()
-            function_list = model_dict["function_sets"][0]["function_list"]
-            # Update parameter values from widgets
-            for func_idx, func in enumerate(function_list):
-                params = func["parameters"]
-                for param in params.keys():
-                    key = (func_idx, param)
-                    if key in self.param_widgets:
-                        values = self.param_widgets[key].get_values()
-                        if values['fixed']:
-                            # Only value and 'fixed' string
-                            params[param] = [values['value'], 'fixed']
-                        else:
-                            # Value, min, max
-                            params[param] = [values['value'], values['min'], values['max']]
-            # Rebuild the config description from the updated dict
-            new_model = pyimfit.ModelDescription.dict_to_ModelDescription(model_dict)
-            config_text = "".join(new_model.getStringDescription())
-            # Backup old config
-            if os.path.isfile(config_path):
-                shutil.copyfile(src=config_path, dst=config_path + ".bak")
-            with open(config_path, "w") as f:
-                f.write(config_text)
-        else:
-            # Fallback: use the text in the config editor if present
-            new_config = self.ui.config.toPlainText()
-            print(new_config)
-            if not(new_config == ""):
-                if os.path.isfile(config_path):
-                    shutil.copyfile(src=config_path, dst=config_path + ".bak")
-                with open(config_path, "w") as f:
-                    f.write(new_config)
+        model_dict = self.current_config_dict
+        function_list = model_dict["function_sets"][0]["function_list"]
+        # Update parameter values from widgets
+        for func_idx, func in enumerate(function_list):
+            params = func["parameters"]
+            for param in params.keys():
+                key = (func_idx, param)
+                if key in self.param_widgets:
+                    values = self.param_widgets[key].get_values()
+                    if values['fixed']:
+                        # Only value and 'fixed' string
+                        params[param] = [values['value'], 'fixed']
+                    else:
+                        # Value, min, max
+                        params[param] = [values['value'], values['min'], values['max']]
+        
+        # Rebuild the config description from the updated dict
+        new_model = pyimfit.ModelDescription.dict_to_ModelDescription(model_dict)
+        config_text = "".join(new_model.getStringDescription())
+        # Backup old config
+        if os.path.isfile(config_path):
+            shutil.copyfile(src=config_path, dst=config_path + ".bak")
+        with open(config_path, "w") as f:
+            f.write(config_text)
         if f: f.close()
 
         # Refresh config image and residual
