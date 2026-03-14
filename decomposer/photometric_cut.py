@@ -985,9 +985,10 @@ def fit_sersic_mu(
     *,
     R_min_arcsec=0.0,     # set >0 for polar to avoid host-dominated core
     R_max_arcsec=np.inf,
-    n_bounds=(0.3, 8.0),
+    n_bounds=(0.3, 6.0), # occasionally likes to get caught on n bounds when fitting sersic
     Re_bounds=(1e-3, 1e4),
     mu_e_bounds=(5.0, 40.0),
+    morphtype = None,
 ):
     R = np.asarray(R_arcsec, float)
     mu = np.asarray(mu, float)
@@ -1001,6 +1002,12 @@ def fit_sersic_mu(
     w = np.where(np.isfinite(ef) & (ef > 0), 1.0 / ef, 1.0)
 
     n0, Re0, mu_e0 = initial_guesses_mu(Rf, muf)
+
+    if morphtype is not None:
+        if morphtype == "E":
+            n0 = 4
+        elif morphtype == "S" or morphtype == "S0" or morphtype == "S0-a":
+            n0 = 1
 
     lb = [float(n_bounds[0]), float(Re_bounds[0]), float(mu_e_bounds[0])]
     ub = [float(n_bounds[1]), float(Re_bounds[1]), float(mu_e_bounds[1])]
@@ -1016,6 +1023,35 @@ def fit_sersic_mu(
     res = least_squares(resid, x0=x0, bounds=(lb, ub), method="trf")
 
     n, Re, mu_e = res.x
+
+
+    # Doing some work to try to get better estimates for the sersic index by just setting it to a more resonable value in the case that one of the n-bounds is hit for the host structure, but currently then I_e and r_e are not well-aligned.
+    if morphtype is not None:
+        if morphtype == "E":
+            n_theoretical = 4
+        elif morphtype == "S" or morphtype == "S0" or morphtype == "S0-a":
+            n_theoretical = 1
+        else:
+            n_theoretical = 2
+
+
+        
+        if abs(n_bounds[0] - n) < 1e-4 or abs(n_bounds[1] - n) < 1e-4:
+            n = n_theoretical
+            x0 = [float(np.clip(Re0, lb[1], ub[1])),
+          float(np.clip(mu_e0, lb[2], ub[2]))]
+            
+            def resid_lockn(p):
+                Re, mu_e = p
+                model = sersic_mu(Rf, n, Re, mu_e)
+                return (muf - model) * w
+            res = least_squares(resid_lockn, x0=x0, bounds=(lb[1:], ub[1:]), method="trf")
+            print(res.x)
+            Re, mu_e = res.x
+        
+        
+
+
     return {
         "success": bool(res.success),
         "n": float(n),
@@ -1057,6 +1093,7 @@ def dual_component_slits_and_sersic(
     refine_kwargs=None,
     # write reports
     report_prefix=None,   # e.g. f"./reports/{galaxy}_r"
+    galaxy_type = None,
 ):
     if pixel_scale_arcsec is None:
         pixel_scale_arcsec = pixel_scale_from_header_arcsec_per_pix(sci_fits)
@@ -1108,8 +1145,11 @@ def dual_component_slits_and_sersic(
     Rh, muh, muh_err, host_mask_used = fold_cut_to_radial_profile(host_cut, min_frac_good=min_frac_good) # I gotta figure out what this does
     Rp, mup, mup_err, polar_mask_used = fold_cut_to_radial_profile(polar_cut, min_frac_good=min_frac_good)
 
+
+    morphtype = galaxy_type["MORPHTYPE"].iloc[0]
+
     # Fit host Sérsic
-    host_fit = fit_sersic_mu(Rh, muh, muh_err, R_min_arcsec=host_R_min_arcsec) # While I think this is a good idea, its also verging on
+    host_fit = fit_sersic_mu(Rh, muh, muh_err, R_min_arcsec=host_R_min_arcsec, morphtype = morphtype) # While I think this is a good idea, its also verging on
     # just "fitting before the fitting". It is something I trid but it doesn't really work well, unless this is just a 1d fit
     # Jonah: It is just a 1-D fit
 

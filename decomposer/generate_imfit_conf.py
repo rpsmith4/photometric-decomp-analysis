@@ -16,15 +16,15 @@ import pandas as pd
 
 # def generate_config(sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring") -> pyimfit.ModelDescription:
 #     print("Hello")
-def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None) -> pyimfit.ModelDescription:
-    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data)
+def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None, galaxy_type: pd.DataFrame = None) -> pyimfit.ModelDescription:
+    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type)
     model_str = res[0].getStringDescription()
     
     with open(outfile, "w") as f:
         f.write("".join(model_str))
     # Uncomment to open up all of the generated files quickly to see how it did.
-    import subprocess
-    subprocess.Popen(["open", "-a", "TextEdit", outfile])
+    # import subprocess
+    # subprocess.Popen(["open", "-a", "TextEdit", outfile])
 
 def main(args):
     if not(args.p == None):
@@ -64,7 +64,8 @@ def main(args):
         img_files = sorted(glob.glob(os.path.join(galpath, "image_?.fits")))
         galname = os.path.basename(galpath)
         ellipse_fit_data_gal = ellipse_fit_data[ellipse_fit_data["file"] == galname]
-
+        master_table_data_gal = master_table_data[master_table_data["NAME"] == galname]
+   
         jobs = []
         files = os.listdir(galpath)
         model_desc_dict = manager.dict() # Used to hold the result of everything
@@ -102,7 +103,7 @@ def main(args):
                     # p = mp.Process(target = generate_config, args=(img, str(args.type).lower(), model_desc, band))
                     # p = mp.Process(target = generate_config, args=(model_desc_dict, outfile_name, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data))
                     try:
-                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict)
+                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal)
                     except Exception as e:
                         print(e)
                         continue
