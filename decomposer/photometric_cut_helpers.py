@@ -16,16 +16,16 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon, Circle
 
 from astropy.io import fits
-from astropy.stats import sigma_clipped_stats
+# from astropy.stats import sigma_clipped_stats
 from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 
-from scipy.ndimage import map_coordinates
-from scipy.optimize import least_squares
-from scipy.signal import fftconvolve
+# from scipy.ndimage import map_coordinates
+# from scipy.optimize import least_squares
+# from scipy.signal import fftconvolve
 
-from table_info import get_galaxy_info
-from sersic_init_conf import get_galaxy_files
+# from table_info import get_galaxy_info
+# from sersic_init_conf import get_galaxy_files
 
 
 # =====================================================================
@@ -45,14 +45,14 @@ def load_fits_array(arr_or_path):
         raise TypeError("Unsupported FITS/array input type")
 
 
-def _get_fits_header(hdu_or_path):
-    """Get a primary header from a FITS path or HDU-like object."""
-    if isinstance(hdu_or_path, (str, bytes, Path)):
-        return fits.getheader(hdu_or_path)
-    try:
-        return hdu_or_path[0].header
-    except Exception as e:
-        raise TypeError("sci_fits must be a FITS filepath or HDU-like with header") from e
+# def _get_fits_header(hdu_or_path):
+#     """Get a primary header from a FITS path or HDU-like object."""
+#     if isinstance(hdu_or_path, (str, bytes, Path)):
+#         return fits.getheader(hdu_or_path)
+#     try:
+#         return hdu_or_path[0].header
+#     except Exception as e:
+#         raise TypeError("sci_fits must be a FITS filepath or HDU-like with header") from e
 
 
 def pixel_scale_from_header_arcsec_per_pix(sci_fits, return_axes=False): # Should probably be 0.262 arcsec/pix for all galaxies in our sample.
@@ -65,111 +65,113 @@ def pixel_scale_from_header_arcsec_per_pix(sci_fits, return_axes=False): # Shoul
     return (geo, (float(scales_as[0]), float(scales_as[1]))) if return_axes else geo
 
 
-def ellipse_fit(name: str, base: str = "./EllipseFitResults", to_pixels: float = 2.0):
-    """
-    Load 'host' & 'polar' ellipse rows for a given `file` from CSVs in `base`.
-    Returns two dicts with center/PA/axes/μ etc. (see keys below).
-    """
-    base_path = Path(base)
-    if not base_path.is_dir():
-        raise FileNotFoundError(f"Directory not found: {base_path.resolve()}")
+# # Getting rid of this in favor of the manner in which you get the ellipse fit results and pass them in
+# def ellipse_fit(name: str, base: str = "./EllipseFitResults") -> pd.DataFrame:
+#     """
+#     Load 'host' & 'polar' ellipse rows for a given `file` from CSVs in `base`.
+#     Returns two dicts with center/PA/axes/μ etc. (see keys below).
+#     """
+#     base_path = Path(base)
+#     if not base_path.is_dir():
+#         raise FileNotFoundError(f"Directory not found: {base_path.resolve()}")
 
-    candidates = []
-    for csv_path in sorted(base_path.glob("*.csv")):
-        try:
-            df = pd.read_csv(csv_path)
-        except Exception as e:
-            raise RuntimeError(f"Failed to read {csv_path}: {e}") from e
-        if not {"file", "label"}.issubset(df.columns):
-            continue
-        subset = df[df["file"] == name]
-        if len(subset):
-            candidates.append((csv_path, subset))
+#     candidates = []
+#     for csv_path in sorted(base_path.glob("*.csv")):
+#         try:
+#             df = pd.read_csv(csv_path)
+#         except Exception as e:
+#             raise RuntimeError(f"Failed to read {csv_path}: {e}") from e
+#         if not {"file", "label"}.issubset(df.columns):
+#             continue
+#         subset = df[df["file"] == name]
+#         if len(subset):
+#             candidates.append((csv_path, subset))
 
-    if not candidates:
-        raise FileNotFoundError(f"No rows with file == {name!r} in {base_path}")
-    if len(candidates) > 1:
-        files = ", ".join(str(p) for p, _ in candidates)
-        raise ValueError(
-            f"Rows for {name!r} found in multiple CSVs: {files}. Expected exactly one CSV."
-        )
+#     if not candidates:
+#         raise FileNotFoundError(f"No rows with file == {name!r} in {base_path}")
+#     if len(candidates) > 1:
+#         files = ", ".join(str(p) for p, _ in candidates)
+#         raise ValueError(
+#             f"Rows for {name!r} found in multiple CSVs: {files}. Expected exactly one CSV."
+#         )
 
-    csv_path, subset = candidates[0]
-    if len(subset) != 2:
-        raise ValueError(
-            f"Expected exactly 2 rows for file == {name!r} in {csv_path}, found {len(subset)}."
-        )
+#     csv_path, subset = candidates[0]
+#     if len(subset) != 2:
+#         raise ValueError(
+#             f"Expected exactly 2 rows for file == {name!r} in {csv_path}, found {len(subset)}."
+#         )
 
-    subset = subset.copy()
-    subset["label"] = subset["label"].astype(str).str.lower()
-    if set(subset["label"]) != {"host", "polar"}:
-        raise ValueError(f"Expected labels 'host' and 'polar' for {name!r} in {csv_path}.")
+#     subset = subset.copy()
+#     subset["label"] = subset["label"].astype(str).str.lower()
+#     if set(subset["label"]) != {"host", "polar"}:
+#         raise ValueError(f"Expected labels 'host' and 'polar' for {name!r} in {csv_path}.")
 
-    def _parse(v):
-        if isinstance(v, str):
-            s = v.strip()
-            if s and (s[0] in "[{(" or s.lower() in {"true", "false", "none"}):
-                try:
-                    return ast.literal_eval(s)
-                except Exception:
-                    return v
-        return v
+#     def _parse(v):
+#         if isinstance(v, str):
+#             s = v.strip()
+#             if s and (s[0] in "[{(" or s.lower() in {"true", "false", "none"}):
+#                 try:
+#                     return ast.literal_eval(s)
+#                 except Exception:
+#                     return v
+#         return v
 
-    def _get(row, col):
-        if col not in row.index:
-            raise KeyError(f"Required column {col!r} missing in {csv_path}")
-        return _parse(row[col])
+#     def _get(row, col):
+#         if col not in row.index:
+#             raise KeyError(f"Required column {col!r} missing in {csv_path}")
+#         return _parse(row[col])
 
-    def _build(row, is_host: bool):
-        xc = _get(row, "x_center")
-        yc = _get(row, "y_center")
-        angle = _get(row, "angle")
-        contour_val = _get(row, "contour")
-        a = _get(row, "semi_major")
-        b = _get(row, "semi_minor")
-        q = _get(row, "axis_ratio")
-        try:
-            xc, yc = float(xc) * to_pixels, float(yc) * to_pixels
-        except Exception:
-            pass
-        try:
-            q_num = float(q)
-            ell = None if math.isnan(q_num) else 1.0 - q_num
-        except Exception:
-            q_num, ell = q, None
+#     def _build(row, is_host: bool):
+#         xc = _get(row, "x_center")
+#         yc = _get(row, "y_center")
+#         angle = _get(row, "angle")
+#         contour_val = _get(row, "contour")
+#         a = _get(row, "semi_major")
+#         b = _get(row, "semi_minor")
+#         q = _get(row, "axis_ratio")
+#         try:
+#             xc, yc = float(xc), float(yc) # I think the the image sizes in pixels are not necessarily the same between our images and what was used for Ellipse fitting. I've tried to adjust this elsewhere, and think the alternative of piking the center of image coordinates (and possible centroiding?) is more consistent.
+#         except Exception:
+#             pass
+#         try:
+#             q_num = float(q)
+#             ell = None if math.isnan(q_num) else 1.0 - q_num
+#         except Exception:
+#             q_num, ell = q, None
 
-        out = {
-            "center": (xc, yc),
-            "PA": angle,
-            "semi_major_axis": a,
-            "semi_minor_axis": b,
-            "axis_ratio": q,
-            "ellipticity": ell,
-        }
-        try:
-            out["μ"] = contour_val
-        except Exception:
-            out["isophote"] = contour_val
+#         out = {
+#             "center": (xc, yc),
+#             "angle": angle,
+#             "semi_major": a,
+#             "semi_minor": b,
+#             "axis_ratio": q,
+#             "ell": ell,
+#         }
+#         try:
+#             out["μ"] = contour_val
+#         except Exception:
+#             out["isophote"] = contour_val
 
-        if is_host:
-            out["PA_diff"] = _get(row, "pa_diff")
+#         if is_host:
+#             out["PA_diff"] = _get(row, "pa_diff")
 
-        return out
+#         return out
 
-    host_row = subset[subset["label"] == "host"].iloc[0]
-    polar_row = subset[subset["label"] == "polar"].iloc[0]
-    host = _build(host_row, is_host=True)
-    polar = _build(polar_row, is_host=False)
-    return host, polar
+#     host_row = subset[subset["label"] == "host"].iloc[0]
+#     polar_row = subset[subset["label"] == "polar"].iloc[0]
+#     host = _build(host_row, is_host=True)
+#     polar = _build(polar_row, is_host=False)
+#     ellipse_results = pd.DataFrame(data={"host": host, "polar": polar})
+#     return ellipse_results
 # =====================================================================
 # Sérsic helpers
 # =====================================================================
-def bn_of_n(n):
+def bn_of_n(n): # Approximation for sersic b_n
     n = np.asarray(n, dtype=float)
     return 2 * n - 1 / 3 + 4 / (405 * n) + 46 / (25515 * n ** 2)
 
 
-def sersic_mu(R, n, Re, mu_e):
+def sersic_mu(R, n, Re, mu_e): # Sersic profile as function of mu
     bn = bn_of_n(n)
     R = np.asarray(R, dtype=float)
     Re = max(float(Re), 1e-12)
@@ -196,7 +198,7 @@ def initial_guesses_mu(R, mu):
     return 2.0, float(Re0), float(mu_e0)
 
 
-def sersic_I(R, n, Re, Ie):
+def sersic_I(R, n, Re, Ie): # sersic profile as function of intensity
     bn = bn_of_n(n)
     R = np.asarray(R, float)
     Re = max(float(Re), 1e-12)
@@ -265,7 +267,7 @@ def plot_slit_overlay(
         bad_alpha[bad] = 0.35
         ax.imshow(np.ones_like(sci), origin="lower", alpha=bad_alpha, interpolation="nearest")
 
-    poly = Polygon(corners, closed=True, fill=False, color=slit_color, linewidth=1.6, zorder=5)
+    poly = Polygon(corners, closed=True, fill=True, color=slit_color, linewidth=1.6, zorder=5)
     ax.add_patch(poly)
     ax.plot([c1[0], c2[0]], [c1[1], c2[1]], color=centerline_color, linewidth=1.6, zorder=6)
     ax.plot(x0, y0, marker='x', color=center_color, markersize=6, linewidth=1.2, zorder=7)

@@ -507,7 +507,7 @@ class MainWindow(QMainWindow):
     def open_ds9(self, *args):
         p = self.selected_galaxy_path
         files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
-        arg = ["ds9", "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config["ds9_limits"][0]}", f"{self.gui_config["ds9_limits"][1]}", "-cube", "3"]
+        arg = ["ds9", "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config['ds9_limits'][0]}", f"{self.gui_config['ds9_limits'][1]}", "-cube", "3"]
         arg.extend(files)
         subprocess.Popen(arg)
     
