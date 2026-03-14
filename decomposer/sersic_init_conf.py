@@ -89,7 +89,7 @@ def _safe_ellipticity(d: Dict, fallback: float = 0.3) -> float:
 
 
 # def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -> tuple[str, float, float]:
-def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None, zeropoint: float = None, pixel_scale: float = None) -> tuple[str, float, float]:
+def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None, zeropoint: float = None, pixel_scale: float = None, galaxy_type: pd.DataFrame = None) -> tuple[str, float, float]:
     """
     Generate an imfit 2xSersic config using:
       - geometry (center, PA, ellipticity) from ellipse_fit()
@@ -218,6 +218,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
         report_prefix=None,
         host_R_min_arcsec=host_rmin,
         polar_R_min_arcsec=polar_rmin,
+        galaxy_type=galaxy_type,
     )
     from photometric_cut import plot_dual_slit_mu_figure
 

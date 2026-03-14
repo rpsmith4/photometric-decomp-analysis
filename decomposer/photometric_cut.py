@@ -983,13 +983,14 @@ def fit_sersic_mu(
     mu,
     mu_err=None,
     *,
-    R_min_arcsec=0.0,     # set >0 for polar to avoid host-dominated core
-    R_max_arcsec=np.inf,
-    n_bounds=(0.3, 6.0), # occasionally likes to get caught on n bounds when fitting sersic
-    Re_bounds=(1e-3, 1e4),
-    mu_e_bounds=(5.0, 40.0),
-    morphtype = None,
-):
+    R_min_arcsec: float = 0.0,     # set >0 for polar to avoid host-dominated core
+    R_max_arcsec: float = np.inf,
+    n_bounds: tuple = (0.3, 6.0), # occasionally likes to get caught on n bounds when fitting sersic
+    Re_bounds: tuple =(1e-3, 1e4),
+    mu_e_bounds: tuple =(5.0, 40.0),
+    morphtype: str = None,
+    polartype: list = None,
+) -> dict:
     R = np.asarray(R_arcsec, float)
     mu = np.asarray(mu, float)
     mu_err = np.asarray(mu_err, float) if mu_err is not None else np.full_like(mu, np.nan)
@@ -1026,20 +1027,51 @@ def fit_sersic_mu(
 
 
     # Doing some work to try to get better estimates for the sersic index by just setting it to a more resonable value in the case that one of the n-bounds is hit for the host structure, but currently then I_e and r_e are not well-aligned.
-    if morphtype is not None:
-        if morphtype == "E":
-            n_theoretical = 4
-        elif morphtype == "S" or morphtype == "S0" or morphtype == "S0-a":
-            n_theoretical = 1
-        else:
-            n_theoretical = 2
+    
 
-
-        
-        if abs(n_bounds[0] - n) < 1e-4 or abs(n_bounds[1] - n) < 1e-4:
+    if abs(n_bounds[0] - n) < 1e-4 or abs(n_bounds[1] - n) < 1e-4:
+        if morphtype is not None:
+            if morphtype == "E":
+                n_theoretical = 4
+            elif morphtype == "S" or morphtype == "S0" or morphtype == "S0-a":
+                n_theoretical = 1
+            else:
+                n_theoretical = 2
             n = n_theoretical
             x0 = [float(np.clip(Re0, lb[1], ub[1])),
-          float(np.clip(mu_e0, lb[2], ub[2]))]
+            float(np.clip(mu_e0, lb[2], ub[2]))]
+            
+            def resid_lockn(p):
+                Re, mu_e = p
+                model = sersic_mu(Rf, n, Re, mu_e)
+                return (muf - model) * w
+            res = least_squares(resid_lockn, x0=x0, bounds=(lb[1:], ub[1:]), method="trf")
+            print(res.x)
+            Re, mu_e = res.x
+
+
+        if polartype is not None:
+            n_theoretical = []
+            for polar_structure in polartype: # I need to check what reasonable baseline PS n values are as far as what seems to fit well currently to use as baselines for estimation if the current script fails to converge to an n value
+
+            # I need to also figure out for the situations in which there are 2 polar structures identified what to use...
+
+                print(polar_structure)
+                if type(polar_structure) is not str:
+                    print("No second structure")
+                    break
+                elif polar_structure == "PH":
+                    n_theoretical.append(2)
+                elif polar_structure == "PB":
+                    n_theoretical.append(3)
+                elif polar_structure == "PR":
+                    n_theoretical.append(0.8)
+                else:
+                    n_theoretical.append(2) 
+
+            n = n_theoretical[0] # Right now, just take the first value from n_theoretical even if two separate structures pass in something. I'll continue looking into this.
+            x0 = [float(np.clip(Re0, lb[1], ub[1])),
+            float(np.clip(mu_e0, lb[2], ub[2]))]
             
             def resid_lockn(p):
                 Re, mu_e = p
@@ -1147,6 +1179,9 @@ def dual_component_slits_and_sersic(
 
 
     morphtype = galaxy_type["MORPHTYPE"].iloc[0]
+    polartype = [galaxy_type["PSG_TYPE_1"].iloc[0], 
+                 galaxy_type["PSG_TYPE_2"].iloc[0]]
+ 
 
     # Fit host Sérsic
     host_fit = fit_sersic_mu(Rh, muh, muh_err, R_min_arcsec=host_R_min_arcsec, morphtype = morphtype) # While I think this is a good idea, its also verging on
@@ -1165,7 +1200,7 @@ def dual_component_slits_and_sersic(
             polar_Rmin_used = 0.0  # fallback if host fit failed
 
     # Fit polar Sérsic
-    polar_fit = fit_sersic_mu(Rp, mup, mup_err, R_min_arcsec=polar_Rmin_used)
+    polar_fit = fit_sersic_mu(Rp, mup, mup_err, R_min_arcsec=polar_Rmin_used, polartype = polartype)
 
     # --------------------------------------------------
     # Clean summary results (human-facing)
@@ -1404,99 +1439,110 @@ def plot_dual_slit_and_mu_profiles(
 
 
 def main():
-    import table_info
-    import glob
-    import os
-    from photometric_cut_helpers import ellipse_fit
-    from sersic_init_conf import get_galaxy_files
-    from table_info import get_galaxy_info
-    import numpy as np
-    import matplotlib.pyplot as plt
+    # import table_info
+    # import glob
+    # import os
+    # from sersic_init_conf import get_galaxy_files
+    # from table_info import get_galaxy_info
+    # import numpy as np
+    # import matplotlib.pyplot as plt
+    # import pandas as pd
 
 
-    table_info.set_directory()
-    GalaxyDirectories = glob.glob("./GalaxyFiles/*")
+    # table_info.set_directory()
+    # GalaxyDirectories = glob.glob("./GalaxyFiles/*")
 
-    filenames = [os.path.basename(f) for f in GalaxyDirectories]
-    test_galaxy = filenames[0]
+    # filenames = [os.path.basename(f) for f in GalaxyDirectories]
+    # test_galaxy = filenames[0]
 
-    host_ellipse_results, polar_ellipse_results = ellipse_fit(test_galaxy)
-    # print("Host results:", host_ellipse_results)
-    # print("Polar results:", polar_ellipse_results)
+    # # Gather Ellipse Fit results for all objects
+    # csvs = glob.glob(os.path.join(Path("EllipseFitResults"), "*.csv"))
+    # ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
+    # for csv in csvs:
+    #     dat = pd.read_csv(csv)
+    #     ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+    
+    # # gather infromation from the master_table.csv (currently unused)
+    # master_table_csv = glob.glob(os.path.join(Path("."), "master_table.csv"))[0]
+    # master_table_data = pd.DataFrame(columns=["NAME", "PSG_TYPE_1","PSG_TYPE_2", "CATEGORY_1", "CATEGORY_2", "MORPHTYPE"])
+    # dat_master_table = pd.read_csv(master_table_csv)
+    # master_table_data = pd.concat([master_table_data, dat_master_table])
+    # # print("Host results:", host_ellipse_results)
+    # # print("Polar results:", polar_ellipse_results)
 
-    TestFiles = get_galaxy_files(test_galaxy, base="./GalaxyFiles", fltr = "r")
-    sci_fits = TestFiles["science"]
-    mask_fits = TestFiles["mask"]
-    invvar_fits = TestFiles.get("invvar", None)
-    psf_fits = TestFiles.get("psf", None)
+    # TestFiles = get_galaxy_files(test_galaxy, base="./GalaxyFiles", fltr = "r")
+    # sci_fits = TestFiles["science"]
+    # mask_fits = TestFiles["mask"]
+    # invvar_fits = TestFiles.get("invvar", None)
+    # psf_fits = TestFiles.get("psf", None)
 
-    psg_type = get_galaxy_info(test_galaxy)["psg_type"]
+    # psg_type = get_galaxy_info(test_galaxy)["psg_type"]
 
-    # Calibration
-    pixel_scale = pixel_scale_from_header_arcsec_per_pix(sci_fits)
-
-
-
-    print(
-        f"\n[Calibration]\npixel_scale = {pixel_scale:.4f} arcsec/pix, "
-    )
-        # ----------------------------
-    # Dual-component slit + Sérsic test
-    # ----------------------------
-    report_prefix = f"./dualcut_{test_galaxy}_r"
-
-    results = dual_component_slits_and_sersic(
-        sci_fits=sci_fits,
-        host_ellipse_results=host_ellipse_results,
-        polar_ellipse_results=polar_ellipse_results,
-        mask_fits=mask_fits,
-        invvar_fits=invvar_fits,
-        psf_fits=psf_fits,
-        zeropoint=22.5,
-        pixel_scale_arcsec=pixel_scale,
-        host_length_pix=300,
-        polar_length_pix=450,
-        width_pix=7.0,
-        oversample=2,
-        host_R_min_arcsec=0.0,
-        polar_R_min_arcsec=None,          # if set, overrides scaling rule
-        polar_R_min_hostRe_factor=3.5,    # default: exclude inner 3.5 * host Re
-        min_frac_good=0.5,
-        refine_center=False,      # keep False for first test; turn on after you like the behavior
-        refine_kwargs=None,
-        report_prefix=report_prefix,
-    )
-
-    plot_dual_slit_mu_figure(
-        sci_fits=sci_fits,
-        mask_fits=mask_fits,
-        results=results,
-        title="Simultaneous Sérsic fit to Host & Polar cuts",
-        savepath=f"./joint_two_cuts_{test_galaxy}.png",
-        show=True,
-    )
+    # # Calibration
+    # pixel_scale = pixel_scale_from_header_arcsec_per_pix(sci_fits)
 
 
 
-    summary = results["results"]
-    print("\n[Dual-component Sérsic results]")
+    # print(
+    #     f"\n[Calibration]\npixel_scale = {pixel_scale:.4f} arcsec/pix, "
+    # )
+    #     # ----------------------------
+    # # Dual-component slit + Sérsic test
+    # # ----------------------------
+    # report_prefix = f"./dualcut_{test_galaxy}_r"
 
-    if summary["host"]["success"]:
-        h = summary["host"]
-        print(f"Host:  n={h['n']:.2f}, Re={h['Re_arcsec']:.2f}\", μe={h['mu_e']:.2f}")
-    else:
-        print("Host:  FAILED")
+    # results = dual_component_slits_and_sersic(
+    #     sci_fits=sci_fits,
+    #     host_ellipse_results=host_ellipse_results,
+    #     polar_ellipse_results=polar_ellipse_results,
+    #     mask_fits=mask_fits,
+    #     invvar_fits=invvar_fits,
+    #     psf_fits=psf_fits,
+    #     zeropoint=22.5,
+    #     pixel_scale_arcsec=pixel_scale,
+    #     host_length_pix=300,
+    #     polar_length_pix=450,
+    #     width_pix=7.0,
+    #     oversample=2,
+    #     host_R_min_arcsec=0.0,
+    #     polar_R_min_arcsec=None,          # if set, overrides scaling rule
+    #     polar_R_min_hostRe_factor=3.5,    # default: exclude inner 3.5 * host Re
+    #     min_frac_good=0.5,
+    #     refine_center=False,      # keep False for first test; turn on after you like the behavior
+    #     refine_kwargs=None,
+    #     report_prefix=report_prefix,
+    # )
 
-    if summary["polar"]["success"]:
-        p = summary["polar"]
-        print(
-            f"Polar: n={p['n']:.2f}, Re={p['Re_arcsec']:.2f}\", μe={p['mu_e']:.2f} "
-            f"(R > {p['R_min_arcsec_used']:.2f}\")"
-        )
-    else:
-        print("Polar: FAILED")
+    # plot_dual_slit_mu_figure(
+    #     sci_fits=sci_fits,
+    #     mask_fits=mask_fits,
+    #     results=results,
+    #     title="Simultaneous Sérsic fit to Host & Polar cuts",
+    #     savepath=f"./joint_two_cuts_{test_galaxy}.png",
+    #     show=True,
+    # )
 
-    print("\n")
+
+
+    # summary = results["results"]
+    # print("\n[Dual-component Sérsic results]")
+
+    # if summary["host"]["success"]:
+    #     h = summary["host"]
+    #     print(f"Host:  n={h['n']:.2f}, Re={h['Re_arcsec']:.2f}\", μe={h['mu_e']:.2f}")
+    # else:
+    #     print("Host:  FAILED")
+
+    # if summary["polar"]["success"]:
+    #     p = summary["polar"]
+    #     print(
+    #         f"Polar: n={p['n']:.2f}, Re={p['Re_arcsec']:.2f}\", μe={p['mu_e']:.2f} "
+    #         f"(R > {p['R_min_arcsec_used']:.2f}\")"
+    #     )
+    # else:
+    #     print("Polar: FAILED")
+
+    # print("\n")
 
 
     return
