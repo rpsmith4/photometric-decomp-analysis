@@ -520,7 +520,10 @@ class MainWindow(QMainWindow):
             if idx != 0:
                 im = np.array([])
             else:
-                im = fits.getdata(os.path.join(galaxy_path, f"image_{band}.fits"))
+                try:
+                    im = fits.getdata(os.path.join(galaxy_path, f"image_{band}.fits"))
+                except:
+                    return np.array([])
         return im
 
     def getconfigim(self, galaxypath, band, fit_type, shape, maxThreads=4):
@@ -536,7 +539,10 @@ class MainWindow(QMainWindow):
         return im
     
     def getconfigresid(self, im, imconfig):
-        return im - imconfig
+        try:
+            return im - imconfig
+        except:
+            return np.array([])
 
 
     def changegal(self):
@@ -548,54 +554,57 @@ class MainWindow(QMainWindow):
         self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
         self.currentgalaxytext.repaint()
 
-        config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
-        config_model = pyimfit.parse_config_file(config_path)
-        self.current_config_model = config_model
-        config_dict = config_model.getModelAsDict()
-        # Add function labels to config_dict
-        labels = read_function_labels(config_path)
-        function_list = config_dict["function_sets"][0]["function_list"]
-        for i, func in enumerate(function_list):
-            if i < len(labels):
-                func['label'] = labels[i]
-            else:
-                func['label'] = None
-        
-        # Want to ensure that I actually keep the labels since pyimift is incapable of doing so for some reason
-        self.current_config_dict = config_dict   
-
-        layout: QVBoxLayout = self.ui.configsliders
-        # Reset the layout first
         try:
-            self.clearLayout(layout)
-        except Exception as e:
-            print(e)
-            pass
-        for func_idx, func in enumerate(function_list):
-            params = func["parameters"]
-            label = func["label"]
-
-            label_text = QTextBrowser()
-            label_text.setText(label)
-            label_text.setMaximumHeight(30)
-            label_text.setMinimumWidth(50)
-            label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
-            label_text.setAlignment(QtCore.Qt.AlignCenter)
-            layout.addWidget(label_text)
-
-            for param in params.keys():
-                initval = params[param][0]
-                fixed = False
-                if params[param][1] == 'fixed':
-                    lowlim = initval
-                    hilim = initval
-                    fixed = True
+            config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
+            config_model = pyimfit.parse_config_file(config_path)
+            self.current_config_model = config_model
+            config_dict = config_model.getModelAsDict()
+            # Add function labels to config_dict
+            labels = read_function_labels(config_path)
+            function_list = config_dict["function_sets"][0]["function_list"]
+            for i, func in enumerate(function_list):
+                if i < len(labels):
+                    func['label'] = labels[i]
                 else:
-                    lowlim = params[param][1]
-                    hilim = params[param][2]
+                    func['label'] = None
+            
+            # Want to ensure that I actually keep the labels since pyimift is incapable of doing so for some reason
+            self.current_config_dict = config_dict   
 
-                # Use (func_idx, param) as key to distinguish duplicate param names
-                self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), label, layout)
+            layout: QVBoxLayout = self.ui.configsliders
+            # Reset the layout first
+            try:
+                self.clearLayout(layout)
+            except Exception as e:
+                print(e)
+                pass
+            for func_idx, func in enumerate(function_list):
+                params = func["parameters"]
+                label = func["label"]
+
+                label_text = QTextBrowser()
+                label_text.setText(label)
+                label_text.setMaximumHeight(30)
+                label_text.setMinimumWidth(50)
+                label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+                label_text.setAlignment(QtCore.Qt.AlignCenter)
+                layout.addWidget(label_text)
+
+                for param in params.keys():
+                    initval = params[param][0]
+                    fixed = False
+                    if params[param][1] == 'fixed':
+                        lowlim = initval
+                        hilim = initval
+                        fixed = True
+                    else:
+                        lowlim = params[param][1]
+                        hilim = params[param][2]
+
+                    # Use (func_idx, param) as key to distinguish duplicate param names
+                    self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), label, layout)
+        except:
+            pass
 
 
         try:
