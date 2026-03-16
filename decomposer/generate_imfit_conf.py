@@ -16,13 +16,15 @@ import pandas as pd
 
 # def generate_config(sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring") -> pyimfit.ModelDescription:
 #     print("Hello")
-def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None) -> pyimfit.ModelDescription:
-    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data)
+def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None, galaxy_type: pd.DataFrame = None) -> pyimfit.ModelDescription:
+    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type)
     model_str = res[0].getStringDescription()
     
     with open(outfile, "w") as f:
         f.write("".join(model_str))
-    
+    # Uncomment to open up all of the generated files quickly to see how it did.
+    # import subprocess
+    # subprocess.Popen(["open", "-a", "TextEdit", outfile])
 
 def main(args):
     if not(args.p == None):
@@ -34,11 +36,22 @@ def main(args):
     
     galpathlist = []
 
+    # Gather Ellipse Fit results for all objects
     csvs = glob.glob(os.path.join(Path(args.ellipse_fit), "*.csv"))
     ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
     for csv in csvs:
         dat = pd.read_csv(csv)
         ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+    
+    # gather infromation from the master_table.csv (currently unused)
+    master_table_csv = glob.glob(os.path.join(Path(args.master_table), "master_table.csv"))[0]
+    master_table_data = pd.DataFrame(columns=["NAME", "PSG_TYPE_1","PSG_TYPE_2", "CATEGORY_1", "CATEGORY_2", "MORPHTYPE"])
+    dat_master_table = pd.read_csv(master_table_csv)
+    master_table_data = pd.concat([master_table_data, dat_master_table])
+    # Call the data for a particular object as fullows:
+    # master_table_data_gal = master_table_data[master_table_data["NAME"] == "[galaxy name]"]
+    # print(master_table_data_gal)
+
     if args.r:
         structure = os.walk(p)
         for root, dirs, files in structure:
@@ -51,7 +64,8 @@ def main(args):
         img_files = sorted(glob.glob(os.path.join(galpath, "image_?.fits")))
         galname = os.path.basename(galpath)
         ellipse_fit_data_gal = ellipse_fit_data[ellipse_fit_data["file"] == galname]
-
+        master_table_data_gal = master_table_data[master_table_data["NAME"] == galname]
+   
         jobs = []
         files = os.listdir(galpath)
         model_desc_dict = manager.dict() # Used to hold the result of everything
@@ -71,6 +85,8 @@ def main(args):
                 psf = fits.getdata(os.path.join(galpath, f"psf_patched_{band}.fits"))
                 invvar = fits.getdata(os.path.join(galpath, f"image_{band}_invvar.fits"))
                 
+
+                # Replace with type from master table using the pattern provided above
                 folder_type_dict = {
                     "Polar Rings": "ring",
                     "Polar_Tilted Bulges": "bulge",
@@ -87,7 +103,7 @@ def main(args):
                     # p = mp.Process(target = generate_config, args=(img, str(args.type).lower(), model_desc, band))
                     # p = mp.Process(target = generate_config, args=(model_desc_dict, outfile_name, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data))
                     try:
-                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict)
+                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal)
                     except Exception as e:
                         print(e)
                         continue
@@ -114,10 +130,11 @@ if __name__ == "__main__":
     parser.add_argument("-p", help="Path to file/folder containing galaxy FITS")
     parser.add_argument("--overwrite", help="Overwrite existing config files", action="store_true")
     parser.add_argument("--mask", help="Use the mask to guess initial values", action="store_true")
-    parser.add_argument("--type", help="Type of polar structure", choices=["ring", "bulge", "halo"], default="ring")
+    parser.add_argument("--type", help="Type of polar structure", choices=["ring", "bulge", "halo"], default="ring") # Working to add in the code to pass in polar structure type based upon the results in the master table
     parser.add_argument("--dont_fit", help="Don't use DE imfitting to try and do another guess at initial parameters", action="store_true")
     parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
     parser.add_argument("--ellipse_fit", help="Location of ellipse fit data", default=".")
+    parser.add_argument("--master_table", help="Location of folder containing master table data", default=".") # Added to get PS types from the master table
     parser.add_argument("-r", help="Recursively go into subfolders (assumes that fits data is at the end of the filetree)", action="store_true")
     parser.add_argument("--new", help="Use new version of the photometric decomp", action="store_true")
     args = parser.parse_args()
