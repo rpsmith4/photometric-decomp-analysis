@@ -22,6 +22,9 @@ import pyimfit
 import shutil
 import numpy as np
 import re
+import pandas as pd
+import matplotlib.patches
+import glob
 
 def open_folder(path): 
     path = os.path.abspath(path) 
@@ -50,14 +53,44 @@ class PlotCanvas(FigureCanvas):
         super().__init__(fig)
         self.setParent(parent)
 
-    def plot(self, im, limits, cmap, stretch=LogStretch()):
+    def plot(self, im, limits, cmap, stretch=LogStretch(), ellipse_params=pd.DataFrame):
         self.ax.cla()
         self.ax.set_axis_off()
         if im.any():
             norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
             self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
+            if not ellipse_params.empty:
+                host = ellipse_params[ellipse_params["label"] == "Host"]
+                polar = ellipse_params[ellipse_params["label"] == "Polar"]
+                imshape = im.shape
+                ell_host = matplotlib.patches.Ellipse(
+                    xy=(imshape[0]/2, imshape[1]/2),
+                    height=float(host["semi_minor"]*2),
+                    width=float(host["semi_major"]*2),
+                    angle=host["angle"],
+                    label="Host",
+                    ls="--",
+                    lw=2,
+                    color="red",
+                    fill=False
+                )
+                ell_polar = matplotlib.patches.Ellipse(
+                    xy=(imshape[0]/2, imshape[1]/2),
+                    height=float(polar["semi_minor"]*2),
+                    width=float(polar["semi_major"]*2),
+                    angle=polar["angle"],
+                    label="Polar",
+                    ls="--",
+                    lw=2,
+                    color="blue",
+                    fill=False
+                )
+                self.ax.add_patch(ell_host)
+                self.ax.add_patch(ell_polar)
+                self.ax.legend()
         else:
             self.ax.text(0,0.5,"Cannot find FITs image!")
+
         self.draw()
 
 
@@ -376,13 +409,21 @@ class CopyParametersDialog(QDialog):
         return selected
 
 class MainWindow(QMainWindow):
-    def __init__(self, p=None):
+    def __init__(self, p=None, ellipse_fit_p=None):
         super().__init__()
 
         # Loading the config file for the GUI
         with open(os.path.join(MAINDIR, LOCAL_DIR, 'config.json')) as config:
             self.gui_config = json.load(config)
             config.close()
+            
+        # Read in the ellipse fit data 
+        csvs = glob.glob(os.path.join(ellipse_fit_p, "*.csv"))
+        ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
+        for csv in csvs:
+            dat = pd.read_csv(csv)
+            ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+        self.ellipse_fit_data = ellipse_fit_data
 
         # Apply global scaling for the application
         scale_factor = self.gui_config["ui_scale"]
@@ -622,7 +663,9 @@ class MainWindow(QMainWindow):
 
         # self.img.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
         img = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
-        self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+        galname = self.selected_galaxy_path.name
+        ellipse_params = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
+        self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=ellipse_params)
 
         model = self.get_composed_data(galaxypath, self.band, idx=1, fit_type=self.fit_type)
         self.model.plot(model, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
@@ -877,10 +920,12 @@ if __name__ == "__main__":
     )
     
     parser.add_argument("-p", help="Path to folder containing galaxies", default=".")
+    parser.add_argument("--ellipse_fit", help="Path to folder ellipse fit data", default=".")
 
     args = parser.parse_args()
     p = Path(args.p).resolve()
+    ellipse_fit_p = Path(args.ellipse_fit).resolve()
     app = QApplication(sys.argv)
-    main_win = MainWindow(p)
+    main_win = MainWindow(p,ellipse_fit_p)
     app.setWindowIcon(QtGui.QIcon(os.path.join(Path(__file__).parent, "./car.png")))
     sys.exit(app.exec())
