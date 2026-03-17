@@ -104,7 +104,7 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
     def __init__(self, mark_colors=None, galmarks=None, parent=None):
         super().__init__(parent)
         self.mark_colors = mark_colors or {}
-        self.galmarks = galmarks or {}
+        self.galmarks = galmarks
 
     def hasChildren(self, index):
         # For invalid indices, fall back to default behavior
@@ -139,12 +139,12 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
             try:
                 if self.isDir(index) and not self.hasChildren(index):
                     name = Path(self.filePath(index)).name
-                    mark = self.galmarks.get(name)
+                    mark = self.galmarks[name]
                     if mark:
-                        col = self.mark_colors.get(mark)
+                        col = self.mark_colors[mark]
                         if col:
                             return QBrush(QColor(col))
-            except Exception:
+            except Exception as e:
                 pass
 
         return super().data(index, role)
@@ -704,7 +704,7 @@ class MainWindow(QMainWindow):
                     # layout.removeItem(item)
  
     def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
-        if not hasattr(self, 'param_widgets'):
+        if not self.param_widgets:
             self.param_widgets = {}
         func_idx, paramname = paramkey
         ndigits = 6
@@ -789,11 +789,12 @@ class MainWindow(QMainWindow):
         try:
             model = self.galaxytree.model()
             model.layoutChanged.emit()
-        except Exception:
+        except Exception as e:
+            print(e)
             pass
     
     def saveconfig(self):
-        if getattr(self, "selected_galaxy_path", None) is None:
+        if self.selected_galaxy_path is None:
             print("No galaxy selected to save config")
             return
         p = self.selected_galaxy_path
