@@ -26,6 +26,11 @@ import pandas as pd
 import matplotlib.patches
 import glob
 
+BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
+sys.path.append(os.path.join(BASE_DIR, 'decomposer'))
+
+from generate_imfit_conf import generate_config
+
 def open_folder(path): 
     path = os.path.abspath(path) 
     if sys.platform.startswith('win'): 
@@ -409,7 +414,7 @@ class CopyParametersDialog(QDialog):
         return selected
 
 class MainWindow(QMainWindow):
-    def __init__(self, p=None, ellipse_fit_p=None):
+    def __init__(self, p=None, master_table_p = None, ellipse_fit_p=None):
         super().__init__()
 
         # Loading the config file for the GUI
@@ -424,6 +429,9 @@ class MainWindow(QMainWindow):
             dat = pd.read_csv(csv)
             ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
         self.ellipse_fit_data = ellipse_fit_data
+
+        # Read in the master table (I might change this later so we don't have to do this in the GUI code)
+        self.master_table_data = pd.read_csv(master_table_p,header=0)
 
         # Apply global scaling for the application
         scale_factor = self.gui_config["ui_scale"]
@@ -490,6 +498,10 @@ class MainWindow(QMainWindow):
         # Connect Copy From Band button
         self.ui.copyparamsbutton.clicked.connect(self.copy_parameters_from_band)
         self.ui.copyparamsbutton.setShortcut(QKeySequence("CTRL+P"))
+
+        # Also connect the generate config button
+        self.ui.newconfbutton.clicked.connect(self.regenconf)
+        self.ui.newconfbutton.setShortcut(QKeySequence("CTRL+G"))
 
         # Get the fit type
         self.ui.fit_type_combo.currentTextChanged.connect(self.change_fit_type)
@@ -912,6 +924,51 @@ class MainWindow(QMainWindow):
                 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to copy parameters: {str(e)}")
+    
+    def regenconf(self):
+        galpath = self.selected_galaxy_path
+        img_file = glob.glob(os.path.join(galpath, f"image_{self.band}.fits"))[0]
+
+        img = fits.open(img_file)[0]
+        mask = fits.getdata(os.path.join(galpath, "image_mask.fits"))
+            
+        psf = fits.getdata(os.path.join(galpath, f"psf_patched_{self.band}.fits"))
+        invvar = fits.getdata(os.path.join(galpath, f"image_{self.band}_invvar.fits"))
+        outfile_name = f"{self.fit_type}_{self.band}.dat" 
+        outfile = os.path.join(galpath, outfile_name)
+        galname = self.selected_galaxy_path.name
+        ellipse_fit_data_gal = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
+        model_desc_dict = {} # Not really needed anymore I think
+        master_table_data_gal = self.master_table_data[self.master_table_data["NAME"] == galname]
+
+
+        files = os.listdir(galpath)
+        try:
+            if f"{self.fit_type}_{self.band}.dat" in files:
+                answer = QMessageBox.question(
+                    self,
+                    'Overwrite Warning',
+                    'There is an existing config file. Overwrite?',
+                    QMessageBox.StandardButton.Yes |
+                    QMessageBox.StandardButton.No
+                )
+                if answer == QMessageBox.StandardButton.Yes:
+                    generate_config(outfile, self.band, img, mask, psf, invvar, self.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal)
+                    QMessageBox.information(self, "Config Generation Information", "Config successfully written")
+                else:
+                    pass
+            else:
+                generate_config(outfile, self.band, img, mask, psf, invvar, self.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal)
+                QMessageBox.information(self, "Config Generation Information", "Config successfully written")
+        except Exception as e:
+            QMessageBox.critical(self, "Config Generation Information", f"Config generation failed:\n{e}")
+            print(e)
+
+        
+        self.changegal()
+        
+        
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -921,11 +978,13 @@ if __name__ == "__main__":
     
     parser.add_argument("-p", help="Path to folder containing galaxies", default=".")
     parser.add_argument("--ellipse_fit", help="Path to folder ellipse fit data", default=".")
+    parser.add_argument("--master_table", help="Path to master table data", default=".")
 
     args = parser.parse_args()
     p = Path(args.p).resolve()
     ellipse_fit_p = Path(args.ellipse_fit).resolve()
+    master_table_p = Path(args.master_table).resolve()
     app = QApplication(sys.argv)
-    main_win = MainWindow(p,ellipse_fit_p)
+    main_win = MainWindow(p,master_table_p, ellipse_fit_p)
     app.setWindowIcon(QtGui.QIcon(os.path.join(Path(__file__).parent, "./car.png")))
     sys.exit(app.exec())
