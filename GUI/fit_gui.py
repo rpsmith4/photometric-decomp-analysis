@@ -463,6 +463,7 @@ class MainWindow(QMainWindow):
         self.curr_gal_index = 0
         self.solvertype = "LM"
         self.band = "g"
+        self.param_widgets = {}
 
         # Setting up the buttons
         self.ui.LMbutton.clicked.connect(lambda: self.set_solver("LM"))
@@ -657,6 +658,7 @@ class MainWindow(QMainWindow):
                     # Use (func_idx, param) as key to distinguish duplicate param names
                     self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), label, layout)
         except:
+            self.clearLayout(self.ui.configsliders)
             pass
 
 
@@ -704,8 +706,6 @@ class MainWindow(QMainWindow):
                     # layout.removeItem(item)
  
     def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
-        if not self.param_widgets:
-            self.param_widgets = {}
         func_idx, paramname = paramkey
         ndigits = 6
         widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits)
