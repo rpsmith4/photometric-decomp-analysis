@@ -347,13 +347,52 @@ def parse_fit_params_file(fit_params_path, config_path):
                             if param_idx >= len(param_names):
                                 func_idx += 1
                                 param_idx = 0
-                except (ValueError, IndexError):
+                except (ValueError, IndexError) as e:
+                    print(e)
                     pass
         
         return params_dict
     except Exception as e:
         print(f"Error parsing fit_params file: {e}")
         return {}
+
+def parse_results(file):
+    model = pyimfit.parse_config_file(file)
+    band = Path(file).stem.rsplit("_")[-3]
+    with open(file, "r") as f:
+        lines = f.readlines()
+    status = lines[5].split(" ")[7]
+    status_message = " ".join(lines[5].split(" ")[9:])
+    uncs = dict()
+    for k, line in enumerate(lines):
+        if "FUNCTION" in line:
+            func_type = line.split(" ")[1].rstrip()
+            func_label = line.split("LABEL ")[-1].rstrip()
+            func_params = pyimfit.get_function_dict()[func_type]
+            uncs[func_label] = dict()
+            for j, func_param in enumerate(func_params):
+                try:
+                    unc = lines[k + j + 1].split("+/-")[1].split("\t")[0]
+                    uncs[func_label][func_param] = float(unc) # Extremely janky way to get the uncertainties
+                except:
+                    uncs[func_label][func_param] = None
+    chi_sq = float(lines[7].split(" ")[-1])
+    chi_sq_red = float(lines[8].split(" ")[-1])
+    functions = []
+    for k, function in enumerate(model.functionList()):
+        func_dict = function.getFunctionAsDict()
+        for param in func_dict["parameters"]:
+            # func_dict["parameters_unc"][param] = func_dict["parameters"][param] 
+            func_dict["parameters"][param] = func_dict["parameters"][param][0]
+        if k == 0:
+            func_dict["label"] = "Host"
+        if k == 1:
+            func_dict["label"] = "Polar"
+        func_dict["parameters_unc"] = uncs[func_dict["label"]]
+        func_dict["band"] = band
+        functions.append(func_dict)
+    
+    return functions, chi_sq, chi_sq_red, status, status_message
 
 class CopyParametersDialog(QDialog):
     """Dialog for copying parameters from one band to another."""
@@ -461,7 +500,7 @@ class CopyParametersDialog(QDialog):
             if self.source_type == "fit_params":
                 fit_params_path = os.path.join(self.galaxy_path, f"{self.fit_type}_{band}_fit_params.txt")
                 if os.path.exists(fit_params_path):
-                    self.fit_params_values = parse_fit_params_file(fit_params_path, config_path)
+                    self.fit_params_values = parse_results(fit_params_path)[0]
                 else:
                     QMessageBox.warning(
                         self, "Warning", 
@@ -963,7 +1002,6 @@ class MainWindow(QMainWindow):
             selected_params = dlg.get_selected_parameters()
             source_type = dlg.get_source_type()
             fit_params_values = dlg.get_fit_params_values()
-            print(fit_params_values)
             
             if not selected_params:
                 QMessageBox.information(self, "No Parameters", "No parameters selected to copy.")
@@ -987,7 +1025,7 @@ class MainWindow(QMainWindow):
                         func['label'] = source_functions_labels[i]
                     else:
                         func['label'] = None
-                
+
                 # Get current config
                 current_config_path = os.path.join(
                     self.selected_galaxy_path,
@@ -1011,10 +1049,15 @@ class MainWindow(QMainWindow):
                 copied_count = 0
                 for func_idx, param_name in selected_params:
                     try:
-                        if source_type == "fit_params" and func_idx in fit_params_values and param_name in fit_params_values[func_idx]:
+                        if source_type == "fit_params":
                             # Copy from fit parameters - use value as fixed parameter
-                            param_value = fit_params_values[func_idx][param_name]
-                            current_functions[func_idx]["parameters"][param_name] = [param_value, 'fixed']
+                            param_value = fit_params_values[func_idx]["parameters"][param_name]
+                            param_unc = fit_params_values[func_idx]["parameters_unc"][param_name]
+                            # Ngl I don't know how I feel about determining the bounds like this, but it works for now (subject to change)
+                            if param_unc != 0:
+                                current_functions[func_idx]["parameters"][param_name] = [param_value, param_value-param_unc, param_value+param_unc]
+                            else:
+                                current_functions[func_idx]["parameters"][param_name] = [param_value, 'fixed']
                             copied_count += 1
                         else:
                             # Copy from config file
