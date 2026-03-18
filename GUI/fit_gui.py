@@ -295,6 +295,66 @@ def read_function_labels(config_path):
                     labels.append(None)
     return labels
 
+def parse_fit_params_file(fit_params_path, config_path):
+    """
+    Parses an imfit fit_params file and returns a dictionary of parameter values
+    organized by function index and parameter name.
+    """
+    params_dict = {}
+    
+    try:
+        # First, get the config structure to know which parameters exist
+        config = pyimfit.parse_config_file(config_path)
+        config_dict = config.getModelAsDict()
+        function_list = config_dict["function_sets"][0]["function_list"]
+        
+        # Parse the fit_params file
+        with open(fit_params_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Track current function index while parsing
+        func_idx = 0
+        param_idx = 0
+        
+        # Parse each line looking for parameter values
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            
+            # Try to parse as a parameter line (typically format: "param_name = value [error]")
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    param_value = float(parts[0])
+                    
+                    # Get parameter name from config
+                    if func_idx < len(function_list):
+                        func_params = function_list[func_idx]["parameters"]
+                        param_names = list(func_params.keys())
+                        
+                        if param_idx < len(param_names):
+                            param_name = param_names[param_idx]
+                            
+                            if func_idx not in params_dict:
+                                params_dict[func_idx] = {}
+                            
+                            # Store the value - we'll use it as a fixed parameter
+                            params_dict[func_idx][param_name] = param_value
+                            param_idx += 1
+                            
+                            # If we've gone through all params in this function, move to next
+                            if param_idx >= len(param_names):
+                                func_idx += 1
+                                param_idx = 0
+                except (ValueError, IndexError):
+                    pass
+        
+        return params_dict
+    except Exception as e:
+        print(f"Error parsing fit_params file: {e}")
+        return {}
+
 class CopyParametersDialog(QDialog):
     """Dialog for copying parameters from one band to another."""
     
@@ -305,6 +365,8 @@ class CopyParametersDialog(QDialog):
         self.fit_type = fit_type
         self.source_band = None
         self.source_config = None
+        self.source_type = "config"  # Can be "config" or "fit_params"
+        self.fit_params_values = {}  # Store parsed fit parameters
         self.setWindowTitle("Copy Parameters From Band")
         # self.setMinimumWidth(400)
         # self.setMinimumHeight(500)
@@ -322,6 +384,20 @@ class CopyParametersDialog(QDialog):
         band_layout.addWidget(self.band_combo)
         band_layout.addStretch()
         layout.addLayout(band_layout)
+        
+        # Source type selection
+        source_layout = QHBoxLayout()
+        source_label = QLabel("Source:")
+        self.config_radio = QRadioButton("Config File")
+        self.config_radio.setChecked(True)
+        self.config_radio.toggled.connect(self.on_source_changed)
+        self.fitparams_radio = QRadioButton("Fit Parameters")
+        self.fitparams_radio.toggled.connect(self.on_source_changed)
+        source_layout.addWidget(source_label)
+        source_layout.addWidget(self.config_radio)
+        source_layout.addWidget(self.fitparams_radio)
+        source_layout.addStretch()
+        layout.addLayout(source_layout)
         
         # Parameter list with checkboxes
         param_label = QLabel("Select parameters to copy:")
@@ -358,10 +434,19 @@ class CopyParametersDialog(QDialog):
         # Load initial band
         self.on_band_changed(self.band_combo.currentText())
     
+    def on_source_changed(self):
+        """Handle source type change."""
+        if self.config_radio.isChecked():
+            self.source_type = "config"
+        else:
+            self.source_type = "fit_params"
+        self.on_band_changed(self.band_combo.currentText())
+    
     def on_band_changed(self, band):
         """Load parameters from the selected source band."""
         self.source_band = band
         self.param_list.clear()
+        self.fit_params_values = {}
         
         config_path = os.path.join(self.galaxy_path, f"{self.fit_type}_{band}.dat")
         try:
@@ -371,6 +456,19 @@ class CopyParametersDialog(QDialog):
             
             # Load function labels
             labels = read_function_labels(config_path)
+            
+            # If fit_params source is selected, try to load fit parameters
+            if self.source_type == "fit_params":
+                fit_params_path = os.path.join(self.galaxy_path, f"{self.fit_type}_{band}_fit_params.txt")
+                if os.path.exists(fit_params_path):
+                    self.fit_params_values = parse_fit_params_file(fit_params_path, config_path)
+                else:
+                    QMessageBox.warning(
+                        self, "Warning", 
+                        f"Fit parameters file not found for band {band}.\nFalling back to config file."
+                    )
+                    self.config_radio.setChecked(True)
+                    self.source_type = "config"
             
             # Populate the list
             for func_idx, func in enumerate(function_list):
@@ -388,7 +486,14 @@ class CopyParametersDialog(QDialog):
                 
                 # Add parameters
                 for param_name in params.keys():
-                    item_text = f"  └─ {param_name}"
+                    # Add source indicator if using fit_params
+                    source_indicator = ""
+                    if self.source_type == "fit_params" and func_idx in self.fit_params_values:
+                        if param_name in self.fit_params_values[func_idx]:
+                            param_val = self.fit_params_values[func_idx][param_name]
+                            source_indicator = f" (fit: {param_val:.6g})"
+                    
+                    item_text = f"  └─ {param_name}{source_indicator}"
                     item = QListWidgetItem(item_text)
                     item.setData(QtCore.Qt.UserRole, (func_idx, param_name))
                     self.param_list.addItem(item)
@@ -412,6 +517,14 @@ class CopyParametersDialog(QDialog):
             if data is not None:
                 selected.append(data)
         return selected
+    
+    def get_source_type(self):
+        """Return the source type (config or fit_params)."""
+        return self.source_type
+    
+    def get_fit_params_values(self):
+        """Return the parsed fit parameters."""
+        return self.fit_params_values
 
 class MainWindow(QMainWindow):
     def __init__(self, p=None, master_table_p = None, ellipse_fit_p=None):
@@ -848,6 +961,9 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             source_band = dlg.source_band
             selected_params = dlg.get_selected_parameters()
+            source_type = dlg.get_source_type()
+            fit_params_values = dlg.get_fit_params_values()
+            print(fit_params_values)
             
             if not selected_params:
                 QMessageBox.information(self, "No Parameters", "No parameters selected to copy.")
@@ -895,11 +1011,18 @@ class MainWindow(QMainWindow):
                 copied_count = 0
                 for func_idx, param_name in selected_params:
                     try:
-                        source_param = source_functions[func_idx]["parameters"][param_name]
-                        if source_param is not None:
-                            # Copy the parameter value and constraints
-                            current_functions[func_idx]["parameters"][param_name] = source_param.copy()
+                        if source_type == "fit_params" and func_idx in fit_params_values and param_name in fit_params_values[func_idx]:
+                            # Copy from fit parameters - use value as fixed parameter
+                            param_value = fit_params_values[func_idx][param_name]
+                            current_functions[func_idx]["parameters"][param_name] = [param_value, 'fixed']
                             copied_count += 1
+                        else:
+                            # Copy from config file
+                            source_param = source_functions[func_idx]["parameters"][param_name]
+                            if source_param is not None:
+                                # Copy the parameter value and constraints
+                                current_functions[func_idx]["parameters"][param_name] = source_param.copy()
+                                copied_count += 1
                     except Exception as e:
                         print(f"Warning: Could not copy {param_name} from function {func_idx}: {e}")
                 
@@ -918,7 +1041,8 @@ class MainWindow(QMainWindow):
                 with open(current_config_path, "w") as f:
                     f.write(config_text)
                 
-                QMessageBox.information(self, "Success", f"Copied {copied_count} parameter(s) from band {source_band}.")
+                source_text = "config file" if source_type == "config" else "fit parameters"
+                QMessageBox.information(self, "Success", f"Copied {copied_count} parameter(s) from {source_text} of band {source_band}.")
                 
                 # Refresh the UI with new parameters
                 self.changegal()
