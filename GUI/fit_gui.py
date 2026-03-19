@@ -575,15 +575,17 @@ class MainWindow(QMainWindow):
             config.close()
             
         # Read in the ellipse fit data 
-        csvs = glob.glob(os.path.join(ellipse_fit_p, "*.csv"))
-        ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
-        for csv in csvs:
-            dat = pd.read_csv(csv)
-            ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
-        self.ellipse_fit_data = ellipse_fit_data
+        if ellipse_fit_p != None:
+            csvs = glob.glob(os.path.join(ellipse_fit_p, "*.csv"))
+            ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
+            for csv in csvs:
+                dat = pd.read_csv(csv)
+                ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+            self.ellipse_fit_data = ellipse_fit_data
 
         # Read in the master table (I might change this later so we don't have to do this in the GUI code)
-        self.master_table_data = pd.read_csv(master_table_p,header=0)
+        if master_table_p != None:
+            self.master_table_data = pd.read_csv(master_table_p,header=0)
 
         # Apply global scaling for the application
         scale_factor = self.gui_config["ui_scale"]
@@ -830,8 +832,11 @@ class MainWindow(QMainWindow):
         # self.img.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
         img = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
         galname = self.selected_galaxy_path.name
-        ellipse_params = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
-        self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=ellipse_params)
+        if ellipse_fit_p != None:
+            ellipse_params = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
+            self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=ellipse_params)
+        else:
+            self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
 
         model = self.get_composed_data(galaxypath, self.band, idx=1, fit_type=self.fit_type)
         self.model.plot(model, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
@@ -1094,6 +1099,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Failed to copy parameters: {str(e)}")
     
     def regenconf(self):
+        ### TODO: Make this a bit more general, ideally shouldn't need to load the data here, but could instead load it in the config generation script itself maybe
         galpath = self.selected_galaxy_path
         img_file = glob.glob(os.path.join(galpath, f"image_{self.band}.fits"))[0]
 
@@ -1145,13 +1151,19 @@ if __name__ == "__main__":
     )
     
     parser.add_argument("-p", help="Path to folder containing galaxies", default=".")
-    parser.add_argument("--ellipse_fit", help="Path to folder ellipse fit data", default=".")
-    parser.add_argument("--master_table", help="Path to master table data", default=".")
+    parser.add_argument("--ellipse_fit", help="Path to folder ellipse fit data", default=None)
+    parser.add_argument("--master_table", help="Path to master table data", default=None)
 
     args = parser.parse_args()
     p = Path(args.p).resolve()
-    ellipse_fit_p = Path(args.ellipse_fit).resolve()
-    master_table_p = Path(args.master_table).resolve()
+    if args.ellipse_fit != None:
+        ellipse_fit_p = Path(args.ellipse_fit).resolve()
+    else:
+        ellipse_fit_p = None
+    if args.master_table != None:
+        master_table_p = Path(args.master_table).resolve()
+    else:
+        master_table_p = None
     app = QApplication(sys.argv)
     main_win = MainWindow(p,master_table_p, ellipse_fit_p)
     app.setWindowIcon(QtGui.QIcon(os.path.join(Path(__file__).parent, "./car.png")))
