@@ -416,7 +416,7 @@ class CopyParametersDialog(QDialog):
         band_layout = QHBoxLayout()
         band_label = QLabel("Copy from band:")
         self.band_combo = QComboBox()
-        available_bands = [b for b in ["g", "r", "i", "z"] if b != current_band]
+        available_bands = ["g", "r", "i", "z"]
         self.band_combo.addItems(available_bands)
         self.band_combo.currentTextChanged.connect(self.on_band_changed)
         band_layout.addWidget(band_label)
