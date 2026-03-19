@@ -65,8 +65,8 @@ class PlotCanvas(FigureCanvas):
             norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
             self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
             if not ellipse_params.empty:
-                host = ellipse_params[ellipse_params["label"] == "Host"]
-                polar = ellipse_params[ellipse_params["label"] == "Polar"]
+                host = ellipse_params[ellipse_params["label"] == "Host"].iloc[0]
+                polar = ellipse_params[ellipse_params["label"] == "Polar"].iloc[0]
                 imshape = im.shape
                 ell_host = matplotlib.patches.Ellipse(
                     xy=(imshape[0]/2, imshape[1]/2),
