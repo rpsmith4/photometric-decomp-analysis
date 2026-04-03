@@ -19,8 +19,8 @@ from sersic_init_conf import gather_parameters as genparams
 
 # def generate_config(sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring") -> pyimfit.ModelDescription:
 #     print("Hello")
-def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None, galaxy_type: pd.DataFrame = None) -> pyimfit.ModelDescription:
-    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type)
+def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None, galaxy_type: pd.DataFrame = None, plot_slits: bool =False) -> pyimfit.ModelDescription:
+    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type, plot_slits=plot_slits)
     model_str = res[0].getStringDescription()
     
     with open(outfile, "w") as f:
