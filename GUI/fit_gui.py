@@ -227,8 +227,11 @@ class ParamSliderWidget(QWidget):
         self.set_fixed_state(fixed)
 
         self.slider.valueChanged.connect(self.slider_changed)
+        self.valspinbox.setKeyboardTracking(False)
         self.valspinbox.valueChanged.connect(self.spinbox_changed)
+        self.minspinbox.setKeyboardTracking(False)
         self.minspinbox.valueChanged.connect(self.minspinbox_changed)
+        self.maxspinbox.setKeyboardTracking(False)
         self.maxspinbox.valueChanged.connect(self.maxspinbox_changed)
         self.fixed_checkbox.stateChanged.connect(lambda state: self.set_fixed_state(state==2))
         
