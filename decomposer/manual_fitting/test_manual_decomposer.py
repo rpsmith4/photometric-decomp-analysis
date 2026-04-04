@@ -335,24 +335,14 @@ def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str
         data_array: An array of the 1-D profile for manual estimation
 
     """
-    current_working_directory = os.getcwd()
-    print(f"Current working directory: {current_working_directory}")
 
     args = argparse.Namespace()
 
-    
-    root_dir = '/Users/jonah/School/Research/photometric-decomp-analysis/decomposer/'
-    data_dir = root_dir + 'manual_fitting/3.6/'
-    # args.profile = data_dir + "ellipse.txt"
-    # args.image = data_dir + "UGC4599_ch1_1_skysub.fits"
-    # args.psf = data_dir + "azim_model_psf.txt"
-
-    
-
-    test_data_dir = root_dir + 'GalaxyFiles/IC4582/'
-    # args.profile = data_dir + "ellipse.txt"
+    test_data_dir = str(galaxy_directory) + "/"
+    data_dir = str(galaxy_directory) + "/"
+    args.profile = data_dir + "ellipse.txt"
     args.image = test_data_dir + "image_g.fits"
-    # args.psf = data_dir + "azim_model_psf.txt"
+    args.psf = data_dir + "azim_model_psf.txt"
     
     psf_info = fits.open(test_data_dir + 'psf_patched_g.fits')
     psf_array = psf_info[0].data
@@ -407,4 +397,14 @@ def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    
+    parser.add_argument("-p", help="Path to galaxy folder", default=".")
+
+    args = parser.parse_args()
+    p = Path(args.p)
+    psf = fits.getdata(os.path.join(p, "psf_patched_g.fits"))
+    image_name = "image_g.fits"
+    main(p, psf, image_name)
