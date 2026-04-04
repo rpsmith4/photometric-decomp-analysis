@@ -22,6 +22,14 @@ import pyimfit
 import shutil
 import numpy as np
 import re
+import pandas as pd
+import matplotlib.patches
+import glob
+
+BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
+sys.path.append(os.path.join(BASE_DIR, 'decomposer'))
+
+from generate_imfit_conf import generate_config
 
 def open_folder(path): 
     path = os.path.abspath(path) 
@@ -50,14 +58,44 @@ class PlotCanvas(FigureCanvas):
         super().__init__(fig)
         self.setParent(parent)
 
-    def plot(self, im, limits, cmap, stretch=LogStretch()):
+    def plot(self, im, limits, cmap, stretch=LogStretch(), ellipse_params=pd.DataFrame):
         self.ax.cla()
         self.ax.set_axis_off()
         if im.any():
             norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
             self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
+            if not ellipse_params.empty:
+                host = ellipse_params[ellipse_params["label"] == "Host"].iloc[0]
+                polar = ellipse_params[ellipse_params["label"] == "Polar"].iloc[0]
+                imshape = im.shape
+                ell_host = matplotlib.patches.Ellipse(
+                    xy=(imshape[0]/2, imshape[1]/2),
+                    height=float(host["semi_minor"]*2),
+                    width=float(host["semi_major"]*2),
+                    angle=host["angle"],
+                    label="Host",
+                    ls="--",
+                    lw=2,
+                    color="red",
+                    fill=False
+                )
+                ell_polar = matplotlib.patches.Ellipse(
+                    xy=(imshape[0]/2, imshape[1]/2),
+                    height=float(polar["semi_minor"]*2),
+                    width=float(polar["semi_major"]*2),
+                    angle=polar["angle"],
+                    label="Polar",
+                    ls="--",
+                    lw=2,
+                    color="blue",
+                    fill=False
+                )
+                self.ax.add_patch(ell_host)
+                self.ax.add_patch(ell_polar)
+                self.ax.legend()
         else:
             self.ax.text(0,0.5,"Cannot find FITs image!")
+
         self.draw()
 
 
@@ -66,7 +104,7 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
     def __init__(self, mark_colors=None, galmarks=None, parent=None):
         super().__init__(parent)
         self.mark_colors = mark_colors or {}
-        self.galmarks = galmarks or {}
+        self.galmarks = galmarks
 
     def hasChildren(self, index):
         # For invalid indices, fall back to default behavior
@@ -101,12 +139,12 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
             try:
                 if self.isDir(index) and not self.hasChildren(index):
                     name = Path(self.filePath(index)).name
-                    mark = self.galmarks.get(name)
+                    mark = self.galmarks[name]
                     if mark:
-                        col = self.mark_colors.get(mark)
+                        col = self.mark_colors[mark]
                         if col:
                             return QBrush(QColor(col))
-            except Exception:
+            except Exception as e:
                 pass
 
         return super().data(index, role)
@@ -189,8 +227,11 @@ class ParamSliderWidget(QWidget):
         self.set_fixed_state(fixed)
 
         self.slider.valueChanged.connect(self.slider_changed)
+        self.valspinbox.setKeyboardTracking(False)
         self.valspinbox.valueChanged.connect(self.spinbox_changed)
+        self.minspinbox.setKeyboardTracking(False)
         self.minspinbox.valueChanged.connect(self.minspinbox_changed)
+        self.maxspinbox.setKeyboardTracking(False)
         self.maxspinbox.valueChanged.connect(self.maxspinbox_changed)
         self.fixed_checkbox.stateChanged.connect(lambda state: self.set_fixed_state(state==2))
         
@@ -257,6 +298,105 @@ def read_function_labels(config_path):
                     labels.append(None)
     return labels
 
+def parse_fit_params_file(fit_params_path, config_path):
+    """
+    Parses an imfit fit_params file and returns a dictionary of parameter values
+    organized by function index and parameter name.
+    """
+    params_dict = {}
+    
+    try:
+        # First, get the config structure to know which parameters exist
+        config = pyimfit.parse_config_file(config_path)
+        config_dict = config.getModelAsDict()
+        function_list = config_dict["function_sets"][0]["function_list"]
+        
+        # Parse the fit_params file
+        with open(fit_params_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Track current function index while parsing
+        func_idx = 0
+        param_idx = 0
+        
+        # Parse each line looking for parameter values
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            
+            # Try to parse as a parameter line (typically format: "param_name = value [error]")
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    param_value = float(parts[0])
+                    
+                    # Get parameter name from config
+                    if func_idx < len(function_list):
+                        func_params = function_list[func_idx]["parameters"]
+                        param_names = list(func_params.keys())
+                        
+                        if param_idx < len(param_names):
+                            param_name = param_names[param_idx]
+                            
+                            if func_idx not in params_dict:
+                                params_dict[func_idx] = {}
+                            
+                            # Store the value - we'll use it as a fixed parameter
+                            params_dict[func_idx][param_name] = param_value
+                            param_idx += 1
+                            
+                            # If we've gone through all params in this function, move to next
+                            if param_idx >= len(param_names):
+                                func_idx += 1
+                                param_idx = 0
+                except (ValueError, IndexError) as e:
+                    print(e)
+                    pass
+        
+        return params_dict
+    except Exception as e:
+        print(f"Error parsing fit_params file: {e}")
+        return {}
+
+def parse_results(file):
+    model = pyimfit.parse_config_file(file)
+    band = Path(file).stem.rsplit("_")[-3]
+    with open(file, "r") as f:
+        lines = f.readlines()
+    status = lines[5].split(" ")[7]
+    status_message = " ".join(lines[5].split(" ")[9:])
+    uncs = dict()
+    for k, line in enumerate(lines):
+        if "FUNCTION" in line:
+            func_type = line.split(" ")[1].rstrip()
+            func_label = line.split("LABEL ")[-1].rstrip()
+            func_params = pyimfit.get_function_dict()[func_type]
+            uncs[func_label] = dict()
+            for j, func_param in enumerate(func_params):
+                try:
+                    unc = lines[k + j + 1].split("+/-")[1].split("\t")[0]
+                    uncs[func_label][func_param] = float(unc) # Extremely janky way to get the uncertainties
+                except:
+                    uncs[func_label][func_param] = None
+    chi_sq = float(lines[7].split(" ")[-1])
+    chi_sq_red = float(lines[8].split(" ")[-1])
+    functions = []
+    for k, function in enumerate(model.functionList()):
+        func_dict = function.getFunctionAsDict()
+        for param in func_dict["parameters"]:
+            # func_dict["parameters_unc"][param] = func_dict["parameters"][param] 
+            func_dict["parameters"][param] = func_dict["parameters"][param][0]
+        if k == 0:
+            func_dict["label"] = "Host"
+        if k == 1:
+            func_dict["label"] = "Polar"
+        func_dict["parameters_unc"] = uncs[func_dict["label"]]
+        func_dict["band"] = band
+        functions.append(func_dict)
+    
+    return functions, chi_sq, chi_sq_red, status, status_message
+
 class CopyParametersDialog(QDialog):
     """Dialog for copying parameters from one band to another."""
     
@@ -267,6 +407,8 @@ class CopyParametersDialog(QDialog):
         self.fit_type = fit_type
         self.source_band = None
         self.source_config = None
+        self.source_type = "config"  # Can be "config" or "fit_params"
+        self.fit_params_values = {}  # Store parsed fit parameters
         self.setWindowTitle("Copy Parameters From Band")
         # self.setMinimumWidth(400)
         # self.setMinimumHeight(500)
@@ -277,13 +419,27 @@ class CopyParametersDialog(QDialog):
         band_layout = QHBoxLayout()
         band_label = QLabel("Copy from band:")
         self.band_combo = QComboBox()
-        available_bands = [b for b in ["g", "r", "i", "z"] if b != current_band]
+        available_bands = ["g", "r", "i", "z"]
         self.band_combo.addItems(available_bands)
         self.band_combo.currentTextChanged.connect(self.on_band_changed)
         band_layout.addWidget(band_label)
         band_layout.addWidget(self.band_combo)
         band_layout.addStretch()
         layout.addLayout(band_layout)
+        
+        # Source type selection
+        source_layout = QHBoxLayout()
+        source_label = QLabel("Source:")
+        self.config_radio = QRadioButton("Config File")
+        self.config_radio.setChecked(True)
+        self.config_radio.toggled.connect(self.on_source_changed)
+        self.fitparams_radio = QRadioButton("Fit Parameters")
+        self.fitparams_radio.toggled.connect(self.on_source_changed)
+        source_layout.addWidget(source_label)
+        source_layout.addWidget(self.config_radio)
+        source_layout.addWidget(self.fitparams_radio)
+        source_layout.addStretch()
+        layout.addLayout(source_layout)
         
         # Parameter list with checkboxes
         param_label = QLabel("Select parameters to copy:")
@@ -320,10 +476,19 @@ class CopyParametersDialog(QDialog):
         # Load initial band
         self.on_band_changed(self.band_combo.currentText())
     
+    def on_source_changed(self):
+        """Handle source type change."""
+        if self.config_radio.isChecked():
+            self.source_type = "config"
+        else:
+            self.source_type = "fit_params"
+        self.on_band_changed(self.band_combo.currentText())
+    
     def on_band_changed(self, band):
         """Load parameters from the selected source band."""
         self.source_band = band
         self.param_list.clear()
+        self.fit_params_values = {}
         
         config_path = os.path.join(self.galaxy_path, f"{self.fit_type}_{band}.dat")
         try:
@@ -333,6 +498,19 @@ class CopyParametersDialog(QDialog):
             
             # Load function labels
             labels = read_function_labels(config_path)
+            
+            # If fit_params source is selected, try to load fit parameters
+            if self.source_type == "fit_params":
+                fit_params_path = os.path.join(self.galaxy_path, f"{self.fit_type}_{band}_fit_params.txt")
+                if os.path.exists(fit_params_path):
+                    self.fit_params_values = parse_results(fit_params_path)[0]
+                else:
+                    QMessageBox.warning(
+                        self, "Warning", 
+                        f"Fit parameters file not found for band {band}.\nFalling back to config file."
+                    )
+                    self.config_radio.setChecked(True)
+                    self.source_type = "config"
             
             # Populate the list
             for func_idx, func in enumerate(function_list):
@@ -350,7 +528,14 @@ class CopyParametersDialog(QDialog):
                 
                 # Add parameters
                 for param_name in params.keys():
-                    item_text = f"  └─ {param_name}"
+                    # Add source indicator if using fit_params
+                    source_indicator = ""
+                    if self.source_type == "fit_params" and func_idx in self.fit_params_values:
+                        if param_name in self.fit_params_values[func_idx]:
+                            param_val = self.fit_params_values[func_idx][param_name]
+                            source_indicator = f" (fit: {param_val:.6g})"
+                    
+                    item_text = f"  └─ {param_name}{source_indicator}"
                     item = QListWidgetItem(item_text)
                     item.setData(QtCore.Qt.UserRole, (func_idx, param_name))
                     self.param_list.addItem(item)
@@ -374,15 +559,36 @@ class CopyParametersDialog(QDialog):
             if data is not None:
                 selected.append(data)
         return selected
+    
+    def get_source_type(self):
+        """Return the source type (config or fit_params)."""
+        return self.source_type
+    
+    def get_fit_params_values(self):
+        """Return the parsed fit parameters."""
+        return self.fit_params_values
 
 class MainWindow(QMainWindow):
-    def __init__(self, p=None):
+    def __init__(self, p=None, master_table_p = None, ellipse_fit_p=None):
         super().__init__()
 
         # Loading the config file for the GUI
         with open(os.path.join(MAINDIR, LOCAL_DIR, 'config.json')) as config:
             self.gui_config = json.load(config)
             config.close()
+            
+        # Read in the ellipse fit data 
+        if ellipse_fit_p != None:
+            csvs = glob.glob(os.path.join(ellipse_fit_p, "*.csv"))
+            ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
+            for csv in csvs:
+                dat = pd.read_csv(csv)
+                ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+            self.ellipse_fit_data = ellipse_fit_data
+
+        # Read in the master table (I might change this later so we don't have to do this in the GUI code)
+        if master_table_p != None:
+            self.master_table_data = pd.read_csv(master_table_p,header=0)
 
         # Apply global scaling for the application
         scale_factor = self.gui_config["ui_scale"]
@@ -414,6 +620,7 @@ class MainWindow(QMainWindow):
         self.curr_gal_index = 0
         self.solvertype = "LM"
         self.band = "g"
+        self.param_widgets = {}
 
         # Setting up the buttons
         self.ui.LMbutton.clicked.connect(lambda: self.set_solver("LM"))
@@ -449,6 +656,10 @@ class MainWindow(QMainWindow):
         # Connect Copy From Band button
         self.ui.copyparamsbutton.clicked.connect(self.copy_parameters_from_band)
         self.ui.copyparamsbutton.setShortcut(QKeySequence("CTRL+P"))
+
+        # Also connect the generate config button
+        self.ui.newconfbutton.clicked.connect(self.regenconf)
+        self.ui.newconfbutton.setShortcut(QKeySequence("CTRL+G"))
 
         # Get the fit type
         self.ui.fit_type_combo.currentTextChanged.connect(self.change_fit_type)
@@ -520,7 +731,10 @@ class MainWindow(QMainWindow):
             if idx != 0:
                 im = np.array([])
             else:
-                im = fits.getdata(os.path.join(galaxy_path, f"image_{band}.fits"))
+                try:
+                    im = fits.getdata(os.path.join(galaxy_path, f"image_{band}.fits"))
+                except:
+                    return np.array([])
         return im
 
     def getconfigim(self, galaxypath, band, fit_type, shape, maxThreads=4):
@@ -536,7 +750,10 @@ class MainWindow(QMainWindow):
         return im
     
     def getconfigresid(self, im, imconfig):
-        return im - imconfig
+        try:
+            return im - imconfig
+        except:
+            return np.array([])
 
 
     def changegal(self):
@@ -548,54 +765,58 @@ class MainWindow(QMainWindow):
         self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
         self.currentgalaxytext.repaint()
 
-        config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
-        config_model = pyimfit.parse_config_file(config_path)
-        self.current_config_model = config_model
-        config_dict = config_model.getModelAsDict()
-        # Add function labels to config_dict
-        labels = read_function_labels(config_path)
-        function_list = config_dict["function_sets"][0]["function_list"]
-        for i, func in enumerate(function_list):
-            if i < len(labels):
-                func['label'] = labels[i]
-            else:
-                func['label'] = None
-        
-        # Want to ensure that I actually keep the labels since pyimift is incapable of doing so for some reason
-        self.current_config_dict = config_dict   
-
-        layout: QVBoxLayout = self.ui.configsliders
-        # Reset the layout first
         try:
-            self.clearLayout(layout)
-        except Exception as e:
-            print(e)
-            pass
-        for func_idx, func in enumerate(function_list):
-            params = func["parameters"]
-            label = func["label"]
-
-            label_text = QTextBrowser()
-            label_text.setText(label)
-            label_text.setMaximumHeight(30)
-            label_text.setMinimumWidth(50)
-            label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
-            label_text.setAlignment(QtCore.Qt.AlignCenter)
-            layout.addWidget(label_text)
-
-            for param in params.keys():
-                initval = params[param][0]
-                fixed = False
-                if params[param][1] == 'fixed':
-                    lowlim = initval
-                    hilim = initval
-                    fixed = True
+            config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
+            config_model = pyimfit.parse_config_file(config_path)
+            self.current_config_model = config_model
+            config_dict = config_model.getModelAsDict()
+            # Add function labels to config_dict
+            labels = read_function_labels(config_path)
+            function_list = config_dict["function_sets"][0]["function_list"]
+            for i, func in enumerate(function_list):
+                if i < len(labels):
+                    func['label'] = labels[i]
                 else:
-                    lowlim = params[param][1]
-                    hilim = params[param][2]
+                    func['label'] = None
+            
+            # Want to ensure that I actually keep the labels since pyimift is incapable of doing so for some reason
+            self.current_config_dict = config_dict   
 
-                # Use (func_idx, param) as key to distinguish duplicate param names
-                self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), label, layout)
+            layout: QVBoxLayout = self.ui.configsliders
+            # Reset the layout first
+            try:
+                self.clearLayout(layout)
+            except Exception as e:
+                print(e)
+                pass
+            for func_idx, func in enumerate(function_list):
+                params = func["parameters"]
+                label = func["label"]
+
+                label_text = QTextBrowser()
+                label_text.setText(label)
+                label_text.setMaximumHeight(30)
+                label_text.setMinimumWidth(50)
+                label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+                label_text.setAlignment(QtCore.Qt.AlignCenter)
+                layout.addWidget(label_text)
+
+                for param in params.keys():
+                    initval = params[param][0]
+                    fixed = False
+                    if params[param][1] == 'fixed':
+                        lowlim = initval
+                        hilim = initval
+                        fixed = True
+                    else:
+                        lowlim = params[param][1]
+                        hilim = params[param][2]
+
+                    # Use (func_idx, param) as key to distinguish duplicate param names
+                    self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), label, layout)
+        except:
+            self.clearLayout(self.ui.configsliders)
+            pass
 
 
         try:
@@ -613,7 +834,12 @@ class MainWindow(QMainWindow):
 
         # self.img.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
         img = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
-        self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+        galname = self.selected_galaxy_path.name
+        if ellipse_fit_p != None:
+            ellipse_params = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
+            self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=ellipse_params)
+        else:
+            self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
 
         model = self.get_composed_data(galaxypath, self.band, idx=1, fit_type=self.fit_type)
         self.model.plot(model, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
@@ -640,8 +866,6 @@ class MainWindow(QMainWindow):
                     # layout.removeItem(item)
  
     def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
-        if not hasattr(self, 'param_widgets'):
-            self.param_widgets = {}
         func_idx, paramname = paramkey
         ndigits = 6
         widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits)
@@ -725,11 +949,12 @@ class MainWindow(QMainWindow):
         try:
             model = self.galaxytree.model()
             model.layoutChanged.emit()
-        except Exception:
+        except Exception as e:
+            print(e)
             pass
     
     def saveconfig(self):
-        if getattr(self, "selected_galaxy_path", None) is None:
+        if self.selected_galaxy_path is None:
             print("No galaxy selected to save config")
             return
         p = self.selected_galaxy_path
@@ -783,6 +1008,8 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             source_band = dlg.source_band
             selected_params = dlg.get_selected_parameters()
+            source_type = dlg.get_source_type()
+            fit_params_values = dlg.get_fit_params_values()
             
             if not selected_params:
                 QMessageBox.information(self, "No Parameters", "No parameters selected to copy.")
@@ -806,7 +1033,7 @@ class MainWindow(QMainWindow):
                         func['label'] = source_functions_labels[i]
                     else:
                         func['label'] = None
-                
+
                 # Get current config
                 current_config_path = os.path.join(
                     self.selected_galaxy_path,
@@ -830,11 +1057,23 @@ class MainWindow(QMainWindow):
                 copied_count = 0
                 for func_idx, param_name in selected_params:
                     try:
-                        source_param = source_functions[func_idx]["parameters"][param_name]
-                        if source_param is not None:
-                            # Copy the parameter value and constraints
-                            current_functions[func_idx]["parameters"][param_name] = source_param.copy()
+                        if source_type == "fit_params":
+                            # Copy from fit parameters - use value as fixed parameter
+                            param_value = fit_params_values[func_idx]["parameters"][param_name]
+                            param_unc = fit_params_values[func_idx]["parameters_unc"][param_name]
+                            # Ngl I don't know how I feel about determining the bounds like this, but it works for now (subject to change)
+                            if param_unc != 0:
+                                current_functions[func_idx]["parameters"][param_name] = [param_value, param_value-param_unc, param_value+param_unc]
+                            else:
+                                current_functions[func_idx]["parameters"][param_name] = [param_value, 'fixed']
                             copied_count += 1
+                        else:
+                            # Copy from config file
+                            source_param = source_functions[func_idx]["parameters"][param_name]
+                            if source_param is not None:
+                                # Copy the parameter value and constraints
+                                current_functions[func_idx]["parameters"][param_name] = source_param.copy()
+                                copied_count += 1
                     except Exception as e:
                         print(f"Warning: Could not copy {param_name} from function {func_idx}: {e}")
                 
@@ -853,13 +1092,61 @@ class MainWindow(QMainWindow):
                 with open(current_config_path, "w") as f:
                     f.write(config_text)
                 
-                QMessageBox.information(self, "Success", f"Copied {copied_count} parameter(s) from band {source_band}.")
+                source_text = "config file" if source_type == "config" else "fit parameters"
+                QMessageBox.information(self, "Success", f"Copied {copied_count} parameter(s) from {source_text} of band {source_band}.")
                 
                 # Refresh the UI with new parameters
                 self.changegal()
                 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to copy parameters: {str(e)}")
+    
+    def regenconf(self):
+        ### TODO: Make this a bit more general, ideally shouldn't need to load the data here, but could instead load it in the config generation script itself maybe
+        galpath = self.selected_galaxy_path
+        img_file = glob.glob(os.path.join(galpath, f"image_{self.band}.fits"))[0]
+
+        img = fits.open(img_file)[0]
+        mask = fits.getdata(os.path.join(galpath, "image_mask.fits"))
+            
+        psf = fits.getdata(os.path.join(galpath, f"psf_patched_{self.band}.fits"))
+        invvar = fits.getdata(os.path.join(galpath, f"image_{self.band}_invvar.fits"))
+        outfile_name = f"{self.fit_type}_{self.band}.dat" 
+        outfile = os.path.join(galpath, outfile_name)
+        galname = self.selected_galaxy_path.name
+        ellipse_fit_data_gal = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
+        model_desc_dict = {} # Not really needed anymore I think
+        master_table_data_gal = self.master_table_data[self.master_table_data["NAME"] == galname]
+
+
+        files = os.listdir(galpath)
+        try:
+            if f"{self.fit_type}_{self.band}.dat" in files:
+                answer = QMessageBox.question(
+                    self,
+                    'Overwrite Warning',
+                    'There is an existing config file. Overwrite?',
+                    QMessageBox.StandardButton.Yes |
+                    QMessageBox.StandardButton.No
+                )
+                if answer == QMessageBox.StandardButton.Yes:
+                    generate_config(outfile, self.band, img, mask, psf, invvar, self.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, plot_slits = self.gui_config["show_phot_slits"])
+                    QMessageBox.information(self, "Config Generation Information", "Config successfully written")
+                else:
+                    pass
+            else:
+                print(self.gui_config["show_phot_slits"])
+                generate_config(outfile, self.band, img, mask, psf, invvar, self.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, plot_slits = self.gui_config["show_phot_slits"])
+                QMessageBox.information(self, "Config Generation Information", "Config successfully written")
+        except Exception as e:
+            QMessageBox.critical(self, "Config Generation Information", f"Config generation failed:\n{e}")
+            print(e)
+
+        
+        self.changegal()
+        
+        
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -868,10 +1155,20 @@ if __name__ == "__main__":
     )
     
     parser.add_argument("-p", help="Path to folder containing galaxies", default=".")
+    parser.add_argument("--ellipse_fit", help="Path to folder ellipse fit data", default=None)
+    parser.add_argument("--master_table", help="Path to master table data", default=None)
 
     args = parser.parse_args()
     p = Path(args.p).resolve()
+    if args.ellipse_fit != None:
+        ellipse_fit_p = Path(args.ellipse_fit).resolve()
+    else:
+        ellipse_fit_p = None
+    if args.master_table != None:
+        master_table_p = Path(args.master_table).resolve()
+    else:
+        master_table_p = None
     app = QApplication(sys.argv)
-    main_win = MainWindow(p)
+    main_win = MainWindow(p,master_table_p, ellipse_fit_p)
     app.setWindowIcon(QtGui.QIcon(os.path.join(Path(__file__).parent, "./car.png")))
     sys.exit(app.exec())

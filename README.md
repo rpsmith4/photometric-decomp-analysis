@@ -22,7 +22,7 @@ This project is intended to be used for:
 - [Siena Galaxy Atlas FITs table](https://sga.legacysurvey.org/)
 - [IMAN](https://bitbucket.org/mosenkov/iman_new/src/master/) (Now included as a submodule with my own slightly modified fork of these scripts)
 - Python 3.1X.XX
-- Some list of python packages (will add later)
+- Required packages are listed in the ```environment.yml``` conda environment file.
 
 ## Examples
 Here are some examples of how to use the code from downloading data to fitting it.

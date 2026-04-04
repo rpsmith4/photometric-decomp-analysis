@@ -89,7 +89,7 @@ def _safe_ellipticity(d: Dict, fallback: float = 0.3) -> float:
 
 
 # def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -> tuple[str, float, float]:
-def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None, zeropoint: float = None, pixel_scale: float = None, galaxy_type: pd.DataFrame = None, phot_params: str = "automatic") -> tuple[str, float, float]:
+def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None, zeropoint: float = None, pixel_scale: float = None, galaxy_type: pd.DataFrame = None, phot_params: str = "automatic", plot_slits = False) -> tuple[str, float, float]:
     """
     Generate an imfit 2xSersic config using:
       - geometry (center, PA, ellipticity) from ellipse_fit()
@@ -222,14 +222,16 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     )
     from photometric_cut import plot_dual_slit_mu_figure
 
-    # plot_dual_slit_mu_figure(
-    #     sci_fits=sci_fits,
-    #     mask_fits=mask_fits,
-    #     results=results,
-    #     title="Simultaneous Sérsic fit to Host & Polar cuts",
-    #     savepath=f"./test_fit.png",
-    #     show=True,
-    # )
+    print(plot_slits)
+    if plot_slits:
+        plot_dual_slit_mu_figure(
+            sci_fits=sci_fits,
+            mask_fits=mask_fits,
+            results=results,
+            title="Simultaneous Sérsic fit to Host & Polar cuts",
+            savepath=f"./test_fit.png",
+            show=True,
+        )
     
     host_fit = results["host"]["fit"]
     polar_fit = results["polar"]["fit"]

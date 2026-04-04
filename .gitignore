@@ -4,3 +4,6 @@
 *.png
 *.ipynb
 .vscode/*
+decomposer/Archive
+decomposer/EllipseFitResults
+decomposer/GalaxyFiles
