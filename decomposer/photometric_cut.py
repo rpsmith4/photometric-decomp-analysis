@@ -289,30 +289,6 @@ def photometric_cut(
         center_xy_used = (float(best_center[0]), float(best_center[1]))
         center_refine_metric = float(best_metric) if best_metric is not None else None
 
-    # Background subtraction (estimated from slit endcaps) # Background is already removed, though there is sensor noise, but can't really subtract that since its a gaussian with mean 0
-    #background_estimate: Optional[float] = None
-    #background_sigma_robust: Optional[float] = None
-
-    # if subtract_background and str(background_region).lower() == "ends":
-    #     region_mask = _build_endcaps_region_mask(
-    #         shape=sci.shape,
-    #         center_xy=center_xy_used,
-    #         pa_deg=pa_deg,
-    #         length_pix=length_pix,
-    #         width_pix=width_pix,
-    #         endcap_frac=endcap_frac,
-    #     )
-    #     region_mask = region_mask & (~bad)
-
-        # bg, bg_sigma = _estimate_background(sci, region_mask)
-        # # Treat non-finite as "not computed"
-        # if np.isfinite(bg):
-        #     background_estimate = float(bg)
-        #     background_sigma_robust = float(bg_sigma) if np.isfinite(bg_sigma) else None
-        #     sci = sci - background_estimate
-        # else:
-        #     background_estimate = None
-        #     background_sigma_robust = None
 
     # Debug overlay
     if show_slit or slit_overlay_savepath:

@@ -17,11 +17,15 @@ import pandas as pd
 # For now I'm just going to use the new decomp method
 from sersic_init_conf import gather_parameters as genparams
 
-# def generate_config(sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring") -> pyimfit.ModelDescription:
-#     print("Hello")
-def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None, galaxy_type: pd.DataFrame = None, plot_slits: bool =False) -> pyimfit.ModelDescription:
-    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type, plot_slits=plot_slits)
-    model_str = res[0].getStringDescription()
+
+def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None, galaxy_type: pd.DataFrame = None, phot_fit_type: str = "automatic", outfile_name: str | None = None, plot_slits: bool =False) -> pyimfit.ModelDescription:
+    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type, plot_slits=plot_slits, phot_params=phot_fit_type)
+
+    # Adjusted to allow for generation of both manual and automatic files and to be stored separately
+    if outfile_name == None:
+        model_str = res[0].getStringDescription()
+    else:
+        model_str = outfile_name
     
     with open(outfile, "w") as f:
         f.write("".join(model_str))
@@ -101,22 +105,22 @@ def main(args):
                             if folder in root:
                                 args.type = folder_type_dict[folder]
 
-                    outfile_name = f"{args.fit_type}_{band}.dat"
-                    outfile = os.path.join(galpath, outfile_name)
-                    if args.fit_type == "2_sersic":
-                        # p = mp.Process(target = generate_config, args=(img, str(args.type).lower(), model_desc, band))
-                        # p = mp.Process(target = generate_config, args=(model_desc_dict, outfile_name, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data))
-                        try:
-                            generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal)
-                        except Exception as e:
-                            print(e)
-                            continue
-                    
-                    # jobs.append(p)  
-            
-            # if not(len(jobs) == 0):
-            #     for p in jobs:
-            #         p.start()
+                outfile_name = f"{args.fit_type}_{band}.dat"
+                outfile = os.path.join(galpath, outfile_name)
+                if args.fit_type == "2_sersic":
+                    # p = mp.Process(target = generate_config, args=(img, str(args.type).lower(), model_desc, band))
+                    # p = mp.Process(target = generate_config, args=(model_desc_dict, outfile_name, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data))
+                    try:
+                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, phot_fit_type="automatic", outfile_name=None)
+                    except Exception as e:
+                        print(e)
+                        continue
+                
+                # jobs.append(p)  
+        
+        # if not(len(jobs) == 0):
+        #     for p in jobs:
+        #         p.start()
 
             #     for p in jobs:
             #         p.join()
