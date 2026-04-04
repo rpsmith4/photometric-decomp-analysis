@@ -14,11 +14,15 @@ warnings.filterwarnings("ignore")
 import pyimfit
 import pandas as pd
 
-# def generate_config(sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring") -> pyimfit.ModelDescription:
-#     print("Hello")
-def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None, galaxy_type: pd.DataFrame = None) -> pyimfit.ModelDescription:
-    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type)
-    model_str = res[0].getStringDescription()
+
+def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None, galaxy_type: pd.DataFrame = None, phot_fit_type: str = "automatic", outfile_name: str | None = None) -> pyimfit.ModelDescription:
+    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type, phot_params=phot_fit_type)
+
+    # Adjusted to allow for generation of both manual and automatic files and to be stored separately
+    if outfile_name == None:
+        model_str = res[0].getStringDescription()
+    else:
+        model_str = outfile_name
     
     with open(outfile, "w") as f:
         f.write("".join(model_str))
@@ -103,7 +107,7 @@ def main(args):
                     # p = mp.Process(target = generate_config, args=(img, str(args.type).lower(), model_desc, band))
                     # p = mp.Process(target = generate_config, args=(model_desc_dict, outfile_name, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data))
                     try:
-                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal)
+                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, phot_fit_type="automatic", outfile_name=None)
                     except Exception as e:
                         print(e)
                         continue

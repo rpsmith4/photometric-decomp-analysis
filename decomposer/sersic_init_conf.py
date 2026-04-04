@@ -89,12 +89,12 @@ def _safe_ellipticity(d: Dict, fallback: float = 0.3) -> float:
 
 
 # def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -> tuple[str, float, float]:
-def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None, zeropoint: float = None, pixel_scale: float = None, galaxy_type: pd.DataFrame = None) -> tuple[str, float, float]:
+def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None, zeropoint: float = None, pixel_scale: float = None, galaxy_type: pd.DataFrame = None, phot_params: str = "automatic") -> tuple[str, float, float]:
     """
     Generate an imfit 2xSersic config using:
       - geometry (center, PA, ellipticity) from ellipse_fit()
       - photometric shape (n, Re_arcsec, mu_e) from dual_component_slits_and_sersic()
-        in photometric_cut.py
+        in photometric_cut.py if set to automatic, from manual description file if set to manual
 
     Returns: (model, pixel_scale_arcsec_per_pix, zeropoint_mag)
     """
@@ -247,6 +247,35 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     polar_n = float(polar_fit["n"])
     polar_Re_pix = float(polar_fit["Re_arcsec"]) / pixel_scale
     polar_Ie_pix = mu_e_to_Ie_pix(polar_fit["mu_e"], zeropoint, pixel_scale)
+
+    ##TODO finish parser for generating manual fit results
+    if phot_params is not "automatic":
+        # parse files for re, n, I0, probably make function to do this?
+        # "fit_params" > "sersic" > "radial" > "re['']", "mu0", "n" but need to convert mu0 -> I0
+        if phot_params == "polar_manual":
+            # find file name for just polar manual fitting
+            # parse
+            # set polar values accordingly
+            polar_n = 0
+            polar_Re_pix = 0
+            polar_Ie_pix = 0
+
+        elif phot_params == "host_manual":
+            # same as polar case
+            host_n = 0
+            host_Re_pix = 0
+            host_Ie_pix = 0
+
+        elif phot_params == "all_manual":
+            # do both polar and host 
+            polar_n = 0
+            polar_Re_pix = 0
+            polar_Ie_pix = 0
+
+            host_n = 0
+            host_Re_pix = 0
+            host_Ie_pix = 0
+            
 
     # ---------- bounds (starter defaults; you said you’ll tune these next) ----------
     # Center bounds (pixels)
