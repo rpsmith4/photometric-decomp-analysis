@@ -152,6 +152,13 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="onedfitbutton">
+       <property name="text">
+        <string>Manual 1-D Fit</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="fileexplorerbutton">
        <property name="maximumSize">
         <size>
@@ -357,8 +364,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>373</width>
-        <height>844</height>
+        <width>367</width>
+        <height>848</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_2">
@@ -487,8 +494,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>528</width>
-        <height>946</height>
+        <width>522</width>
+        <height>940</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_6">

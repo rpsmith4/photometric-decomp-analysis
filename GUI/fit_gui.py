@@ -28,8 +28,10 @@ import glob
 
 BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
 sys.path.append(os.path.join(BASE_DIR, 'decomposer'))
+sys.path.append(os.path.join(BASE_DIR, 'decomposer/manual_fitting'))
 
 from generate_imfit_conf import generate_config
+import test_manual_decomposer
 
 def open_folder(path): 
     path = os.path.abspath(path) 
@@ -661,6 +663,9 @@ class MainWindow(QMainWindow):
         self.ui.newconfbutton.clicked.connect(self.regenconf)
         self.ui.newconfbutton.setShortcut(QKeySequence("CTRL+G"))
 
+        # 1D Fitting button
+        self.ui.onedfitbutton.clicked.connect(self.openonedfitdialog)
+
         # Get the fit type
         self.ui.fit_type_combo.currentTextChanged.connect(self.change_fit_type)
         self.fit_type = self.ui.fit_type_combo.currentText()
@@ -1144,6 +1149,10 @@ class MainWindow(QMainWindow):
 
         
         self.changegal()
+    
+
+    def openonedfitdialog(self):
+        test_manual_decomposer.main(self.selected_galaxy_path)
         
         
 
