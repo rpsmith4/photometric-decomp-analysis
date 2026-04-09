@@ -1152,7 +1152,14 @@ class MainWindow(QMainWindow):
     
 
     def openonedfitdialog(self):
-        test_manual_decomposer.main(self.selected_galaxy_path)
+        if self.selected_galaxy_path is None:
+            QMessageBox.warning(self, "No galaxy selected", "Please select a galaxy first.")
+            return
+        manual_decomp_path = os.path.join(MAINDIR, "decomposer", "manual_fitting", "test_manual_decomposer.py")
+        try:
+            subprocess.Popen([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band])
+        except Exception as e:
+            QMessageBox.critical(self, "Failed to open 1D fit", f"Could not launch 1D fit: {e}")
         
         
 

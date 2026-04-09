@@ -324,7 +324,7 @@ def fold_cut_to_radial_profile_I(cut, min_frac_good=0.5):
     return np.asarray(Rb), np.asarray(Ib), np.asarray(Ieb), base_mask
 
 
-def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str = "", data_array: NDArray | None = None) -> None:
+def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str = "", data_array: NDArray | None = None, band: str | None = None) -> None:
     """ A function that prepares the necessary information to pass along to the manual decomposition script.
 
     
@@ -341,13 +341,18 @@ def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str
     test_data_dir = str(galaxy_directory) + "/"
     data_dir = str(galaxy_directory) + "/"
     args.profile = data_dir + "ellipse.txt"
-    args.image = test_data_dir + "image_g.fits"
+    if band:
+        args.image = test_data_dir + f"image_{band}.fits"
+        psf_info = fits.open(test_data_dir + f'psf_patched_{band}.fits')
+    else:
+        args.image = test_data_dir + f"image_g.fits"
+        psf_info = fits.open(test_data_dir + 'psf_patched_g.fits')
+
     args.psf = data_dir + "azim_model_psf.txt"
     
-    psf_info = fits.open(test_data_dir + 'psf_patched_g.fits')
     psf_array = psf_info[0].data
     psf_center = (psf_array.shape[0] // 2, psf_array.shape[1] // 2)
-    psf_cut = photometric_cut(psf_array, psf_center, 172.6, length_pix = 40, pixel_scale_arcsec=0.262)
+    psf_cut = photometric_cut(psf_array, psf_center, 172.6, length_pix = 40, pixel_scale_arcsec=0.262) # I don't know if this is how one does a 1D PSF, you may want to read up on this since I think its different
     R_psf, I_psf, Ierr_psf, mask = fold_cut_to_radial_profile_I(psf_cut)
 
         # Stack columns together
@@ -365,7 +370,10 @@ def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str
    
     args.psf = test_data_dir + "psf_profile.txt"
 
-    gal_info = fits.open(test_data_dir + 'image_g.fits')
+    if band:
+        gal_info = fits.open(test_data_dir + f'image_{band}.fits')
+    else:
+        gal_info = fits.open(test_data_dir + f'image_g.fits')
     gal_array = gal_info[0].data
     gal_center = (gal_array.shape[0] // 2, gal_array.shape[1] // 2)
     pa = 172.6-90
@@ -402,9 +410,8 @@ if __name__ == '__main__':
     )
     
     parser.add_argument("-p", help="Path to galaxy folder", default=".")
+    parser.add_argument("-b", help="Band to fit", default="b", choices=['g','r','i','z'])
 
     args = parser.parse_args()
     p = Path(args.p)
-    psf = fits.getdata(os.path.join(p, "psf_patched_g.fits"))
-    image_name = "image_g.fits"
-    main(p, psf, image_name)
+    main(p, band=args.b)
