@@ -1,4 +1,4 @@
-import ferengi
+import ferengi_clean as ferengi
 import argparse
 import numpy as np
 from pathlib import Path
@@ -12,6 +12,7 @@ from mpi4py import MPI
 from mpi4py.futures import MPIPoolExecutor
 from functools import partial
 from astropy.cosmology import FlatLambdaCDM
+import traceback
 cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
 
 # INPUTS:
@@ -80,9 +81,10 @@ def simunits2cts2(simim, pixarea, expt):
         simim[:, :, k] = ferengi.maggies2cts(simim[:,:,k], expt=expt[k], zp=22.5)
     return simim 
 
-def simunits2maggies2(simim, pixarea):
+def simunits2maggies2(simim):
     # simim = simim * 10 ** 6 / 3.631e-6 * pixarea # MJy/sr to nmgy /pixel
-    simim = simim * 10 ** 6 / 3.631e-6 # MJy/sr to nmgy /sr
+    # simim = simim * 10 ** 6 / 3.631e-6 # MJy/sr to nmgy /sr
+    simim = (simim * 10 ** 6 / 3.631e-6 * u.nmgy/u.sr ).to(u.nmgy/u.arcsec**2)# MJy/sr to nmgy /arcsec**2
     return simim 
 
 def simunits2maggies(simim, pixarea):
@@ -122,7 +124,7 @@ def redshift(im, psf, sky, out_bands, galaxy_name, lerp_scheme):
 
     # im = im * 10**(-1) # Needed to get the order of magnitude right 
     # im = simunits2cts2(im, pixarea_lo, tlo) 
-    im = simunits2maggies2(im, pixarea_lo) 
+    im = simunits2maggies2(im) 
     # im = simunits2cts(im, pixarea_lo, tlo) 
 
     # sky = np.zeros_like(sky) 
@@ -194,7 +196,7 @@ def load_data_and_run(galaxy_name, p, psf_path, out_path, lerp_scheme):
 
         # sky_shape = (np.shape(im)[0]*3, np.shape(im)[1]*3) # Adjust as needed to make the code not error out if the sky is too small
         sky_shape = (np.shape(im)[0]*10, np.shape(im)[1]*10) # Adjust as needed to make the code not error out if the sky is too small
-        sky = rng.normal(mu, stddevs, size=(sky_shape[0], sky_shape[1], 5)) # nmgy
+        sky = rng.normal(mu, stddevs, size=(sky_shape[0], sky_shape[1], 5)) * u.nmgy # nmgy
         # sky = 100*sky # Needed to make it even visible (may have to change thi or something)
 
         psf = list()
@@ -218,7 +220,7 @@ def load_data_and_run(galaxy_name, p, psf_path, out_path, lerp_scheme):
         print(e)
         return -1
     except Exception as e:
-        print(e)
+        print(traceback.format_exc())
         return -1
 
 if __name__ == "__main__":
@@ -252,11 +254,11 @@ if __name__ == "__main__":
             galaxy_names.append(galaxy_name)
 
 
-    # for galaxy in galaxy_names:
-    #     load_data_and_run(galaxy, p, psf_path, o, lerp_scheme)
-    part = partial(load_data_and_run, p=p, psf_path=psf_path, out_path=o, lerp_scheme=lerp_scheme)
-    with MPIPoolExecutor(max_workers=args.n) as pool:
-        pool.map(part, galaxy_names)
+    for galaxy in galaxy_names:
+        load_data_and_run(galaxy, p, psf_path, o, lerp_scheme)
+    # part = partial(load_data_and_run, p=p, psf_path=psf_path, out_path=o, lerp_scheme=lerp_scheme)
+    # with MPIPoolExecutor(max_workers=args.n) as pool:
+    #     pool.map(part, galaxy_names)
 
     # pool = mp.Pool(processes=args.n)
     # pool.map(func, galaxy_names)

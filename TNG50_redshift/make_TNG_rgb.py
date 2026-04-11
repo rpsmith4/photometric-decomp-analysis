@@ -107,8 +107,8 @@ def maggies2simunits(im, pixarea):
 def TNG_rgb(galaxy_name, path, path_redshift, psf_path, out):
     print(f"Making image for {galaxy_name}")
 
-    # zs = [0, 0.05, 0.1, 0.15, 0.2] # List of redshifts
-    zs = [0.003] # List of redshifts
+    zs = [0, 0.05, 0.1, 0.15, 0.2] # List of redshifts
+    # zs = [0.003] # List of redshifts
 
     bands = "grz"
     # pixscale = 0.262 * u.arcsecond
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     psf_path = Path(args.psf)
 
 
-    structure = os.walk(p)
+    structure = os.walk(pr)
     galaxy_names = []
     for root, dirs, files in structure:
         if not(files == []):
@@ -211,7 +211,7 @@ if __name__ == "__main__":
             galaxy_names.append(galaxy_name)
 
     part = partial(TNG_rgb, path=p, path_redshift=pr, psf_path=psf_path, out=o)
-    # with MPIPoolExecutor(max_workers=15) as pool:
-    #     pool.map(part, galaxy_names)
-    for galaxy_name in galaxy_names:
-        TNG_rgb(galaxy_name, p, pr, psf_path, o)
+    with MPIPoolExecutor(max_workers=15) as pool:
+        pool.map(part, galaxy_names)
+    # for galaxy_name in galaxy_names:
+    #     TNG_rgb(galaxy_name, p, pr, psf_path, o)
