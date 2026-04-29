@@ -1022,7 +1022,7 @@ def fit_sersic_mu(
                 model = sersic_mu(Rf, n, Re, mu_e)
                 return (muf - model) * w
             res = least_squares(resid_lockn, x0=x0, bounds=(lb[1:], ub[1:]), method="trf")
-            print(res.x)
+            # print(res.x)
             Re, mu_e = res.x
 
 
@@ -1032,9 +1032,9 @@ def fit_sersic_mu(
 
             # I need to also figure out for the situations in which there are 2 polar structures identified what to use...
 
-                print(polar_structure)
+                # print(polar_structure)
                 if type(polar_structure) is not str:
-                    print("No second structure")
+                    # print("No second structure")
                     break
                 elif polar_structure == "PH":
                     n_theoretical.append(2)

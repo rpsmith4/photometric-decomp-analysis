@@ -143,9 +143,9 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     from photometric_cut_helpers import pixel_scale_from_header_arcsec_per_pix# , ellipse_fit <- now passing in as pd.DataFrame explicitly before this point.
 
     # ellipse_fit_data["ell"] = 1-ellipse_fit_data["axis_ratio"]
-    ellipse_fit_data["ell"] = 1-ellipse_fit_data["axis_ratio"]
-    host_e = ellipse_fit_data[ellipse_fit_data["label"] == "Host"]
-    polar_e = ellipse_fit_data[ellipse_fit_data["label"] == "Polar"]
+    ellipse_fit_data["ell"] = (ellipse_fit_data["semi_major"]-ellipse_fit_data["semi_minor"])/ellipse_fit_data["semi_major"]
+    host_e = ellipse_fit_data[ellipse_fit_data["PolarOrHost"] == "Host"]
+    polar_e = ellipse_fit_data[ellipse_fit_data["PolarOrHost"] == "Polar"]
  
     if pixel_scale is None:
         pixel_scale = float(pixel_scale_from_header_arcsec_per_pix(sci_fits))
@@ -176,7 +176,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     host_len = int(max(200, 2.5 * host_a)) if host_a is not None else 300
     polar_len = int(max(250, 2.5 * polar_a)) if polar_a is not None else 450
 
-    pa_diff = host_e["pa_diff"].iloc[0]
+    pa_diff = np.abs(host_pa-polar_pa)
     # Trying to refine the 1-D fitting by getting better constraints on the bounds in which to fit both host and polar components. Make it so that it stops failing. There's a lot of work to be done here:
     if host_a < polar_a:
         polar_rmin = host_a*(1-polar_ell)/np.sqrt((1-host_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2)
@@ -222,7 +222,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     )
     from photometric_cut import plot_dual_slit_mu_figure
 
-    print(plot_slits)
+    # print(plot_slits)
     if plot_slits:
         plot_dual_slit_mu_figure(
             sci_fits=sci_fits,
@@ -353,6 +353,8 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     
     model.addFunction(host)
     model.addFunction(polar)
+
+    # print(model)
 
     return model, pixel_scale, zeropoint
 

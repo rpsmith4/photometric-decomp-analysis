@@ -301,7 +301,7 @@ class SersicFitter(BasicFitter):
             re = self.radii[len(self.radii)//3]
 
         self.set_params([re, mu0, n])
-        self.fit()
+        self.fit(range_low_lim=self.ref_points[0], range_up_lim=self.ref_points[1])
 
     def chi_penalty(self):
         total = 1

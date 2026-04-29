@@ -67,8 +67,8 @@ class PlotCanvas(FigureCanvas):
             norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
             self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
             if not ellipse_params.empty:
-                host = ellipse_params[ellipse_params["label"] == "Host"].iloc[0]
-                polar = ellipse_params[ellipse_params["label"] == "Polar"].iloc[0]
+                host = ellipse_params[ellipse_params["PolarOrHost"] == "Host"].iloc[0]
+                polar = ellipse_params[ellipse_params["PolarOrHost"] == "Polar"].iloc[0]
                 imshape = im.shape
                 ell_host = matplotlib.patches.Ellipse(
                     xy=(imshape[0]/2, imshape[1]/2),
@@ -581,10 +581,10 @@ class MainWindow(QMainWindow):
             
         # Read in the ellipse fit data 
         if ellipse_fit_p != None:
-            csvs = glob.glob(os.path.join(ellipse_fit_p, "*.csv"))
-            ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
+            csvs = glob.glob(os.path.join(Path(args.ellipse_fit), "*.ecsv"))
+            ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
             for csv in csvs:
-                dat = pd.read_csv(csv)
+                dat = pd.read_csv(csv, sep = " ")
                 ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
             self.ellipse_fit_data = ellipse_fit_data
 
