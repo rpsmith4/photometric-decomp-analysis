@@ -970,7 +970,6 @@ def fit_sersic_mu(
     R = np.asarray(R_arcsec, float)
     mu = np.asarray(mu, float)
     mu_err = np.asarray(mu_err, float) if mu_err is not None else np.full_like(mu, np.nan)
-
     mask = np.isfinite(R) & np.isfinite(mu) & (R >= float(R_min_arcsec)) & (R <= float(R_max_arcsec))
     if np.sum(mask) < 8:
         return {"success": False, "reason": "too_few_points", "mask": mask}
@@ -991,16 +990,17 @@ def fit_sersic_mu(
     x0 = [float(np.clip(n0, lb[0], ub[0])),
           float(np.clip(Re0, lb[1], ub[1])),
           float(np.clip(mu_e0, lb[2], ub[2]))]
-
+    print(x0)
     def resid(p):
         n, Re, mu_e = p
         model = sersic_mu(Rf, n, Re, mu_e)
         return (muf - model) * w
 
-    res = least_squares(resid, x0=x0, bounds=(lb, ub), method="trf")
+    res = least_squares(resid, x0=x0, bounds=(lb, ub), method="trf", #max_nfev=10000)
+    )
 
     n, Re, mu_e = res.x
-
+    # print(res)
 
     # Doing some work to try to get better estimates for the sersic index by just setting it to a more resonable value in the case that one of the n-bounds is hit for the host structure, but currently then I_e and r_e are not well-aligned.
     
@@ -1048,13 +1048,13 @@ def fit_sersic_mu(
             n = n_theoretical[0] # Right now, just take the first value from n_theoretical even if two separate structures pass in something. I'll continue looking into this.
             x0 = [float(np.clip(Re0, lb[1], ub[1])),
             float(np.clip(mu_e0, lb[2], ub[2]))]
-            
+            # print(x0)
             def resid_lockn(p):
                 Re, mu_e = p
                 model = sersic_mu(Rf, n, Re, mu_e)
                 return (muf - model) * w
             res = least_squares(resid_lockn, x0=x0, bounds=(lb[1:], ub[1:]), method="trf")
-            print(res.x)
+            # print(res.x)
             Re, mu_e = res.x
         
         
@@ -1163,6 +1163,7 @@ def dual_component_slits_and_sersic(
     host_fit = fit_sersic_mu(Rh, muh, muh_err, R_min_arcsec=host_R_min_arcsec, morphtype = morphtype) # While I think this is a good idea, its also verging on
     # just "fitting before the fitting". It is something I trid but it doesn't really work well, unless this is just a 1d fit
     # Jonah: It is just a 1-D fit
+    # print(host_fit)
 
     # Decide polar inner cutoff
     polar_Rmin_used = None
@@ -1177,7 +1178,7 @@ def dual_component_slits_and_sersic(
 
     # Fit polar Sérsic
     polar_fit = fit_sersic_mu(Rp, mup, mup_err, R_min_arcsec=polar_Rmin_used, polartype = polartype)
-
+    
     # --------------------------------------------------
     # Clean summary results (human-facing)
     # --------------------------------------------------

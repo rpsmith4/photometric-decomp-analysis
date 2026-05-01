@@ -178,19 +178,24 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
 
     pa_diff = np.abs(host_pa-polar_pa)
     # Trying to refine the 1-D fitting by getting better constraints on the bounds in which to fit both host and polar components. Make it so that it stops failing. There's a lot of work to be done here:
+    print((host_a, polar_a))
     if host_a < polar_a:
-        polar_rmin = host_a*(1-polar_ell)/np.sqrt((1-host_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2)
+        polar_rmin = host_a*(1-host_ell)/np.sqrt((1-host_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2)
+        print((1-polar_ell)/np.sqrt((1-host_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2))
         if polar_a > 8*polar_rmin:
             polar_rmin *= 4
+        polar_rmin = max(0.5*polar_a, polar_rmin) # just a failsafe to make sure that a good number of points are available for use
         host_rmin = 0*host_a
     if polar_a < host_a:
         host_rmin = polar_a*(1-polar_ell)/np.sqrt((1-polar_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2)
         if host_a > 8*host_rmin:
             host_rmin *= 4
+        host_rmin = max(0.5*host_a, host_rmin) # just a failsafe to make sure that a good number of points are available for use
         polar_rmin = 0*polar_a
     host_rmin *= pixel_scale
     polar_rmin *= pixel_scale
     # print((host_rmin, polar_rmin)) # Just to test how it's doing
+    
     
     # ---------- photometric estimates (n, Re_arcsec, mu_e) ----------
     # This calls your new machinery in photometric_cut.py
@@ -223,6 +228,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     from photometric_cut import plot_dual_slit_mu_figure
 
     # print(plot_slits)
+    # plot_slits = True
     if plot_slits:
         plot_dual_slit_mu_figure(
             sci_fits=sci_fits,
