@@ -1120,6 +1120,9 @@ class MainWindow(QMainWindow):
         outfile = os.path.join(galpath, outfile_name)
         galname = self.selected_galaxy_path.name
         ellipse_fit_data_gal = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
+        if ellipse_fit_data_gal.empty:
+            QMessageBox.critical(self, "Failed to Generate Config", f"Galaxy {galname} not in Ellipse Fit Data!")
+            return
         model_desc_dict = {} # Not really needed anymore I think
         master_table_data_gal = self.master_table_data[self.master_table_data["NAME"] == galname]
 
@@ -1163,15 +1166,18 @@ class MainWindow(QMainWindow):
         self.component = 'host' # Change this line to 'polar' if fitting polar component
         try:
             ellipse_fit_data_gal = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
-            if self.component == 'host':
-                ellipse_fit_data_gal = ellipse_fit_data_gal[ellipse_fit_data_gal["PolarOrHost"] == 'Host']
-            elif self.component == 'polar':
-                ellipse_fit_data_gal = ellipse_fit_data_gal[ellipse_fit_data_gal["PolarOrHost"] == 'Polar']
-            self.ell = ((ellipse_fit_data_gal["semi_major"] - ellipse_fit_data_gal["semi_minor"])/ellipse_fit_data_gal["semi_major"]).iloc[0]
-            # print(self.ell)
-            self.pa = ellipse_fit_data_gal["angle"].iloc[0]
-            # print(self.pa)
-            subprocess.Popen([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", self.component, "-pa", str(self.pa), "-ell", str(self.ell), "-m", mask_path])
+            if ellipse_fit_data_gal.empty:
+                QMessageBox.critical(self, "Failed to open 1D fit", f"Galaxy {galname} not in Ellipse Fit Data!")
+            else:
+                if self.component == 'host':
+                    ellipse_fit_data_gal = ellipse_fit_data_gal[ellipse_fit_data_gal["PolarOrHost"] == 'Host']
+                elif self.component == 'polar':
+                    ellipse_fit_data_gal = ellipse_fit_data_gal[ellipse_fit_data_gal["PolarOrHost"] == 'Polar']
+                self.ell = ((ellipse_fit_data_gal["semi_major"] - ellipse_fit_data_gal["semi_minor"])/ellipse_fit_data_gal["semi_major"]).iloc[0]
+                # print(self.ell)
+                self.pa = ellipse_fit_data_gal["angle"].iloc[0]
+                # print(self.pa)
+                subprocess.Popen([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", self.component, "-pa", str(self.pa), "-ell", str(self.ell), "-m", mask_path])
         except Exception as e:
             QMessageBox.critical(self, "Failed to open 1D fit", f"Could not launch 1D fit: {e}")
         
