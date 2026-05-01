@@ -1150,22 +1150,28 @@ class MainWindow(QMainWindow):
         
         self.changegal()
     
-
+    # This currently only allows for manual refitting of the host. For the polar component, just swap out line 1160 'host' with 'polar'. I don't know if you want separate buttons to do that or a toggle, but either way I'm not 100% sure how that would exactly that would need to be included.
     def openonedfitdialog(self):
         if self.selected_galaxy_path is None:
             QMessageBox.warning(self, "No galaxy selected", "Please select a galaxy first.")
             return
+        
+        galpath = self.selected_galaxy_path
         manual_decomp_path = os.path.join(MAINDIR, "decomposer", "manual_fitting", "test_manual_decomposer.py")
+        mask_path = os.path.join(galpath, "image_mask.fits")
+        galname = self.selected_galaxy_path.name
+        self.component = 'host' # Change this line to 'polar' if fitting polar component
         try:
-            galname = self.selected_galaxy_path.name
             ellipse_fit_data_gal = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
-            print(ellipse_fit_data_gal)
-            ellipse_fit_data_gal_host = ellipse_fit_data_gal[ellipse_fit_data_gal["PolarOrHost"] == 'Host']
-            self.ell = ((ellipse_fit_data_gal_host["semi_major"] - ellipse_fit_data_gal_host["semi_minor"])/ellipse_fit_data_gal_host["semi_major"]).iloc[0]
+            if self.component == 'host':
+                ellipse_fit_data_gal = ellipse_fit_data_gal[ellipse_fit_data_gal["PolarOrHost"] == 'Host']
+            elif self.component == 'polar':
+                ellipse_fit_data_gal = ellipse_fit_data_gal[ellipse_fit_data_gal["PolarOrHost"] == 'Polar']
+            self.ell = ((ellipse_fit_data_gal["semi_major"] - ellipse_fit_data_gal["semi_minor"])/ellipse_fit_data_gal["semi_major"]).iloc[0]
             # print(self.ell)
-            self.pa = ellipse_fit_data_gal_host["angle"].iloc[0]
+            self.pa = ellipse_fit_data_gal["angle"].iloc[0]
             # print(self.pa)
-            subprocess.Popen([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", 'host', "-pa", str(self.pa), "-ell", str(self.ell)])
+            subprocess.Popen([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", self.component, "-pa", str(self.pa), "-ell", str(self.ell), "-m", mask_path])
         except Exception as e:
             QMessageBox.critical(self, "Failed to open 1D fit", f"Could not launch 1D fit: {e}")
         

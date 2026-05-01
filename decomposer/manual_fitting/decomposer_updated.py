@@ -91,7 +91,7 @@ def check_if_masked_radius(radius, masked_dist_ranges, pix2sec):
 class Decomposer(object):
     def __init__(self, profile_file_name, image_name, psf_file, profile_type, m0, pix2sec, limmag, adderror,
                  masked_dist_ranges, data_dir,
-                 pa, ell
+                 pa, ell, component: str = ''
                  ):
         # --- PSF ---
         self.psf = np.genfromtxt(psf_file, unpack=True, usecols=[1])
@@ -110,8 +110,8 @@ class Decomposer(object):
         self.lim_mag = limmag  # 30
         self.add_error = adderror
         self.data_dir = data_dir
-        # self.pa = pa
-        # self.ell = ell
+        self.component = component
+        
 
         # Determine the center of the galaxy as the center of the image:
         hdulist = fits.open(image_name)
@@ -371,7 +371,7 @@ class Decomposer(object):
         if event.key == "f":
             self.fit_slices()
         if event.key == "s":
-            self.save_results(save_path=self.data_dir) # make different for host/polar which is saved
+            self.save_results(save_path=self.data_dir, component = self.component) # make different for host/polar which is saved
         if event.key == "a":
             self.fit_slices(auto=True)
         if event.key == "d":
@@ -758,7 +758,7 @@ class Decomposer(object):
         self.messages = []
         plt.draw()
 
-    def save_results(self, save_path: str = '') -> None:
+    def save_results(self, save_path: str = '', component: str = '') -> None:
         all_results = {}
         all_results["lower_limit"] = self.range_low_lim
         # Save slices
@@ -773,7 +773,7 @@ class Decomposer(object):
         # 3) Name of the best model
         all_results["best_model"] = self.models_list[self.best_model_idx].name.lower()
         # Save json
-        filename = save_path + "Slice_fit.json"
+        filename = save_path + "Slice_fit_" + component + ".json"
         fout = open(filename, "w")
         json.dump(all_results, fout)
         fout.close()
@@ -826,7 +826,7 @@ def main(args, data_dir = ''):
 
     with Decomposer(args.profile, args.image, args.psf, args.profile_type, args.ZP, args.pix2sec, args.SBlim,
                     args.adderr, masked_dist_ranges, data_dir,
-                    args.pa, args.ell
+                    args.pa, args.ell, component = args.component
                     ) as d:
         plt.show()
 
