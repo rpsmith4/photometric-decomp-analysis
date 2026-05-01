@@ -90,7 +90,9 @@ def check_if_masked_radius(radius, masked_dist_ranges, pix2sec):
 
 class Decomposer(object):
     def __init__(self, profile_file_name, image_name, psf_file, profile_type, m0, pix2sec, limmag, adderror,
-                 masked_dist_ranges, data_dir):
+                 masked_dist_ranges, data_dir,
+                 pa, ell, component: str = ''
+                 ):
         # --- PSF ---
         self.psf = np.genfromtxt(psf_file, unpack=True, usecols=[1])
         # self.psf = zoom(self.psf, image_scale)
@@ -108,6 +110,8 @@ class Decomposer(object):
         self.lim_mag = limmag  # 30
         self.add_error = adderror
         self.data_dir = data_dir
+        self.component = component
+        
 
         # Determine the center of the galaxy as the center of the image:
         hdulist = fits.open(image_name)
@@ -115,7 +119,7 @@ class Decomposer(object):
         ny, nx = np.shape(imframe)
         XC = nx / 2.
         YC = ny / 2.
-        print(f'{XC,YC}')
+        # print(f'{XC,YC}')
 
         self.horizonthal_distances = []
         self.horizonthal_slice = []
@@ -216,11 +220,15 @@ class Decomposer(object):
                 self.horizonthal_distances.append(dist)
                 self.horizonthal_slice.append(mag)
                 self.horizonthal_std.append(mag_std)
-                self.posang_iraf = 0
                 if profile_type == "photcut":
-                    self.ell_iraf = 172.6
+                    # replace with:
+                    self.ell_iraf = ell
+                    self.posang_iraf = pa
+
+                    
                 else:
                     self.ell_iraf = 0
+                    self.posang_iraf = 0
                 self.x_cen_iraf.append(XC)
                 self.y_cen_iraf.append(YC)
 
@@ -250,9 +258,9 @@ class Decomposer(object):
         self.orig_image = data[int(self.y_cen_iraf - max_r): int(self.y_cen_iraf + max_r + 1),
                                int(self.x_cen_iraf - max_r): int(self.x_cen_iraf + max_r + 1)]
         self.orig_image_cen = self.orig_image.shape[0] / 2
-        print(f'{self.y_cen_iraf}, {max_r}')
-        print(self.orig_image)
-        print('\n\n\n')
+        # print(f'{self.y_cen_iraf}, {max_r}')
+        # print(self.orig_image)
+        # print('\n\n\n')
 
         # Setup fitting
         self.models_list = [SimpleDiskFitter, SersicFitter, BrokenDiskFitter, DoubleBrokenDiskFitter,
@@ -363,7 +371,7 @@ class Decomposer(object):
         if event.key == "f":
             self.fit_slices()
         if event.key == "s":
-            self.save_results(save_path=self.data_dir)
+            self.save_results(save_path=self.data_dir, component = self.component) # make different for host/polar which is saved
         if event.key == "a":
             self.fit_slices(auto=True)
         if event.key == "d":
@@ -382,6 +390,8 @@ class Decomposer(object):
         if event.key == "r":
             self.reset()
             self.make_plot()
+        # if event.key == "m":
+        #    self.mask_range()
 
     def change_model(self, idx):
         if idx >= len(self.models_list):
@@ -653,7 +663,7 @@ class Decomposer(object):
             p = self.ax_orig.add_patch(MPLEllipse((self.orig_image_cen, self.orig_image_cen),
                                                   width=2 * self.range_low_lim / self.image_scale,
                                                   height=2 * self.range_low_lim * (1 - self.ell_iraf) / self.image_scale,
-                                                  angle=self.posang_iraf,
+                                                  angle= self.posang_iraf,
                                                   edgecolor="b", facecolor="none"))
             self.ellipses_plot_instances.append(p)
         if self.range_up_lim is not None:
@@ -748,7 +758,7 @@ class Decomposer(object):
         self.messages = []
         plt.draw()
 
-    def save_results(self, save_path: str = '') -> None:
+    def save_results(self, save_path: str = '', component: str = '') -> None:
         all_results = {}
         all_results["lower_limit"] = self.range_low_lim
         # Save slices
@@ -763,7 +773,7 @@ class Decomposer(object):
         # 3) Name of the best model
         all_results["best_model"] = self.models_list[self.best_model_idx].name.lower()
         # Save json
-        filename = save_path + "Slice_fit.json"
+        filename = save_path + "Slice_fit_" + component + ".json"
         fout = open(filename, "w")
         json.dump(all_results, fout)
         fout.close()
@@ -815,7 +825,9 @@ def main(args, data_dir = ''):
             masked_dist_ranges.append(list(np.array(s.split(':'), float)))
 
     with Decomposer(args.profile, args.image, args.psf, args.profile_type, args.ZP, args.pix2sec, args.SBlim,
-                    args.adderr, masked_dist_ranges, data_dir) as d:
+                    args.adderr, masked_dist_ranges, data_dir,
+                    args.pa, args.ell, component = args.component
+                    ) as d:
         plt.show()
 
 

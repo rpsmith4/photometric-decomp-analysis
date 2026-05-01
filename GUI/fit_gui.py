@@ -67,8 +67,8 @@ class PlotCanvas(FigureCanvas):
             norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
             self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
             if not ellipse_params.empty:
-                host = ellipse_params[ellipse_params["label"] == "Host"].iloc[0]
-                polar = ellipse_params[ellipse_params["label"] == "Polar"].iloc[0]
+                host = ellipse_params[ellipse_params["PolarOrHost"] == "Host"].iloc[0]
+                polar = ellipse_params[ellipse_params["PolarOrHost"] == "Polar"].iloc[0]
                 imshape = im.shape
                 ell_host = matplotlib.patches.Ellipse(
                     xy=(imshape[0]/2, imshape[1]/2),
@@ -581,10 +581,10 @@ class MainWindow(QMainWindow):
             
         # Read in the ellipse fit data 
         if ellipse_fit_p != None:
-            csvs = glob.glob(os.path.join(ellipse_fit_p, "*.csv"))
-            ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
+            csvs = glob.glob(os.path.join(Path(args.ellipse_fit), "*.ecsv"))
+            ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
             for csv in csvs:
-                dat = pd.read_csv(csv)
+                dat = pd.read_csv(csv, sep = " ")
                 ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
             self.ellipse_fit_data = ellipse_fit_data
 
@@ -1150,14 +1150,28 @@ class MainWindow(QMainWindow):
         
         self.changegal()
     
-
+    # This currently only allows for manual refitting of the host. For the polar component, just swap out line 1160 'host' with 'polar'. I don't know if you want separate buttons to do that or a toggle, but either way I'm not 100% sure how that would exactly that would need to be included.
     def openonedfitdialog(self):
         if self.selected_galaxy_path is None:
             QMessageBox.warning(self, "No galaxy selected", "Please select a galaxy first.")
             return
+        
+        galpath = self.selected_galaxy_path
         manual_decomp_path = os.path.join(MAINDIR, "decomposer", "manual_fitting", "test_manual_decomposer.py")
+        mask_path = os.path.join(galpath, "image_mask.fits")
+        galname = self.selected_galaxy_path.name
+        self.component = 'host' # Change this line to 'polar' if fitting polar component
         try:
-            subprocess.Popen([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band])
+            ellipse_fit_data_gal = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
+            if self.component == 'host':
+                ellipse_fit_data_gal = ellipse_fit_data_gal[ellipse_fit_data_gal["PolarOrHost"] == 'Host']
+            elif self.component == 'polar':
+                ellipse_fit_data_gal = ellipse_fit_data_gal[ellipse_fit_data_gal["PolarOrHost"] == 'Polar']
+            self.ell = ((ellipse_fit_data_gal["semi_major"] - ellipse_fit_data_gal["semi_minor"])/ellipse_fit_data_gal["semi_major"]).iloc[0]
+            # print(self.ell)
+            self.pa = ellipse_fit_data_gal["angle"].iloc[0]
+            # print(self.pa)
+            subprocess.Popen([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", self.component, "-pa", str(self.pa), "-ell", str(self.ell), "-m", mask_path])
         except Exception as e:
             QMessageBox.critical(self, "Failed to open 1D fit", f"Could not launch 1D fit: {e}")
         

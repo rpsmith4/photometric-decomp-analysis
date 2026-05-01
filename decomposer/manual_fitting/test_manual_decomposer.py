@@ -324,7 +324,7 @@ def fold_cut_to_radial_profile_I(cut, min_frac_good=0.5):
     return np.asarray(Rb), np.asarray(Ib), np.asarray(Ieb), base_mask
 
 
-def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str = "", data_array: NDArray | None = None, band: str | None = None) -> None:
+def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str = "", data_array: NDArray | None = None, band: str | None = None, pa: float | None = None, ell: float | None = None, component: str | None = None, mask: Path | None = None) -> None:
     """ A function that prepares the necessary information to pass along to the manual decomposition script.
 
     
@@ -338,26 +338,27 @@ def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str
 
     args = argparse.Namespace()
 
-    test_data_dir = str(galaxy_directory) + "/"
-    data_dir = str(galaxy_directory) + "/"
+    # test_data_dir = str(galaxy_directory) + "/"
+    data_dir = str(galaxy_directory) + "/" # Incorporate whether it is the polar or host being saved. Only needs to be included here.
     args.profile = data_dir + "ellipse.txt"
     if band:
-        args.image = test_data_dir + f"image_{band}.fits"
-        psf_info = fits.open(test_data_dir + f'psf_patched_{band}.fits')
+        args.image = data_dir + f"image_{band}.fits"
+        psf_info = fits.open(data_dir + f'psf_patched_{band}.fits')
     else:
-        args.image = test_data_dir + f"image_g.fits"
-        psf_info = fits.open(test_data_dir + 'psf_patched_g.fits')
+        args.image = data_dir + f"image_g.fits"
+        psf_info = fits.open(data_dir + 'psf_patched_g.fits')
 
     args.psf = data_dir + "azim_model_psf.txt"
     
     psf_array = psf_info[0].data
     psf_center = (psf_array.shape[0] // 2, psf_array.shape[1] // 2)
     psf_cut = photometric_cut(psf_array, psf_center, 172.6, length_pix = 40, pixel_scale_arcsec=0.262) # I don't know if this is how one does a 1D PSF, you may want to read up on this since I think its different
-    R_psf, I_psf, Ierr_psf, mask = fold_cut_to_radial_profile_I(psf_cut)
+    # It is definitely not perfect, as it misses contributions from outside the slit, but was sufficient for a first approximation. The full process would require some type of deconvolution which would take me a bit to figure out how to properly include, and hasn't been impactful enough yet.
+    R_psf, I_psf, Ierr_psf, radial_mask = fold_cut_to_radial_profile_I(psf_cut)
 
         # Stack columns together
     data = np.column_stack((R_psf, I_psf, Ierr_psf))
-    save_path = test_data_dir
+    save_path = data_dir
     # Save to file with formatting
     np.savetxt(
         save_path + "psf_profile.txt",
@@ -368,35 +369,41 @@ def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str
     print(f"Successfully created and saved psf_profile.txt to {save_path}")
     psf_info = np.genfromtxt(save_path + "psf_profile.txt", unpack=True, usecols=[1])
    
-    args.psf = test_data_dir + "psf_profile.txt"
+    args.psf = save_path + "psf_profile.txt"
 
     if band:
-        gal_info = fits.open(test_data_dir + f'image_{band}.fits')
+        gal_info = fits.open(data_dir + f'image_{band}.fits')
     else:
-        gal_info = fits.open(test_data_dir + f'image_g.fits')
+        gal_info = fits.open(data_dir + f'image_g.fits')
     gal_array = gal_info[0].data
     gal_center = (gal_array.shape[0] // 2, gal_array.shape[1] // 2)
-    pa = 172.6-90
-    gal_cut = photometric_cut(gal_array, gal_center, pa, length_pix = 600, pixel_scale_arcsec=0.262)
+
+    mask_data = fits.getdata(mask)
+    gal_cut = photometric_cut(gal_array, gal_center, pa, mask_fits= mask_data, length_pix = 600, pixel_scale_arcsec=0.262)
     R_gal, mu_gal, muerr_gal, mask = fold_cut_to_radial_profile_I(gal_cut)
     data_gal = np.column_stack((R_gal, mu_gal, muerr_gal))
     np.savetxt(
-        save_path + "gal_profile.txt",
+        save_path + "gal_profile_" + component + ".txt",
         data_gal,
         header="sma[pix]\tI\tI_err",
         fmt=["%6.2f", "% .8e", "% .8e"],
         comments="# ")
-    print(f"Successfully created and saved gal_profile.txt to {save_path}")
-    psf_info = np.genfromtxt(save_path + "gal_profile.txt", unpack=True, usecols=[1])
+    print(f"Successfully created and saved gal_profile_{component}.txt to {save_path}")
+    print('\n')
+    # psf_info = np.genfromtxt(save_path + "gal_profile.txt", unpack=True, usecols=[1])
 
-    args.profile = test_data_dir + "gal_profile.txt"
+    args.profile = save_path + "gal_profile_" + component + ".txt"
 
+    # Currently, all of these are hard coded. They shouldn't need to change with any of the files to my knowledge.
     args.ZP = 22.5
     args.pix2sec = 0.262
     args.SBlim = 30.0
     args.adderr = 0.000
-    args.mask_radii = "0:8"
+    args.mask_radii = "0:0"
     args.profile_type = 'photcut'
+    args.pa = pa
+    args.ell = ell
+    args.component = component
 
     import decomposer_updated
     decomposer_updated.main(args, data_dir)
@@ -411,7 +418,13 @@ if __name__ == '__main__':
     
     parser.add_argument("-p", help="Path to galaxy folder", default=".")
     parser.add_argument("-b", help="Band to fit", default="b", choices=['g','r','i','z'])
+    # I don't really know how the GUI interacts with this script, so this is my guess for how the following can be passed in?
+    parser.add_argument("-c", help="Component to fit", default=None, choices = ['host', 'polar']) 
+    parser.add_argument("-pa", help="Position angle results for the correct component", default = None)
+    parser.add_argument("-ell", help="Ellipticity results for the correct component", default = None)
+    parser.add_argument("-m", help="Path to the mask file for this galaxy", default = None)
 
     args = parser.parse_args()
     p = Path(args.p)
-    main(p, band=args.b)
+
+    main(p, band=args.b, pa = float(args.pa), ell = float(args.ell), component = args.c, mask = args.m)
