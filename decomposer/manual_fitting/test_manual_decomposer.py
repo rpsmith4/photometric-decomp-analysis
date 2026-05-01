@@ -324,7 +324,7 @@ def fold_cut_to_radial_profile_I(cut, min_frac_good=0.5):
     return np.asarray(Rb), np.asarray(Ib), np.asarray(Ieb), base_mask
 
 
-def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str = "", data_array: NDArray | None = None, band: str | None = None) -> None:
+def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str = "", data_array: NDArray | None = None, band: str | None = None, pa: float | None = None, ell: float | None = None) -> None:
     """ A function that prepares the necessary information to pass along to the manual decomposition script.
 
     
@@ -379,7 +379,6 @@ def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str
     gal_center = (gal_array.shape[0] // 2, gal_array.shape[1] // 2)
 
     # TODO: take in ellipse fit results from GUI script, as well as whether it is a host or polar manual fitting. Adjust pa (and probably length_pix) accordingly.
-    pa = 172.6-90
     # args.pa = ...
     # args.ell = ...
 
@@ -406,6 +405,8 @@ def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str
     args.adderr = 0.000
     args.mask_radii = "0:0"
     args.profile_type = 'photcut'
+    args.pa = pa
+    args.ell = ell
 
     import decomposer_updated
     decomposer_updated.main(args, data_dir)
@@ -422,8 +423,10 @@ if __name__ == '__main__':
     parser.add_argument("-b", help="Band to fit", default="b", choices=['g','r','i','z'])
     # I don't really know how the GUI interacts with this script, so this is my guess for how the following can be passed in?
     parser.add_argument("-c", help="Component to fit", default=None, choices = ['host', 'polar']) 
-    parser.add_argument("-ellipse_results", help="Ellipse Fit results for the correct component", default = None)
+    parser.add_argument("-pa", help="Position angle results for the correct component", default = None)
+    parser.add_argument("-ell", help="Ellipticity results for the correct component", default = None)
 
     args = parser.parse_args()
     p = Path(args.p)
-    main(p, band=args.b)
+
+    main(p, band=args.b, pa = float(args.pa), ell = float(args.ell))

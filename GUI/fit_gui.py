@@ -1157,7 +1157,15 @@ class MainWindow(QMainWindow):
             return
         manual_decomp_path = os.path.join(MAINDIR, "decomposer", "manual_fitting", "test_manual_decomposer.py")
         try:
-            subprocess.Popen([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band])
+            galname = self.selected_galaxy_path.name
+            ellipse_fit_data_gal = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
+            print(ellipse_fit_data_gal)
+            ellipse_fit_data_gal_host = ellipse_fit_data_gal[ellipse_fit_data_gal["PolarOrHost"] == 'Host']
+            self.ell = ((ellipse_fit_data_gal_host["semi_major"] - ellipse_fit_data_gal_host["semi_minor"])/ellipse_fit_data_gal_host["semi_major"]).iloc[0]
+            # print(self.ell)
+            self.pa = ellipse_fit_data_gal_host["angle"].iloc[0]
+            # print(self.pa)
+            subprocess.Popen([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", 'host', "-pa", str(self.pa), "-ell", str(self.ell)])
         except Exception as e:
             QMessageBox.critical(self, "Failed to open 1D fit", f"Could not launch 1D fit: {e}")
         

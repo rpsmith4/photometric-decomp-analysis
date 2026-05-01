@@ -91,7 +91,7 @@ def check_if_masked_radius(radius, masked_dist_ranges, pix2sec):
 class Decomposer(object):
     def __init__(self, profile_file_name, image_name, psf_file, profile_type, m0, pix2sec, limmag, adderror,
                  masked_dist_ranges, data_dir,
-                 # pa, ell
+                 pa, ell
                  ):
         # --- PSF ---
         self.psf = np.genfromtxt(psf_file, unpack=True, usecols=[1])
@@ -222,11 +222,10 @@ class Decomposer(object):
                 self.horizonthal_std.append(mag_std)
                 if profile_type == "photcut":
                     # replace with:
-                    # self.ell_iraf = self.ell
-                    # self.posang_iraf = self.pa
+                    self.ell_iraf = ell
+                    self.posang_iraf = pa
 
-                    self.ell_iraf = 0.755
-                    self.posang_iraf = 172.6-90
+                    
                 else:
                     self.ell_iraf = 0
                     self.posang_iraf = 0
@@ -826,8 +825,8 @@ def main(args, data_dir = ''):
             masked_dist_ranges.append(list(np.array(s.split(':'), float)))
 
     with Decomposer(args.profile, args.image, args.psf, args.profile_type, args.ZP, args.pix2sec, args.SBlim,
-                    args.adderr, masked_dist_ranges, 
-                    # args.pa, args.ell
+                    args.adderr, masked_dist_ranges, data_dir,
+                    args.pa, args.ell
                     ) as d:
         plt.show()
 
