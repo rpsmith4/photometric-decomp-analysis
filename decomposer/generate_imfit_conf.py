@@ -19,21 +19,19 @@ from sersic_init_conf import gather_parameters as genparams
 
 
 def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, model_desc_dict: dict = None, galaxy_type: pd.DataFrame = None, phot_fit_type: str = "automatic", outfile_name: str | None = None, plot_slits: bool =False) -> pyimfit.ModelDescription:
-    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type, plot_slits=plot_slits, phot_params=phot_fit_type)
+    res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type, plot_slits=plot_slits, phot_params=phot_fit_type, data_loc=outfile)
 
     # Adjusted to allow for generation of both manual and automatic files and to be stored separately
-    if outfile_name == None:
-        model_str = res[0].getStringDescription()
-    else:
-        model_str = outfile_name
-    
-    with open(outfile, "w") as f:
+    model_str = res[0].getStringDescription()
+    save_path = Path(outfile).joinpath(outfile_name) 
+    print(save_path)
+    with open(save_path, "w") as f:
         f.write("".join(model_str))
     # Uncomment to open up all of the generated files quickly to see how it did.
     # import subprocess
     # subprocess.Popen(["open", "-a", "TextEdit", outfile])
 
-def main(args):
+def main(args, fit_band = 'all'):
     if not(args.p == None):
         p = Path(args.p)
     else:
@@ -84,41 +82,52 @@ def main(args):
             jobs = []
             files = os.listdir(galpath)
             model_desc_dict = manager.dict() # Used to hold the result of everything
+
+
             for img_file in img_files:
                 band = img_file[-6] # Yes I know this is not the best way
-                
-                if not(f"{args.fit_type}_{band}.dat" in files) or args.overwrite:
-                    print(f"Generating config for {img_file}")
-                    img = fits.open(img_file)[0]
+                if (fit_band != 'all') & (fit_band != band): # allow to only fit for a single filter for manual generation
+                    continue
+                else:
+                    if not(f"{args.fit_type}_{band}.dat" in files) or args.overwrite:
+                        print(f"Generating config for {img_file}")
+                        img = fits.open(img_file)[0]
 
-                    if args.mask:
-                        mask = fits.getdata(os.path.join(galpath, "image_mask.fits"))
-                    else:
-                        mask = None
-                        # img = img * (1-mask)
+                        if args.mask:
+                            mask = fits.getdata(os.path.join(galpath, "image_mask.fits"))
+                        else:
+                            mask = None
+                            # img = img * (1-mask)
+                            
+                        psf = fits.getdata(os.path.join(galpath, f"psf_patched_{band}.fits"))
+                        invvar = fits.getdata(os.path.join(galpath, f"image_{band}_invvar.fits"))
                         
-                    psf = fits.getdata(os.path.join(galpath, f"psf_patched_{band}.fits"))
-                    invvar = fits.getdata(os.path.join(galpath, f"image_{band}_invvar.fits"))
-                    
 
-                    # Replace with type from master table using the pattern provided above
-                    folder_type_dict = {
-                        "Polar Rings": "ring",
-                        "Polar_Tilted Bulges": "bulge",
-                        "Polar_Tilted Halo": "halo"
-                    }
-                    if not args.type:
-                        for folder in ["Polar Rings", "Polar_Tilted Bulges", "Polar_Tilted Halo"]: # Attempt to autodetect type
-                            if folder in root:
-                                args.type = folder_type_dict[folder]
+                        # # Replace with type from master table using the pattern provided above
+                        # folder_type_dict = {
+                        #     "Polar Rings": "ring",
+                        #     "Polar_Tilted Bulges": "bulge",
+                        #     "Polar_Tilted Halo": "halo"
+                        # }
+                        # if not args.type:
+                        #     for folder in ["Polar Rings", "Polar_Tilted Bulges", "Polar_Tilted Halo"]: # Attempt to autodetect type
+                        #         if folder in root:
+                        #             args.type = folder_type_dict[folder]
 
-                outfile_name = f"{args.fit_type}_{band}.dat"
-                outfile = os.path.join(galpath, outfile_name)
+
+                if args.component != "automatic":
+                    outfile_name = f"{args.fit_type}_{band}_{args.component}.dat"
+                else:
+                    outfile_name = f"{args.fit_type}_{band}.dat"
+                outfile = os.path.join(galpath)
+                # print(outfile_name)
+                # print(outfile)
                 if args.fit_type == "2_sersic":
                     # p = mp.Process(target = generate_config, args=(img, str(args.type).lower(), model_desc, band))
                     # p = mp.Process(target = generate_config, args=(model_desc_dict, outfile_name, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data))
+                    
                     try:
-                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, phot_fit_type="automatic", outfile_name=None)
+                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, phot_fit_type=args.component, outfile_name=outfile_name)
                     except Exception as e:
                         print(e)
                         continue
@@ -148,13 +157,14 @@ if __name__ == "__main__":
     parser.add_argument("-p", help="Path to file/folder containing galaxy FITS")
     parser.add_argument("--overwrite", help="Overwrite existing config files", action="store_true")
     parser.add_argument("--mask", help="Use the mask to guess initial values", action="store_true")
-    parser.add_argument("--type", help="Type of polar structure", choices=["ring", "bulge", "halo"], default="ring") # Working to add in the code to pass in polar structure type based upon the results in the master table
+   # parser.add_argument("--type", help="Type of polar structure", choices=["ring", "bulge", "halo"], default="ring") # Working to add in the code to pass in polar structure type based upon the results in the master table
     parser.add_argument("--dont_fit", help="Don't use DE imfitting to try and do another guess at initial parameters", action="store_true")
     parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
     parser.add_argument("--ellipse_fit", help="Location of ellipse fit data", default=".")
     parser.add_argument("--master_table", help="Location of folder containing master table data", default=".") # Added to get PS types from the master table
     parser.add_argument("-r", help="Recursively go into subfolders (assumes that fits data is at the end of the filetree)", action="store_true")
     parser.add_argument("--new", help="Use new version of the photometric decomp", action="store_true")
+    parser.add_argument("-component", help="Defines whether to use the automatic or manual fit results", choices=["automatic", "polar_manual", "host_manual", "all_manual"], default = "automatic")
     args = parser.parse_args()
     
     main(args)

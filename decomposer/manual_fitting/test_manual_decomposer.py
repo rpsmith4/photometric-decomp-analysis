@@ -408,6 +408,52 @@ def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str
     import decomposer_updated
     decomposer_updated.main(args, data_dir)
 
+    # Generate new config file
+    # I'll need to clean up a bunch of this but I'm wanting to get it working first
+
+    import generate_imfit_conf
+    import glob
+    import pandas as pd
+    gen_args = argparse.Namespace()
+    gen_args.p = p
+    gen_args.overwrite = True
+    gen_args.mask = True
+    gen_args.ellipse_fit = Path("./decomposer/EllipseFitResults")
+    gen_args.fit_type = "2_sersic"
+    gen_args.master_table = Path("./decomposer")
+    gen_args.r = False
+    gen_args.dont_fit = True
+    gen_args.new = True
+
+    csvs = glob.glob(os.path.join(Path(gen_args.ellipse_fit), "*.ecsv"))
+    ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
+
+    if component == 'host':
+        gen_args.component = 'host_manual'
+        if len(glob.glob(str(p) + "/*host.json")) != 0:
+            generate_imfit_conf.main(gen_args, fit_band = band)
+  
+    elif component == 'polar': 
+        gen_args.component = 'polar_manual'
+        if len(glob.glob(str(p) + "/*polar.json")) != 0:
+            generate_imfit_conf.main(gen_args, fit_band = band)
+  
+
+    
+    all_json = glob.glob(str(p) + "/*.json")
+    if len(all_json) > 1:
+        gen_args.component = 'all_manual'
+        generate_imfit_conf.main(gen_args, fit_band = band)
+
+
+
+
+    
+
+
+
+
+
     return
 
 
