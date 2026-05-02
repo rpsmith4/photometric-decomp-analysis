@@ -430,12 +430,16 @@ def main(galaxy_directory: str = "", psf: NDArray | None = None, image_name: str
 
     if component == 'host':
         gen_args.component = 'host_manual'
-        # outfile_name = f'manual_2_sersic_{band}_host.dat'
+        if len(glob.glob(str(p) + "/*host.json")) != 0:
+            generate_imfit_conf.main(gen_args, fit_band = band)
+  
     elif component == 'polar': 
         gen_args.component = 'polar_manual'
-        # outfile_name = f'manual_2_sersic_{band}_polar.dat'
+        if len(glob.glob(str(p) + "/*polar.json")) != 0:
+            generate_imfit_conf.main(gen_args, fit_band = band)
+  
 
-    generate_imfit_conf.main(gen_args, fit_band = band)
+    
     all_json = glob.glob(str(p) + "/*.json")
     if len(all_json) > 1:
         gen_args.component = 'all_manual'
