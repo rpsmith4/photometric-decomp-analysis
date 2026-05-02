@@ -1138,13 +1138,13 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.No
                 )
                 if answer == QMessageBox.StandardButton.Yes:
-                    generate_config(outfile, self.band, img, mask, psf, invvar, self.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, plot_slits = self.gui_config["show_phot_slits"])
+                    generate_config(galpath, self.band, img, mask, psf, invvar, self.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, plot_slits = self.gui_config["show_phot_slits"], outfile_name = outfile)
                     QMessageBox.information(self, "Config Generation Information", "Config successfully written")
                 else:
                     pass
             else:
                 print(self.gui_config["show_phot_slits"])
-                generate_config(outfile, self.band, img, mask, psf, invvar, self.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, plot_slits = self.gui_config["show_phot_slits"])
+                generate_config(galpath, self.band, img, mask, psf, invvar, self.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, plot_slits = self.gui_config["show_phot_slits"], outfile_name = outfile)
                 QMessageBox.information(self, "Config Generation Information", "Config successfully written")
         except Exception as e:
             QMessageBox.critical(self, "Config Generation Information", f"Config generation failed:\n{e}")
