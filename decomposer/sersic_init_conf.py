@@ -89,7 +89,7 @@ def _safe_ellipticity(d: Dict, fallback: float = 0.3) -> float:
 
 
 # def gather_parameters(name: str, path: str = "./GalaxyFiles", fltr: str = "r") -> tuple[str, float, float]:
-def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None, zeropoint: float = None, pixel_scale: float = None, galaxy_type: pd.DataFrame = None, phot_params: str = "automatic", plot_slits = False) -> tuple[str, float, float]:
+def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None, psf_fits: np.array = None, invvar_fits: np.array = None, psg_type: str = "ring", ellipse_fit_data: pd.DataFrame = None, zeropoint: float = None, pixel_scale: float = None, galaxy_type: pd.DataFrame = None, phot_params: str = "automatic", plot_slits = False, data_loc: str | None = None) -> tuple[str, float, float]:
     """
     Generate an imfit 2xSersic config using:
       - geometry (center, PA, ellipticity) from ellipse_fit()
@@ -178,10 +178,10 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
 
     pa_diff = np.abs(host_pa-polar_pa)
     # Trying to refine the 1-D fitting by getting better constraints on the bounds in which to fit both host and polar components. Make it so that it stops failing. There's a lot of work to be done here:
-    print((host_a, polar_a))
+    # print((host_a, polar_a))
     if host_a < polar_a:
         polar_rmin = host_a*(1-host_ell)/np.sqrt((1-host_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2)
-        print((1-polar_ell)/np.sqrt((1-host_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2))
+        # print((1-polar_ell)/np.sqrt((1-host_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2))
         if polar_a > 8*polar_rmin:
             polar_rmin *= 4
         polar_rmin = max(0.5*polar_a, polar_rmin) # just a failsafe to make sure that a good number of points are available for use
@@ -241,48 +241,80 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     
     host_fit = results["host"]["fit"]
     polar_fit = results["polar"]["fit"]
+    # print(host_fit)
+    # print(polar_fit)
 
-    if not host_fit.get("success", False):
+    if (host_fit["success"] == False) and (phot_params != "host_manual") and (phot_params != "all_manual"):
         raise RuntimeError("Host 1-D Sérsic estimate failed; cannot seed imfit reliably.")
-    if not polar_fit.get("success", False):
+    if (polar_fit["success"] == False) and (phot_params != "polar_manual") and (phot_params != "all_manual"):
         raise RuntimeError("Polar 1-D Sérsic estimate failed; cannot seed imfit reliably.")
 
     # Convert to imfit parameters (pixels + intensities/pixel)
-    host_n = float(host_fit["n"])
-    host_Re_pix = float(host_fit["Re_arcsec"]) / pixel_scale
-    host_Ie_pix = mu_e_to_Ie_pix(host_fit["mu_e"], zeropoint, pixel_scale)
+    if host_fit.get("success", True):
+        host_n = float(host_fit["n"])
+        host_Re_pix = float(host_fit["Re_arcsec"]) / pixel_scale
+        host_Ie_pix = mu_e_to_Ie_pix(host_fit["mu_e"], zeropoint, pixel_scale)
 
-    polar_n = float(polar_fit["n"])
-    polar_Re_pix = float(polar_fit["Re_arcsec"]) / pixel_scale
-    polar_Ie_pix = mu_e_to_Ie_pix(polar_fit["mu_e"], zeropoint, pixel_scale)
+    if polar_fit.get("success", True):
+        polar_n = float(polar_fit["n"])
+        polar_Re_pix = float(polar_fit["Re_arcsec"]) / pixel_scale
+        polar_Ie_pix = mu_e_to_Ie_pix(polar_fit["mu_e"], zeropoint, pixel_scale)
 
     ##TODO finish parser for generating manual fit results
     if phot_params is not "automatic":
         # parse files for re, n, I0, probably make function to do this?
         # "fit_params" > "sersic" > "radial" > "re['']", "mu0", "n" but need to convert mu0 -> I0
+        import json
+        import glob
+
+        
         if phot_params == "polar_manual":
             # find file name for just polar manual fitting
             # parse
             # set polar values accordingly
-            polar_n = 0
-            polar_Re_pix = 0
-            polar_Ie_pix = 0
+            json_file = glob.glob(str(data_loc) + '/*polar.json')[0]
+            with open(json_file, 'r') as file:
+                data = json.load(file)
+            params_list = data["fit_params"]["sersic"]["radial"]
+            
+            polar_n = params_list["n"]
+            polar_Re_pix = params_list["re['']"]/pixel_scale
+            polar_mue = params_list["mu_e[mag/sq.'']"]
+            polar_Ie_pix = mu_e_to_Ie_pix(polar_mue, zeropoint, pixel_scale)
 
         elif phot_params == "host_manual":
             # same as polar case
-            host_n = 0
-            host_Re_pix = 0
-            host_Ie_pix = 0
+            json_file = glob.glob(str(data_loc) + '/*host.json')[0]
+            with open(json_file, 'r') as file:
+                data = json.load(file)
+            params_list = data["fit_params"]["sersic"]["radial"]
+            
+            host_n = params_list["n"]
+            host_Re_pix = params_list["re['']"]/pixel_scale
+            host_mue = params_list["mu_e[mag/sq.'']"]
+            host_Ie_pix = mu_e_to_Ie_pix(host_mue, zeropoint, pixel_scale)
 
         elif phot_params == "all_manual":
             # do both polar and host 
-            polar_n = 0
-            polar_Re_pix = 0
-            polar_Ie_pix = 0
+            json_file = glob.glob(str(data_loc) + '/*polar.json')[0]
+            with open(json_file, 'r') as file:
+                data = json.load(file)
+            params_list = data["fit_params"]["sersic"]["radial"]
+            
+            polar_n = params_list["n"]
+            polar_Re_pix = params_list["re['']"]/pixel_scale
+            polar_mue = params_list["mu_e[mag/sq.'']"]
+            polar_Ie_pix = mu_e_to_Ie_pix(polar_mue, zeropoint, pixel_scale)
 
-            host_n = 0
-            host_Re_pix = 0
-            host_Ie_pix = 0
+            json_file = glob.glob(str(data_loc) + '/*host.json')[0]
+            with open(json_file, 'r') as file:
+                data = json.load(file)
+            params_list = data["fit_params"]["sersic"]["radial"]
+            
+            host_n = params_list["n"]
+            host_Re_pix = params_list["re['']"]/pixel_scale
+            host_mue = params_list["mu_e[mag/sq.'']"]
+            host_Ie_pix = mu_e_to_Ie_pix(host_mue, zeropoint, pixel_scale)
             
 
     # ---------- bounds (starter defaults; you said you’ll tune these next) ----------

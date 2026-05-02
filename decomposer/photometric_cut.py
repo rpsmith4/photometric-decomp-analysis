@@ -990,7 +990,7 @@ def fit_sersic_mu(
     x0 = [float(np.clip(n0, lb[0], ub[0])),
           float(np.clip(Re0, lb[1], ub[1])),
           float(np.clip(mu_e0, lb[2], ub[2]))]
-    print(x0)
+    # print(x0)
     def resid(p):
         n, Re, mu_e = p
         model = sersic_mu(Rf, n, Re, mu_e)
@@ -1166,19 +1166,19 @@ def dual_component_slits_and_sersic(
     # print(host_fit)
 
     # Decide polar inner cutoff
-    polar_Rmin_used = None
-    if polar_R_min_arcsec is not None:
-        polar_Rmin_used = float(polar_R_min_arcsec)
-    else: # Need to adjust this cutoff as for many objects it ends up being much to stringent. I'm playing around with what to do atm.
-        if host_fit.get("success", False):
-            f = float(polar_R_min_hostRe_factor)
-            polar_Rmin_used = f * float(host_fit["Re_arcsec"])
-        else:
-            polar_Rmin_used = 0.0  # fallback if host fit failed
+    # polar_Rmin_used = None
+    # if polar_R_min_arcsec is not None:
+    #     polar_Rmin_used = float(polar_R_min_arcsec)
+    # else: # Need to adjust this cutoff as for many objects it ends up being much to stringent. I'm playing around with what to do atm.
+    #     if host_fit.get("success", False):
+    #         f = float(polar_R_min_hostRe_factor)
+    #         polar_Rmin_used = f * float(host_fit["Re_arcsec"])
+    #     else:
+    #         polar_Rmin_used = 0.0  # fallback if host fit failed
 
     # Fit polar Sérsic
-    polar_fit = fit_sersic_mu(Rp, mup, mup_err, R_min_arcsec=polar_Rmin_used, polartype = polartype)
-    
+    polar_fit = fit_sersic_mu(Rp, mup, mup_err, R_min_arcsec=polar_R_min_arcsec, polartype = polartype)
+  
     # --------------------------------------------------
     # Clean summary results (human-facing)
     # --------------------------------------------------
@@ -1188,24 +1188,25 @@ def dual_component_slits_and_sersic(
     }
 
     hf = host_fit
-    if hf.get("success", False):
+    if hf.get("success", True):
         summary["host"] = {
             "success": True,
             "n": float(hf["n"]),
             "Re_arcsec": float(hf["Re_arcsec"]),
             "mu_e": float(hf["mu_e"]),
+            "R_min_arcsec": float(host_R_min_arcsec)
         }
     else:
         summary["host"] = {"success": False}
 
     pf = polar_fit
-    if pf.get("success", False):
+    if pf.get("success", True):
         summary["polar"] = {
             "success": True,
             "n": float(pf["n"]),
             "Re_arcsec": float(pf["Re_arcsec"]),
             "mu_e": float(pf["mu_e"]),
-            "R_min_arcsec_used": float(polar_Rmin_used),
+            "R_min_arcsec": float(polar_R_min_arcsec),
         }
     else:
         summary["polar"] = {"success": False}
