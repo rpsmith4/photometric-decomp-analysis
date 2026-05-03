@@ -779,7 +779,7 @@ class MainWindow(QMainWindow):
     def getconfigim(self, galaxypath, config_path, shape, maxThreads=4):
         try:
             model_desc = pyimfit.parse_config_file(config_path)
-            psf = fits.getdata(os.path.join(galaxypath, f"psf_patched_{band}.fits"))
+            psf = fits.getdata(os.path.join(galaxypath, f"psf_patched_{self.band}.fits"))
             imfitter = pyimfit.Imfit(model_desc, psf=psf, maxThreads=maxThreads)
             # imfitter = pyimfit.Imfit(model_desc, maxThreads=maxThreads)
             im = imfitter.getModelImage(shape=shape)
