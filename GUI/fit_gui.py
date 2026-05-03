@@ -668,9 +668,22 @@ class MainWindow(QMainWindow):
         self.ui.polarradio.toggled.connect(lambda checked: setattr(self, 'component', 'polar') if checked else None)
         self.component = 'host'
 
-        # Get the fit type
-        self.ui.fit_type_combo.currentTextChanged.connect(self.change_fit_type)
         self.fit_type = self.ui.fit_type_combo.currentText()
+
+        self.host_manual = self.ui.host_manual_radio.isChecked()
+        self.polar_manual = self.ui.polar_manual_radio.isChecked()
+
+        self.ui.host_auto_radio.toggled.connect(self.on_fitting_mode_changed)
+        self.ui.host_manual_radio.toggled.connect(self.on_fitting_mode_changed)
+        self.ui.polar_auto_radio.toggled.connect(self.on_fitting_mode_changed)
+        self.ui.polar_manual_radio.toggled.connect(self.on_fitting_mode_changed)
+
+        self.host_button_group = QButtonGroup(self)
+        self.host_button_group.addButton(self.ui.host_auto_radio)
+        self.host_button_group.addButton(self.ui.host_manual_radio)
+        self.polar_button_group = QButtonGroup(self)
+        self.polar_button_group.addButton(self.ui.polar_auto_radio)
+        self.polar_button_group.addButton(self.ui.polar_manual_radio)
 
         # Loading the list of galaxies
         self.galaxytree: QTreeView = self.ui.galaxytree
@@ -715,6 +728,25 @@ class MainWindow(QMainWindow):
         
         self.ui.show()
 
+    def get_suffix(self):
+        if self.host_manual and self.polar_manual:
+            return "_manual_all"
+        elif self.host_manual:
+            return "_manual_host"
+        elif self.polar_manual:
+            return "_manual_polar"
+        else:
+            return ""
+
+    def get_config_path(self, galaxypath, band, fit_type):
+        suffix = self.get_suffix()
+        return os.path.join(galaxypath, f"{fit_type}_{band}{suffix}.dat")
+
+    def on_fitting_mode_changed(self):
+        self.host_manual = self.ui.host_manual_radio.isChecked()
+        self.polar_manual = self.ui.polar_manual_radio.isChecked()
+        self.changegal()
+
     def open_gal_fileexplorer(self):
         open_folder(self.selected_galaxy_path)
 
@@ -744,9 +776,9 @@ class MainWindow(QMainWindow):
                     return np.array([])
         return im
 
-    def getconfigim(self, galaxypath, band, fit_type, shape, maxThreads=4):
+    def getconfigim(self, galaxypath, config_path, shape, maxThreads=4):
         try:
-            model_desc = pyimfit.parse_config_file(os.path.join(galaxypath, f"{fit_type}_{band}.dat"))
+            model_desc = pyimfit.parse_config_file(config_path)
             psf = fits.getdata(os.path.join(galaxypath, f"psf_patched_{band}.fits"))
             imfitter = pyimfit.Imfit(model_desc, psf=psf, maxThreads=maxThreads)
             # imfitter = pyimfit.Imfit(model_desc, maxThreads=maxThreads)
@@ -773,7 +805,7 @@ class MainWindow(QMainWindow):
         self.currentgalaxytext.repaint()
 
         try:
-            config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
+            config_path = self.get_config_path(galaxypath, self.band, self.fit_type)
             config_model = pyimfit.parse_config_file(config_path)
             self.current_config_model = config_model
             config_dict = config_model.getModelAsDict()
@@ -854,7 +886,7 @@ class MainWindow(QMainWindow):
         resid = self.get_composed_data(galaxypath, self.band, idx=2, fit_type=self.fit_type)
         self.resid.plot(resid, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
         
-        imconfig = self.getconfigim(galaxypath, self.band, self.fit_type, np.shape(img), maxThreads=self.gui_config["imfit_maxthreads"])
+        imconfig = self.getconfigim(galaxypath, config_path, np.shape(img), maxThreads=self.gui_config["imfit_maxthreads"])
         self.configimg.plot(imconfig, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
 
         imresidconfig = self.getconfigresid(img, imconfig)
@@ -966,7 +998,7 @@ class MainWindow(QMainWindow):
             return
         p = self.selected_galaxy_path
         fit_type = self.ui.fit_type_combo.currentText()
-        config_path = os.path.join(p, f"{fit_type}_{self.band}.dat")
+        config_path = self.get_config_path(p, self.band, fit_type)
 
         # If we have a config model and param_widgets, update the config model with the new values
         model_dict = self.current_config_dict
