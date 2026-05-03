@@ -654,8 +654,7 @@ class MainWindow(QMainWindow):
 
         self.ui.fileexplorerbutton.clicked.connect(self.open_gal_fileexplorer)
         self.ui.fileexplorerbutton.setShortcut(QKeySequence("CTRL+F"))
-        
-        # Connect Copy From Band button
+
         self.ui.copyparamsbutton.clicked.connect(self.copy_parameters_from_band)
         self.ui.copyparamsbutton.setShortcut(QKeySequence("CTRL+P"))
 
@@ -665,6 +664,9 @@ class MainWindow(QMainWindow):
 
         # 1D Fitting button
         self.ui.onedfitbutton.clicked.connect(self.openonedfitdialog)
+        self.ui.hostradio.toggled.connect(lambda checked: setattr(self, 'component', 'host') if checked else None)
+        self.ui.polarradio.toggled.connect(lambda checked: setattr(self, 'component', 'polar') if checked else None)
+        self.component = 'host'
 
         # Get the fit type
         self.ui.fit_type_combo.currentTextChanged.connect(self.change_fit_type)
@@ -1163,7 +1165,7 @@ class MainWindow(QMainWindow):
         manual_decomp_path = os.path.join(MAINDIR, "decomposer", "manual_fitting", "test_manual_decomposer.py")
         mask_path = os.path.join(galpath, "image_mask.fits")
         galname = self.selected_galaxy_path.name
-        self.component = 'host' # Change this line to 'polar' if fitting polar component
+        self.component = 'host' if self.ui.hostradio.isChecked() else 'polar'
         try:
             ellipse_fit_data_gal = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
             if ellipse_fit_data_gal.empty:

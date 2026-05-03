@@ -152,6 +152,38 @@
       </widget>
      </item>
      <item>
+      <widget class="QGroupBox" name="groupBox_component">
+       <property name="maximumSize">
+        <size>
+         <width>150</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="title">
+        <string>1-D Fit Component</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_component">
+        <item>
+         <widget class="QRadioButton" name="hostradio">
+          <property name="text">
+           <string>Host</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QRadioButton" name="polarradio">
+          <property name="text">
+           <string>Polar</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="onedfitbutton">
        <property name="text">
         <string>Manual 1-D Fit</string>
