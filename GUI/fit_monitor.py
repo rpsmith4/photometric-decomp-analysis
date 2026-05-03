@@ -20,7 +20,7 @@ class FitWorker(QtCore.QThread):
     output = QtCore.Signal(str)
     finished = QtCore.Signal(int)
 
-    def __init__(self, path, band, solver, max_threads, fit_type, mask=True, psf=True, invvar=True, parent=None):
+    def __init__(self, path, band, solver, max_threads, fit_type, mask=True, psf=True, invvar=True, config_file=None, parent=None):
         super().__init__(parent)
         self.path = str(Path(path).resolve())
         self.band = band
@@ -30,6 +30,7 @@ class FitWorker(QtCore.QThread):
         self.mask = mask
         self.psf = psf
         self.invvar = invvar
+        self.config_file = config_file
 
     def run(self):
         # Change to target directory and run imfit, streaming stdout
@@ -48,7 +49,7 @@ class FitWorker(QtCore.QThread):
         try:
             imfit_run.run_imfit(self.band, mask=self.mask, psf=self.psf, invvar=self.invvar,
                                 alg=self.solver, max_threads=self.max_threads, fit_type=self.fit_type,
-                                stdout_callback=cb)
+                                config_file=self.config_file, stdout_callback=cb)
         except Exception as e:
             self.output.emit(f"Error running imfit: {e}\n")
             try:
@@ -94,7 +95,7 @@ class FitWorker(QtCore.QThread):
 
 
 class FitMonitorDialog:
-    def __init__(self, path, band, solver, max_threads=8, fit_type="2_sersic", parent=None):
+    def __init__(self, path, band, solver, max_threads=8, fit_type="2_sersic", config_file=None, parent=None):
         self.parent = parent
         ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_monitor.ui'))
         loader = QUiLoader()
@@ -105,6 +106,7 @@ class FitMonitorDialog:
         self.solver = solver
         self.max_threads = max_threads
         self.fit_type = fit_type
+        self.config_file = config_file
 
         # UI elements from the .ui
         self.ui.stdoutEdit.setReadOnly(True)
@@ -112,7 +114,7 @@ class FitMonitorDialog:
         self.ui.closeButton.clicked.connect(self.close)
 
         # Worker thread
-        self.worker = FitWorker(path, band, solver, max_threads, fit_type)
+        self.worker = FitWorker(path, band, solver, max_threads, fit_type, config_file=config_file)
         self.worker.output.connect(self._append_output)
         self.worker.finished.connect(self._finished)
 

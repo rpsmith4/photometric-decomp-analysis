@@ -730,11 +730,11 @@ class MainWindow(QMainWindow):
 
     def get_suffix(self):
         if self.host_manual and self.polar_manual:
-            return "_manual_all"
+            return "_all_manual"
         elif self.host_manual:
-            return "_manual_host"
+            return "_host_manual"
         elif self.polar_manual:
-            return "_manual_polar"
+            return "_polar_manual"
         else:
             return ""
 
@@ -951,7 +951,8 @@ class MainWindow(QMainWindow):
             print("No galaxy selected to refit")
             return
         path = self.selected_galaxy_path
-        dlg = fit_monitor.FitMonitorDialog(path, self.band, self.solvertype, max_threads=self.gui_config["imfit_maxthreads"], fit_type=self.fit_type, parent=self)
+        config_path = self.get_config_path(path, self.band, self.fit_type)
+        dlg = fit_monitor.FitMonitorDialog(path, self.band, self.solvertype, max_threads=self.gui_config["imfit_maxthreads"], fit_type=self.fit_type, config_file=config_path, parent=self)
         dlg.show()
         self.fit_dialogs.append(dlg)
 
@@ -1211,7 +1212,8 @@ class MainWindow(QMainWindow):
                 # print(self.ell)
                 self.pa = ellipse_fit_data_gal["angle"].iloc[0]
                 # print(self.pa)
-                subprocess.Popen([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", self.component, "-pa", str(self.pa), "-ell", str(self.ell), "-m", mask_path])
+                subprocess.call([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", self.component, "-pa", str(self.pa), "-ell", str(self.ell), "-m", mask_path])
+                self.changegal()
         except Exception as e:
             QMessageBox.critical(self, "Failed to open 1D fit", f"Could not launch 1D fit: {e}")
         
