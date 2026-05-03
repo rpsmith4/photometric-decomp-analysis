@@ -1212,7 +1212,11 @@ class MainWindow(QMainWindow):
                 # print(self.ell)
                 self.pa = ellipse_fit_data_gal["angle"].iloc[0]
                 # print(self.pa)
-                subprocess.call([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", self.component, "-pa", str(self.pa), "-ell", str(self.ell), "-m", mask_path])
+                subprocess.call([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", self.component, 
+                                 "-pa", str(self.pa), "-ell", str(self.ell), 
+                                 "-ellipse_path", ellipse_fit_p,
+                                 "-m", mask_path,
+                                 "-master_table", master_table_p])
                 self.changegal()
         except Exception as e:
             QMessageBox.critical(self, "Failed to open 1D fit", f"Could not launch 1D fit: {e}")

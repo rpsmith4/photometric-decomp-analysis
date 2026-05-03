@@ -342,10 +342,10 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     polar_ell_lo, polar_ell_hi = clamp(polar_ell - ell_tol, 0.0, 0.95), clamp(polar_ell + ell_tol, 0.0, 0.95)
 
     # Sérsic n bounds
-    host_n_lo, host_n_hi = _frac_bounds(host_n, 2)
-    host_n_lo = max(host_n_lo, 0.5)
-    host_n_hi = max(5.0, host_n_hi)
-    polar_n_lo, polar_n_hi = _frac_bounds(polar_n, 2)
+    host_n_lo, host_n_hi = _frac_bounds(host_n, 0.25)
+    host_n_lo = min(0.75*host_n_lo, 0.5)
+    host_n_hi = max(5.0, 1.2*host_n_hi)
+    polar_n_lo, polar_n_hi = _frac_bounds(polar_n, 0.25)
     polar_n_lo = max(polar_n_lo, 0.1)
 
     # Re bounds (pix)
