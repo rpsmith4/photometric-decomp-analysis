@@ -342,16 +342,16 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     polar_ell_lo, polar_ell_hi = clamp(polar_ell - ell_tol, 0.0, 0.95), clamp(polar_ell + ell_tol, 0.0, 0.95)
 
     # Sérsic n bounds
-    host_n_lo, host_n_hi = _frac_bounds(host_n, 0.25)
-    host_n_lo = min(0.75*host_n_lo, 0.5)
-    host_n_hi = max(5.0, 1.2*host_n_hi)
-    polar_n_lo, polar_n_hi = _frac_bounds(polar_n, 0.25)
+    host_n_lo, host_n_hi = _frac_bounds(host_n, 0.75)
+    host_n_lo = min(0.75*host_n_lo, 0.01)
+    host_n_hi = max(10.0, 1.2*host_n_hi)
+    polar_n_lo, polar_n_hi = _frac_bounds(polar_n, 0.75)
     polar_n_lo = max(polar_n_lo, 0.1)
 
     # Re bounds (pix)
     def re_bounds(re_pix):
         # re_pix = max(re_pix, 0.5)
-        return 0.7 * re_pix, 1.3 * re_pix
+        return 0.1 * re_pix, 1.5 * re_pix
 
     host_re_lo, host_re_hi = re_bounds(host_Re_pix)
     polar_re_lo, polar_re_hi = re_bounds(polar_Re_pix)
@@ -359,7 +359,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     # Ie bounds (counts/pix) — wide multiplicative
     def ie_bounds(ie):
         ie = max(ie, 1e-6)
-        return ie / 2.0, ie * 2.0
+        return ie / 100, ie * 5.0
 
     host_ie_lo, host_ie_hi = ie_bounds(host_Ie_pix)
     polar_ie_lo, polar_ie_hi = ie_bounds(polar_Ie_pix)
