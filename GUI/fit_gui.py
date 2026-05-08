@@ -861,11 +861,18 @@ class MainWindow(QMainWindow):
             return
     
     def get_composed_data(self, galaxy_path, band, idx, fit_type):
-        # idx = 0 -> Image with mask, 1 -> Model image, 2 -> Residual, 3 -> Percent residual, 4 Onwards -> Components of model
+        # idx = 0 -> Regular image with mask applied, 1 -> Model image, 2 -> Residual, 3 -> Percent residual, 4 Onwards -> Components of model
         try:
+            if idx == 0:
+                im = fits.getdata(os.path.join(galaxy_path, f"image_{band}.fits"))
+                mask_path = os.path.join(galaxy_path, "image_mask.fits")
+                if os.path.exists(mask_path):
+                    mask = fits.getdata(mask_path)
+                    if mask.shape == im.shape:
+                        im = np.where(mask > 0, 0, im)
+                return im
             im = fits.getdata(os.path.join(galaxy_path, f"{fit_type}_{band}_composed.fits"))[idx]
         except:
-            # Regualar image fallback
             if idx != 0:
                 im = np.array([])
             else:
