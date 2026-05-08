@@ -300,13 +300,19 @@ class ParamSliderWidget(QWidget):
 
     def update_converted(self):
         val = self.valspinbox.value()
+        minval = self.minspinbox.value()
+        maxval = self.maxspinbox.value()
         if self.paramname == "r_e":
-            arcsec = val * 0.262
-            self.converted_label.setText(f"{arcsec:.3f} arcsec")
+            valarcsec = val * 0.262
+            minvalarcsec = minval * 0.262
+            maxvalarcsec = maxval * 0.262
+            self.converted_label.setText(f"Min: {minvalarcsec:.3f} Val: {valarcsec:.3f} Max: {maxvalarcsec:.3f}arcsec")
         elif self.paramname == "I_e":
-            if val > 0:
-                mag = 22.5 - 2.5 * math.log10(val/0.262**2)
-                self.converted_label.setText(f"{mag:.3f} mag/arcsec^2")
+            if val > 0 and minval > 0 and maxval > 0:
+                valmag = 22.5 - 2.5 * math.log10(val/0.262**2)
+                minvalmag = 22.5 - 2.5 * math.log10(minval/0.262**2)
+                maxvalmag = 22.5 - 2.5 * math.log10(maxval/0.262**2)
+                self.converted_label.setText(f"Min: {minvalmag:.3f} Val: {valmag:.3f} Max: {maxvalmag:.3f}arcsec")
             else:
                 self.converted_label.setText("N/A")
         else:
