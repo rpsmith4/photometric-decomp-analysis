@@ -152,6 +152,19 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="importds9maskbutton">
+       <property name="maximumSize">
+        <size>
+         <width>150</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Import DS9 Mask</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QGroupBox" name="groupBox_component">
        <property name="maximumSize">
         <size>

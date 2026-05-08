@@ -28,10 +28,12 @@ import matplotlib.patches
 import glob
 
 BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
+sys.path.append(str(BASE_DIR))
 sys.path.append(os.path.join(BASE_DIR, 'decomposer'))
 sys.path.append(os.path.join(BASE_DIR, 'decomposer/manual_fitting'))
 
 from generate_imfit_conf import generate_config
+from iman_new.imp.masking.convert_reg_to_mask import mask as convert_reg_to_mask
 import test_manual_decomposer
 
 def open_folder(path): 
@@ -681,6 +683,8 @@ class MainWindow(QMainWindow):
 
         self.ui.opends9button.clicked.connect(self.open_ds9)
         self.ui.opends9button.setShortcut(QKeySequence("O"))
+        self.ui.importds9maskbutton.clicked.connect(self.import_ds9_mask)
+        self.ui.importds9maskbutton.setShortcut(QKeySequence("CTRL+M"))
         self.ui.refitbutton.clicked.connect(self.refit)
         self.ui.refitbutton.setShortcut(QKeySequence("CTRL+R"))
         self.ui.cancelbutton.clicked.connect(self.cancel)
@@ -790,10 +794,71 @@ class MainWindow(QMainWindow):
 
     def open_ds9(self, *args):
         p = self.selected_galaxy_path
+        if p is None:
+            QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
+            return
         files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
         arg = ["ds9", "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config['ds9_limits'][0]}", f"{self.gui_config['ds9_limits'][1]}", "-cube", "3"]
         arg.extend(files)
         subprocess.Popen(arg)
+
+    def import_ds9_mask(self):
+        if self.selected_galaxy_path is None:
+            QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
+            return
+
+        galpath = self.selected_galaxy_path
+        reg_file, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select DS9 region file",
+            str(galpath),
+            "DS9 Region Files (*.reg);;All Files (*)"
+        )
+        if not reg_file:
+            return
+
+        image_file = os.path.join(galpath, f"image_{self.band}.fits")
+        if not os.path.isfile(image_file):
+            QMessageBox.critical(self, "Missing Image", f"Could not find image file: {image_file}")
+            return
+
+        new_mask_file = os.path.join(galpath, f"image_{self.band}_ds9_mask.fits")
+        try:
+            _, output_mask, mask_data = convert_reg_to_mask(
+                image_file,
+                reg_file,
+                output_mask=new_mask_file,
+                mask_value=1,
+                verbosity=False
+            )
+            if output_mask is None:
+                raise RuntimeError("Mask conversion did not produce an output mask file")
+
+            old_mask_path = os.path.join(galpath, "image_mask.fits")
+            if os.path.exists(old_mask_path):
+                with fits.open(old_mask_path) as hdul:
+                    old_mask = hdul[0].data
+                    header = hdul[0].header
+            else:
+                header = fits.getheader(image_file)
+                old_mask = np.zeros_like(mask_data, dtype=np.uint8)
+
+            if old_mask.shape != mask_data.shape:
+                raise ValueError("Existing mask and DS9 mask have different shapes. Please verify the image and region file.")
+
+            combined_mask = np.where((old_mask > 0) | (mask_data > 0), 1, 0).astype(old_mask.dtype)
+            fits.writeto(old_mask_path, combined_mask, header=header, overwrite=True)
+
+            QMessageBox.information(
+                self,
+                "DS9 Mask Imported",
+                f"Imported {os.path.basename(reg_file)} and merged it into image_mask.fits.\nSaved DS9 mask copy as {os.path.basename(output_mask)}."
+            )
+            self.changegal()
+        except Exception as e:
+            QMessageBox.critical(self, "Mask Import Failed", f"Failed to import DS9 mask:\n{e}")
+            print(e)
+            return
     
     def get_composed_data(self, galaxy_path, band, idx, fit_type):
         # idx = 0 -> Image with mask, 1 -> Model image, 2 -> Residual, 3 -> Percent residual, 4 Onwards -> Components of model
