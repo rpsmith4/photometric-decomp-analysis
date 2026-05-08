@@ -7,7 +7,6 @@
     "plot_scale": "log",
     "plot_cmap": "inferno",
     "plot_resid_cmap": "seismic_r",
-    "ds9_path": "",
     "mark_colors": {
         "fitted": "#35bd49",
         "return": "#bdba35",
@@ -15,5 +14,7 @@
     },
     "imfit_maxthreads" : 8,
     "ui_scale": 1,
-    "show_phot_slits": 0
+    "show_phot_slits": 0,
+    "imfit_path": "",
+    "ds9_path": ""
 }

@@ -833,7 +833,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
             return
         files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
-        arg = ["ds9", "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config['ds9_limits'][0]}", f"{self.gui_config['ds9_limits'][1]}", "-cube", "3"]
+        ds9_cmd = self.gui_config.get("ds9_path", "ds9") or "ds9"
+        arg = [ds9_cmd, "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config['ds9_limits'][0]}", f"{self.gui_config['ds9_limits'][1]}", "-cube", "3"]
         arg.extend(files)
         subprocess.Popen(arg)
 

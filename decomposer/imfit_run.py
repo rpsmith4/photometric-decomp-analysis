@@ -11,6 +11,7 @@ import pyimfit
 import subprocess
 import glob
 import signal
+import json
 
 IMAN_DIR = Path(os.path.join(Path(os.path.dirname(__file__)).parent, "iman_new"))
 sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
@@ -22,7 +23,14 @@ def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, f
     #imfit -c config.dat image_g.fits --mask image_mask.fits --psf psf_patched_g.fits --noise image_g_invvar.fits --save-model g_model.fits --save-residual g_residual.fits --max-threads 4 --errors-are-weights
     # command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt", "--max-threads", f"{args.max_threads}"]
     config_file = config_file or f"{fit_type}_{band}.dat"
-    command = ["imfit", "-c", config_file, f"image_{band}.fits", "--save-params", f"{fit_type}_{band}_fit_params.txt", "--max-threads", f"{max_threads}"]
+    config_path = Path(os.path.dirname(__file__)).parent / "GUI" / "config.json"
+    imfit_cmd = "imfit"
+    if config_path.exists():
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        if 'imfit_path' in config and config['imfit_path']:
+            imfit_cmd = config['imfit_path']
+    command = [imfit_cmd, "-c", config_file, f"image_{band}.fits", "--save-params", f"{fit_type}_{band}_fit_params.txt", "--max-threads", f"{max_threads}"]
     if mask:
         command.extend(["--mask", "image_mask.fits"])
     if psf:
