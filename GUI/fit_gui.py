@@ -757,14 +757,10 @@ class MainWindow(QMainWindow):
         self.configimg = PlotCanvas(parent=self.ui.configimg)
         self.configresid = PlotCanvas(parent=self.ui.configresid)
 
-        # Add 1D toggle
-        self.toggle_1d = QCheckBox("1D Radial Profiles")
+        # Add 1D toggle from the UI
+        self.toggle_1d = self.ui.toggle1dcheckbox
         self.toggle_1d.stateChanged.connect(self.on_toggle_1d)
-        self.is_1d_mode = False
-        if hasattr(self.ui, 'verticalLayout_3'):
-            self.ui.verticalLayout_3.addWidget(self.toggle_1d)
-        elif hasattr(self.ui, 'layout') and self.ui.layout() is not None:
-            self.ui.layout().addWidget(self.toggle_1d)
+        self.is_1d_mode = self.toggle_1d.isChecked()
 
         # Loading the JSON file for the galaxy marks (whether fitted, need to return to, or can't fit)
         try:

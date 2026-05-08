@@ -337,6 +337,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QCheckBox" name="toggle1dcheckbox">
+       <property name="text">
+        <string>1D Radial Profiles</string>
+       </property>
+       <property name="checked">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer name="verticalSpacer">
        <property name="orientation">
         <enum>Qt::Orientation::Vertical</enum>
