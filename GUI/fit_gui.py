@@ -18,6 +18,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
 from astropy.visualization.stretch import LogStretch, LinearStretch
 from astropy.visualization import ImageNormalize
+import math
 import pyimfit
 import shutil
 import numpy as np
@@ -224,7 +225,16 @@ class ParamSliderWidget(QWidget):
         spinboxes_layout.setStretchFactor(self.valspinbox, 1)
         spinboxes_layout.setStretchFactor(self.maxspinbox, 1)
         parameter_adjust_layout.addLayout(spinboxes_layout)
-        self.setLayout(parameter_adjust_layout)
+        
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self.converted_label = QLabel()
+        self.converted_label.setStyleSheet('font-size: 10px')
+        self.converted_label.setMaximumHeight(12)
+        layout.addWidget(self.converted_label)
+        layout.addLayout(parameter_adjust_layout)
+        self.setLayout(layout)
 
         self.set_fixed_state(fixed)
 
@@ -239,6 +249,8 @@ class ParamSliderWidget(QWidget):
         
         spinboxes_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         parameter_adjust_layout.setStretchFactor(spinboxes_layout, 10)
+        
+        self.update_converted()
 
     def set_fixed_state(self, is_fixed):
         self.minspinbox.setEnabled(not is_fixed)
@@ -251,12 +263,14 @@ class ParamSliderWidget(QWidget):
         self.valspinbox.blockSignals(True)
         self.valspinbox.setValue(float_val)
         self.valspinbox.blockSignals(False)
+        self.update_converted()
 
     def spinbox_changed(self, value):
         int_val = int(round(value * self.scale))
         self.slider.blockSignals(True)
         self.slider.setValue(int_val)
         self.slider.blockSignals(False)
+        self.update_converted()
 
     def minspinbox_changed(self, new_min):
         self.slider.setMinimum(int(new_min * self.scale))
@@ -283,6 +297,20 @@ class ParamSliderWidget(QWidget):
             'max': self.maxspinbox.value(),
             'fixed': self.fixed_checkbox.isChecked()
         }
+
+    def update_converted(self):
+        val = self.valspinbox.value()
+        if self.paramname == "r_e":
+            arcsec = val * 0.262
+            self.converted_label.setText(f"{arcsec:.3f} arcsec")
+        elif self.paramname == "I_e":
+            if val > 0:
+                mag = 22.5 - 2.5 * math.log10(val/0.262**2)
+                self.converted_label.setText(f"{mag:.3f} mag/arcsec^2")
+            else:
+                self.converted_label.setText("N/A")
+        else:
+            self.converted_label.setText("")
 
 def read_function_labels(config_path):
     """
