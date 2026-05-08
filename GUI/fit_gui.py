@@ -106,11 +106,11 @@ class PlotCanvas(FigureCanvas):
 
         self.draw()
 
-    def plot_profiles(self, host_data, polar_data, title, overplot=None):
+    def plot_profiles(self, host_data, polar_data, title, overplot=None, y_label='Surface Brightness (mag/arcsec^2)'):
         self.fig.clear()
         self.ax = self.fig.subplots()
 
-        self.fig.subplots_adjust(left=0.1, right=0.9,bottom=0.1,top=0.9)
+        self.fig.subplots_adjust(left=0.13, right=0.9,bottom=0.1,top=0.9)
         self.ax.cla()
         self.ax.set_title(title, fontsize=12)
         self.ax.plot(host_data['r'], host_data['mu'], label='Host', color='blue')
@@ -120,7 +120,7 @@ class PlotCanvas(FigureCanvas):
             self.ax.plot(overplot['polar']['r'], overplot['polar']['mu'], 'r--', label='Polar Image')
         self.ax.legend(fontsize=8)
         self.ax.set_xlabel('Radius (arcsec)', fontsize=10)
-        self.ax.set_ylabel('Surface Brightness (mag/arcsec^2)', fontsize=10)
+        self.ax.set_ylabel(y_label, fontsize=10)
         self.ax.tick_params(labelsize=8)
         self.draw()
 
@@ -1067,7 +1067,12 @@ class MainWindow(QMainWindow):
         if self.is_1d_mode:
             data = self.get_radial_data(self.band)
             if data is not None:
-                self.resid.plot_profiles(data['residual']['host'], data['residual']['polar'], 'Residual Radial Profile')
+                self.resid.plot_profiles(
+                    data['residual']['host'],
+                    data['residual']['polar'],
+                    'Residual Radial Profile',
+                    y_label='Residual Flux (nanomaggies/arcsec^2)'
+                )
                 return
         self.resid.plot(self.residual_im, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
 
@@ -1083,7 +1088,12 @@ class MainWindow(QMainWindow):
         if self.is_1d_mode:
             data = self.get_radial_data(self.band)
             if data is not None:
-                self.configresid.plot_profiles(data['config_residual']['host'], data['config_residual']['polar'], 'Config Residual Radial Profile')
+                self.configresid.plot_profiles(
+                    data['config_residual']['host'],
+                    data['config_residual']['polar'],
+                    'Config Residual Radial Profile',
+                    y_label='Config Residual Flux (nanomaggies/arcsec^2)'
+                )
                 return
         self.configresid.plot(self.config_residual_im, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
 
@@ -1109,9 +1119,13 @@ class MainWindow(QMainWindow):
         invvar_array = self.invvar_fits.data if getattr(self.invvar_fits, 'data', None) is not None else self.invvar_fits
         psf_array = self.psf_fits.data if getattr(self.psf_fits, 'data', None) is not None else self.psf_fits
 
-        def profile_from_image(image_data, pa, length):
+        def profile_from_image(image_data, pa, length, quantity='mu'):
+            if hasattr(image_data, 'data'):
+                sci_input = image_data
+            else:
+                sci_input = type('FITSLike', (), {'data': image_data})()
             cut = photometric_cut(
-                sci_fits=image_data,
+                sci_fits=sci_input,
                 center_xy=center,
                 pa_deg=pa,
                 length_pix=length,
@@ -1123,8 +1137,8 @@ class MainWindow(QMainWindow):
                 zeropoint=zeropoint,
                 pixel_scale_arcsec=self.pixel_scale,
             )
-            r, mu, mu_err, _ = fold_cut_to_radial_profile(cut)
-            return {'r': r, 'mu': mu, 'mu_err': mu_err}
+            r, values, values_err, _ = fold_cut_to_radial_profile(cut, quantity=quantity)
+            return {'r': r, 'mu': values, 'mu_err': values_err}
 
         image_host = profile_from_image(self.sci_fits, host_pa, host_len)
         image_polar = profile_from_image(self.sci_fits, polar_pa, polar_len)
@@ -1133,15 +1147,15 @@ class MainWindow(QMainWindow):
         model_polar = profile_from_image(self.model_im, polar_pa, polar_len)
 
         residual_data = self.sci_fits.data - self.model_im
-        residual_host = profile_from_image(residual_data, host_pa, host_len)
-        residual_polar = profile_from_image(residual_data, polar_pa, polar_len)
+        residual_host = profile_from_image(residual_data, host_pa, host_len, quantity='I')
+        residual_polar = profile_from_image(residual_data, polar_pa, polar_len, quantity='I')
 
         config_host = profile_from_image(self.config_im, host_pa, host_len)
         config_polar = profile_from_image(self.config_im, polar_pa, polar_len)
 
         config_residual_data = self.sci_fits.data - self.config_im
-        config_residual_host = profile_from_image(config_residual_data, host_pa, host_len)
-        config_residual_polar = profile_from_image(config_residual_data, polar_pa, polar_len)
+        config_residual_host = profile_from_image(config_residual_data, host_pa, host_len, quantity='I')
+        config_residual_polar = profile_from_image(config_residual_data, polar_pa, polar_len, quantity='I')
 
         return {
             'image': {'host': image_host, 'polar': image_polar},

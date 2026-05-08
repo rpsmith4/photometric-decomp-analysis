@@ -906,30 +906,53 @@ def refine_center_by_folding(
 
     raise ValueError(f"Unknown search_mode={search_mode!r}; expected 'axis' or 'disk'.")
 
-def fold_cut_to_radial_profile(cut, min_frac_good=0.5):
+def fold_cut_to_radial_profile(cut, min_frac_good=0.5, quantity="mu"):
     """
-    Take a cut dict from photometric_cut() and produce a folded radial profile:
-      R = |s| (arcsec), mu(R) = median of +/- sides in bins.
+    Take a cut dict from photometric_cut() and produce a folded radial profile.
 
-    Returns: R, mu, mu_err, mask_used (boolean mask on the *original* samples)
+    Parameters
+    ----------
+    cut : dict
+        Output from photometric_cut().
+    min_frac_good : float
+        Minimum fraction of good pixels in a slice to include it.
+    quantity : {'mu', 'I'}
+        Which quantity to fold: surface brightness magnitudes ('mu') or
+        linear flux ('I') in nanomaggies per arcsec^2.
+
+    Returns
+    -------
+    R, values, errs, mask_used
     """
     s = np.asarray(cut["s_arcsec"], float)
-    mu = np.asarray(cut["mu"], float)
-    mu_err = np.asarray(cut.get("mu_err", np.full_like(mu, np.nan)), float)
-    frac_good = np.asarray(cut.get("frac_good", np.ones_like(mu)), float)
-    valid = np.asarray(cut.get("valid", np.isfinite(mu)), bool)
+    if quantity == "mu":
+        values = np.asarray(cut["mu"], float)
+        errs = np.asarray(cut.get("mu_err", np.full_like(values, np.nan)), float)
+        valid = np.asarray(cut.get("valid", np.isfinite(values)), bool)
+    elif quantity == "I":
+        values = np.asarray(cut["I"], float)
+        errs = np.asarray(cut.get("I_err", np.full_like(values, np.nan)), float)
+        valid = np.asarray(cut.get("valid", np.isfinite(values)), bool)
+        if "pixel_scale_arcsec" in cut and np.isfinite(cut["pixel_scale_arcsec"]):
+            pixarea = float(cut["pixel_scale_arcsec"]) ** 2
+            values = values / pixarea
+            errs = errs / pixarea
+    else:
+        raise ValueError(f"Unsupported quantity for fold_cut_to_radial_profile: {quantity}")
 
-    base_mask = valid & np.isfinite(s) & np.isfinite(mu) & (frac_good >= float(min_frac_good))
+    frac_good = np.asarray(cut.get("frac_good", np.ones_like(values)), float)
+
+    base_mask = valid & np.isfinite(s) & np.isfinite(values) & (frac_good >= float(min_frac_good))
     if np.sum(base_mask) < 10:
         return np.array([]), np.array([]), np.array([]), base_mask
 
     s0 = s[base_mask]
-    mu0 = mu[base_mask]
-    mu_e0 = mu_err[base_mask] if mu_err is not None else np.full_like(mu0, np.nan)
+    values0 = values[base_mask]
+    errs0 = errs[base_mask] if errs is not None else np.full_like(values0, np.nan)
 
     R = np.abs(s0)
     order = np.argsort(R)
-    R, mu0, mu_e0 = R[order], mu0[order], mu_e0[order]
+    R, values0, errs0 = R[order], values0[order], errs0[order]
 
     # Bin in R with an automatic bin width
     dR = np.median(np.diff(R)) if R.size > 10 else (R.max() - R.min()) / max(R.size - 1, 1)
@@ -942,17 +965,16 @@ def fold_cut_to_radial_profile(cut, min_frac_good=0.5):
     idx = np.digitize(R, edges) - 1
     nb = edges.size - 1
 
-    Rb, mub, mueb = [], [], []
+    Rb, vb, veb = [], [], []
     for b in range(nb):
         sel = idx == b
         if np.sum(sel) < 2:
             continue
         Rb.append(np.nanmedian(R[sel]))
-        mub.append(np.nanmedian(mu0[sel]))
-        # conservative: take median error in bin
-        mueb.append(np.nanmedian(mu_e0[sel]) if np.any(np.isfinite(mu_e0[sel])) else np.nan)
+        vb.append(np.nanmedian(values0[sel]))
+        veb.append(np.nanmedian(errs0[sel]) if np.any(np.isfinite(errs0[sel])) else np.nan)
 
-    return np.asarray(Rb), np.asarray(mub), np.asarray(mueb), base_mask
+    return np.asarray(Rb), np.asarray(vb), np.asarray(veb), base_mask
 
 def fit_sersic_mu(
     R_arcsec,
