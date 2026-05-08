@@ -325,12 +325,12 @@ class ParamSliderWidget(QWidget):
         val = self.valspinbox.value()
         minval = self.minspinbox.value()
         maxval = self.maxspinbox.value()
-        if self.paramname == "r_e":
+        if self.paramname in ["r_e", "R_ring"]:
             valarcsec = val * 0.262
             minvalarcsec = minval * 0.262
             maxvalarcsec = maxval * 0.262
             self.converted_label.setText(f"Min: {minvalarcsec:.3f} Val: {valarcsec:.3f} Max: {maxvalarcsec:.3f}arcsec")
-        elif self.paramname == "I_e":
+        elif self.paramname in ["I_e", "sigma_r", "A"]:
             if val > 0 and minval > 0 and maxval > 0:
                 valmag = 22.5 - 2.5 * math.log10(val/0.262**2)
                 minvalmag = 22.5 - 2.5 * math.log10(minval/0.262**2)
@@ -728,6 +728,7 @@ class MainWindow(QMainWindow):
         self.component = 'host'
 
         self.fit_type = self.ui.fit_type_combo.currentText()
+        self.ui.fit_type_combo.currentIndexChanged.connect(self.change_fit_type)
 
         self.host_manual = self.ui.host_manual_radio.isChecked()
         self.polar_manual = self.ui.polar_manual_radio.isChecked()
@@ -1438,13 +1439,41 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.No
                 )
                 if answer == QMessageBox.StandardButton.Yes:
-                    generate_config(galpath, self.band, img, mask, psf, invvar, self.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, plot_slits = self.gui_config["show_phot_slits"], outfile_name = outfile)
+                    generate_config(
+                        galpath,
+                        self.band,
+                        img,
+                        mask,
+                        psf,
+                        invvar,
+                        type="ring",
+                        ellipse_fit_data=ellipse_fit_data_gal,
+                        model_desc_dict=model_desc_dict,
+                        galaxy_type=master_table_data_gal,
+                        plot_slits=self.gui_config["show_phot_slits"],
+                        outfile_name=outfile,
+                        fit_type=self.fit_type,
+                    )
                     QMessageBox.information(self, "Config Generation Information", "Config successfully written")
                 else:
                     pass
             else:
                 print(self.gui_config["show_phot_slits"])
-                generate_config(galpath, self.band, img, mask, psf, invvar, self.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, plot_slits = self.gui_config["show_phot_slits"], outfile_name = outfile)
+                generate_config(
+                    galpath,
+                    self.band,
+                    img,
+                    mask,
+                    psf,
+                    invvar,
+                    type="ring",
+                    ellipse_fit_data=ellipse_fit_data_gal,
+                    model_desc_dict=model_desc_dict,
+                    galaxy_type=master_table_data_gal,
+                    plot_slits=self.gui_config["show_phot_slits"],
+                    outfile_name=outfile,
+                    fit_type=self.fit_type,
+                )
                 QMessageBox.information(self, "Config Generation Information", "Config successfully written")
         except Exception as e:
             QMessageBox.critical(self, "Config Generation Information", f"Config generation failed:\n{e}")
