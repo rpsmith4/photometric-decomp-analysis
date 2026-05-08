@@ -881,12 +881,16 @@ class MainWindow(QMainWindow):
                 raise ValueError("Existing mask and DS9 mask have different shapes. Please verify the image and region file.")
 
             combined_mask = np.where((old_mask > 0) | (mask_data > 0), 1, 0).astype(old_mask.dtype)
+            try:
+                fits.writeto(os.path.join(galpath, "image_mask.fits.bak"), old_mask, header=header, overwrite=False) #Keep a backup
+            except:
+                pass
             fits.writeto(old_mask_path, combined_mask, header=header, overwrite=True)
 
             QMessageBox.information(
                 self,
                 "DS9 Mask Imported",
-                f"Imported {os.path.basename(reg_file)} and merged it into image_mask.fits.\nSaved DS9 mask copy as {os.path.basename(output_mask)}."
+                f"Imported {os.path.basename(reg_file)} and merged it into image_mask.fits. (Backup is available in the file explorer)"
             )
             self.changegal()
         except Exception as e:
