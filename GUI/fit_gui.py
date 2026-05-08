@@ -59,13 +59,14 @@ import fit_monitor
 
 class PlotCanvas(FigureCanvas):
     def __init__(self, parent = None):
-        fig = Figure(figsize=(250/100, 250/100), dpi=100)
-        self.ax = fig.add_subplot(111)
-        fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
-        super().__init__(fig)
+        self.fig = Figure(figsize=(250/50, 250/50), dpi=50)
+        self.ax = self.fig.subplots()
+        self.fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
+        super().__init__(self.fig)
         self.setParent(parent)
 
     def plot(self, im, limits, cmap, stretch=LogStretch(), ellipse_params=pd.DataFrame):
+        self.fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
         self.ax.cla()
         self.ax.set_axis_off()
         if im.any():
@@ -106,16 +107,21 @@ class PlotCanvas(FigureCanvas):
         self.draw()
 
     def plot_profiles(self, host_data, polar_data, title, overplot=None):
+        self.fig.clear()
+        self.ax = self.fig.subplots()
+
+        self.fig.subplots_adjust(left=0.1, right=0.9,bottom=0.1,top=0.9)
         self.ax.cla()
-        self.ax.set_title(title)
+        self.ax.set_title(title, fontsize=12)
         self.ax.plot(host_data['r'], host_data['mu'], label='Host', color='blue')
         self.ax.plot(polar_data['r'], polar_data['mu'], label='Polar', color='red')
         if overplot:
             self.ax.plot(overplot['host']['r'], overplot['host']['mu'], 'b--', label='Host Image')
             self.ax.plot(overplot['polar']['r'], overplot['polar']['mu'], 'r--', label='Polar Image')
-        self.ax.legend()
-        self.ax.set_xlabel('Radius (arcsec)')
-        self.ax.set_ylabel('Surface Brightness (mag/arcsec^2)')
+        self.ax.legend(fontsize=8)
+        self.ax.set_xlabel('Radius (arcsec)', fontsize=10)
+        self.ax.set_ylabel('Surface Brightness (mag/arcsec^2)', fontsize=10)
+        self.ax.tick_params(labelsize=8)
         self.draw()
 
 
@@ -787,7 +793,7 @@ class MainWindow(QMainWindow):
         self.ui.show()
 
     def on_toggle_1d(self, state):
-        self.is_1d_mode = state == 2
+        self.is_1d_mode =  state == 2
         self.plot_image()
         self.plot_model()
         self.plot_residual()
@@ -1123,27 +1129,19 @@ class MainWindow(QMainWindow):
         image_host = profile_from_image(self.sci_fits, host_pa, host_len)
         image_polar = profile_from_image(self.sci_fits, polar_pa, polar_len)
 
-        fake_model = fits.PrimaryHDU(data=self.model_im)
-        fake_model.header = self.sci_fits.header.copy()
-        model_host = profile_from_image(fake_model, host_pa, host_len)
-        model_polar = profile_from_image(fake_model, polar_pa, polar_len)
+        model_host = profile_from_image(self.model_im, host_pa, host_len)
+        model_polar = profile_from_image(self.model_im, polar_pa, polar_len)
 
         residual_data = self.sci_fits.data - self.model_im
-        fake_residual = fits.PrimaryHDU(data=residual_data)
-        fake_residual.header = self.sci_fits.header.copy()
-        residual_host = profile_from_image(fake_residual, host_pa, host_len)
-        residual_polar = profile_from_image(fake_residual, polar_pa, polar_len)
+        residual_host = profile_from_image(residual_data, host_pa, host_len)
+        residual_polar = profile_from_image(residual_data, polar_pa, polar_len)
 
-        fake_config = fits.PrimaryHDU(data=self.config_im)
-        fake_config.header = self.sci_fits.header.copy()
-        config_host = profile_from_image(fake_config, host_pa, host_len)
-        config_polar = profile_from_image(fake_config, polar_pa, polar_len)
+        config_host = profile_from_image(self.config_im, host_pa, host_len)
+        config_polar = profile_from_image(self.config_im, polar_pa, polar_len)
 
         config_residual_data = self.sci_fits.data - self.config_im
-        fake_config_residual = fits.PrimaryHDU(data=config_residual_data)
-        fake_config_residual.header = self.sci_fits.header.copy()
-        config_residual_host = profile_from_image(fake_config_residual, host_pa, host_len)
-        config_residual_polar = profile_from_image(fake_config_residual, polar_pa, polar_len)
+        config_residual_host = profile_from_image(config_residual_data, host_pa, host_len)
+        config_residual_polar = profile_from_image(config_residual_data, polar_pa, polar_len)
 
         return {
             'image': {'host': image_host, 'polar': image_polar},
