@@ -35,6 +35,8 @@ sys.path.append(os.path.join(BASE_DIR, 'decomposer/manual_fitting'))
 from generate_imfit_conf import generate_config
 from iman_new.imp.masking.convert_reg_to_mask import mask as convert_reg_to_mask
 import test_manual_decomposer
+from photometric_cut import photometric_cut, fold_cut_to_radial_profile
+from photometric_cut_helpers import pixel_scale_from_header_arcsec_per_pix
 
 def open_folder(path): 
     path = os.path.abspath(path) 
@@ -101,6 +103,19 @@ class PlotCanvas(FigureCanvas):
         else:
             self.ax.text(0,0.5,"Cannot find FITs image!")
 
+        self.draw()
+
+    def plot_profiles(self, host_data, polar_data, title, overplot=None):
+        self.ax.cla()
+        self.ax.set_title(title)
+        self.ax.plot(host_data['r'], host_data['mu'], label='Host', color='blue')
+        self.ax.plot(polar_data['r'], polar_data['mu'], label='Polar', color='red')
+        if overplot:
+            self.ax.plot(overplot['host']['r'], overplot['host']['mu'], 'b--', label='Host Image')
+            self.ax.plot(overplot['polar']['r'], overplot['polar']['mu'], 'r--', label='Polar Image')
+        self.ax.legend()
+        self.ax.set_xlabel('Radius (arcsec)')
+        self.ax.set_ylabel('Surface Brightness (mag/arcsec^2)')
         self.draw()
 
 
@@ -617,7 +632,7 @@ class MainWindow(QMainWindow):
             
         # Read in the ellipse fit data 
         if ellipse_fit_p != None:
-            csvs = glob.glob(os.path.join(Path(args.ellipse_fit), "*.ecsv"))
+            csvs = glob.glob(os.path.join(Path(ellipse_fit_p), "*.csv"))
             ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
             for csv in csvs:
                 dat = pd.read_csv(csv, sep = " ")
@@ -742,6 +757,15 @@ class MainWindow(QMainWindow):
         self.configimg = PlotCanvas(parent=self.ui.configimg)
         self.configresid = PlotCanvas(parent=self.ui.configresid)
 
+        # Add 1D toggle
+        self.toggle_1d = QCheckBox("1D Radial Profiles")
+        self.toggle_1d.stateChanged.connect(self.on_toggle_1d)
+        self.is_1d_mode = False
+        if hasattr(self.ui, 'verticalLayout_3'):
+            self.ui.verticalLayout_3.addWidget(self.toggle_1d)
+        elif hasattr(self.ui, 'layout') and self.ui.layout() is not None:
+            self.ui.layout().addWidget(self.toggle_1d)
+
         # Loading the JSON file for the galaxy marks (whether fitted, need to return to, or can't fit)
         try:
             with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json')) as f:
@@ -765,6 +789,14 @@ class MainWindow(QMainWindow):
         self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
         
         self.ui.show()
+
+    def on_toggle_1d(self, state):
+        self.is_1d_mode = state == 2
+        self.plot_image()
+        self.plot_model()
+        self.plot_residual()
+        self.plot_config()
+        self.plot_config_residual()
 
     def get_suffix(self):
         if self.host_manual and self.polar_manual:
@@ -978,25 +1010,33 @@ class MainWindow(QMainWindow):
         
 
         # self.img.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
-        img = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
+        self.sci_im = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
+        self.sci_fits = fits.open(os.path.join(galaxypath, f"image_{self.band}.fits"))[0]
+        self.pixel_scale = pixel_scale_from_header_arcsec_per_pix(self.sci_fits)
+        self.mask_fits = fits.open(os.path.join(galaxypath, "image_mask.fits"))[0] if os.path.exists(os.path.join(galaxypath, "image_mask.fits")) else None
+        self.invvar_fits = fits.open(os.path.join(galaxypath, f"image_{self.band}_invvar.fits"))[0] if os.path.exists(os.path.join(galaxypath, f"image_{self.band}_invvar.fits")) else None
+        self.psf_fits = fits.open(os.path.join(galaxypath, f"psf_patched_{self.band}.fits"))[0] if os.path.exists(os.path.join(galaxypath, f"psf_patched_{self.band}.fits")) else None
+
+        self.model_im = self.get_composed_data(galaxypath, self.band, idx=1, fit_type=self.fit_type)
+        self.residual_im = self.get_composed_data(galaxypath, self.band, idx=2, fit_type=self.fit_type)
+        
+        imconfig = self.getconfigim(galaxypath, config_path, np.shape(self.sci_im), maxThreads=self.gui_config["imfit_maxthreads"])
+        self.config_im = imconfig
+        self.config_residual_im = self.getconfigresid(self.sci_im, self.config_im)
+
         galname = self.selected_galaxy_path.name
         if ellipse_fit_p != None:
             ellipse_params = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
-            self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=ellipse_params)
         else:
-            self.img.plot(img, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+            ellipse_params = pd.DataFrame()
+        self.current_ellipse_params = ellipse_params
+        self.toggle_1d.setEnabled(not ellipse_params.empty)
 
-        model = self.get_composed_data(galaxypath, self.band, idx=1, fit_type=self.fit_type)
-        self.model.plot(model, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
-
-        resid = self.get_composed_data(galaxypath, self.band, idx=2, fit_type=self.fit_type)
-        self.resid.plot(resid, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
-        
-        imconfig = self.getconfigim(galaxypath, config_path, np.shape(img), maxThreads=self.gui_config["imfit_maxthreads"])
-        self.configimg.plot(imconfig, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
-
-        imresidconfig = self.getconfigresid(img, imconfig)
-        self.configresid.plot(imresidconfig, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
+        self.plot_image()
+        self.plot_model()
+        self.plot_residual()
+        self.plot_config()
+        self.plot_config_residual()
 
     def clearLayout(self, layout):
         if isinstance(layout, QLayout):
@@ -1009,6 +1049,113 @@ class MainWindow(QMainWindow):
                 else:
                     self.clearLayout(item.layout())
                     # layout.removeItem(item)
+ 
+    def plot_image(self):
+        self.img.plot(self.sci_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=self.current_ellipse_params)
+
+    def plot_model(self):
+        if self.is_1d_mode:
+            data = self.get_radial_data(self.band)
+            if data is not None:
+                self.model.plot_profiles(data['model']['host'], data['model']['polar'], 'Model Radial Profile', overplot=data['image'])
+                return
+        self.model.plot(self.model_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+
+    def plot_residual(self):
+        if self.is_1d_mode:
+            data = self.get_radial_data(self.band)
+            if data is not None:
+                self.resid.plot_profiles(data['residual']['host'], data['residual']['polar'], 'Residual Radial Profile')
+                return
+        self.resid.plot(self.residual_im, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
+
+    def plot_config(self):
+        if self.is_1d_mode:
+            data = self.get_radial_data(self.band)
+            if data is not None:
+                self.configimg.plot_profiles(data['config']['host'], data['config']['polar'], 'Config Radial Profile', overplot=data['image'])
+                return
+        self.configimg.plot(self.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+
+    def plot_config_residual(self):
+        if self.is_1d_mode:
+            data = self.get_radial_data(self.band)
+            if data is not None:
+                self.configresid.plot_profiles(data['config_residual']['host'], data['config_residual']['polar'], 'Config Residual Radial Profile')
+                return
+        self.configresid.plot(self.config_residual_im, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
+
+    def get_radial_data(self, band):
+        if self.current_ellipse_params is None or self.current_ellipse_params.empty:
+            return None
+        host_e = self.current_ellipse_params[self.current_ellipse_params["PolarOrHost"] == "Host"]
+        polar_e = self.current_ellipse_params[self.current_ellipse_params["PolarOrHost"] == "Polar"]
+        if host_e.empty or polar_e.empty:
+            return None
+        host_pa = host_e["angle"].iloc[0]
+        polar_pa = polar_e["angle"].iloc[0]
+        host_a = host_e["semi_major"].iloc[0]
+        polar_a = polar_e["semi_major"].iloc[0]
+        zeropoint = 22.5
+        center = (float(self.sci_fits.header['CRPIX1']) - 1.0, float(self.sci_fits.header['CRPIX2']) - 1.0)
+        host_len = int(max(200, 2.5 * host_a))
+        polar_len = int(max(250, 2.5 * polar_a))
+        width_pix = 7.0
+        oversample = 2
+
+        mask_array = self.mask_fits.data if getattr(self.mask_fits, 'data', None) is not None else self.mask_fits
+        invvar_array = self.invvar_fits.data if getattr(self.invvar_fits, 'data', None) is not None else self.invvar_fits
+        psf_array = self.psf_fits.data if getattr(self.psf_fits, 'data', None) is not None else self.psf_fits
+
+        def profile_from_image(image_data, pa, length):
+            cut = photometric_cut(
+                sci_fits=image_data,
+                center_xy=center,
+                pa_deg=pa,
+                length_pix=length,
+                width_pix=width_pix,
+                oversample=oversample,
+                mask_fits=mask_array,
+                invvar_fits=invvar_array,
+                psf_fits=psf_array,
+                zeropoint=zeropoint,
+                pixel_scale_arcsec=self.pixel_scale,
+            )
+            r, mu, mu_err, _ = fold_cut_to_radial_profile(cut)
+            return {'r': r, 'mu': mu, 'mu_err': mu_err}
+
+        image_host = profile_from_image(self.sci_fits, host_pa, host_len)
+        image_polar = profile_from_image(self.sci_fits, polar_pa, polar_len)
+
+        fake_model = fits.PrimaryHDU(data=self.model_im)
+        fake_model.header = self.sci_fits.header.copy()
+        model_host = profile_from_image(fake_model, host_pa, host_len)
+        model_polar = profile_from_image(fake_model, polar_pa, polar_len)
+
+        residual_data = self.sci_fits.data - self.model_im
+        fake_residual = fits.PrimaryHDU(data=residual_data)
+        fake_residual.header = self.sci_fits.header.copy()
+        residual_host = profile_from_image(fake_residual, host_pa, host_len)
+        residual_polar = profile_from_image(fake_residual, polar_pa, polar_len)
+
+        fake_config = fits.PrimaryHDU(data=self.config_im)
+        fake_config.header = self.sci_fits.header.copy()
+        config_host = profile_from_image(fake_config, host_pa, host_len)
+        config_polar = profile_from_image(fake_config, polar_pa, polar_len)
+
+        config_residual_data = self.sci_fits.data - self.config_im
+        fake_config_residual = fits.PrimaryHDU(data=config_residual_data)
+        fake_config_residual.header = self.sci_fits.header.copy()
+        config_residual_host = profile_from_image(fake_config_residual, host_pa, host_len)
+        config_residual_polar = profile_from_image(fake_config_residual, polar_pa, polar_len)
+
+        return {
+            'image': {'host': image_host, 'polar': image_polar},
+            'model': {'host': model_host, 'polar': model_polar},
+            'residual': {'host': residual_host, 'polar': residual_polar},
+            'config': {'host': config_host, 'polar': config_polar},
+            'config_residual': {'host': config_residual_host, 'polar': config_residual_polar},
+        }
  
     def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
         func_idx, paramname = paramkey
