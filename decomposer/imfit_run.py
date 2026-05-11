@@ -18,18 +18,15 @@ sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
 import make_model_ima_imfit
 
 
-def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, fit_type="2_sersic", config_file=None, stdout_callback=None):
+def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, fit_type="2_sersic", config_file=None, gui_config = None, stdout_callback=None):
     # Assumes alread in directory
     #imfit -c config.dat image_g.fits --mask image_mask.fits --psf psf_patched_g.fits --noise image_g_invvar.fits --save-model g_model.fits --save-residual g_residual.fits --max-threads 4 --errors-are-weights
     # command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt", "--max-threads", f"{args.max_threads}"]
     config_file = config_file or f"{fit_type}_{band}.dat"
-    config_path = Path(os.path.dirname(__file__)).parent / "GUI" / "config.json"
     imfit_cmd = "imfit"
-    if config_path.exists():
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-        if 'imfit_path' in config and config['imfit_path']:
-            imfit_cmd = config['imfit_path']
+    if gui_config:
+        if 'imfit_path' in gui_config and gui_config['imfit_path']:
+            imfit_cmd = os.path.join(gui_config['imfit_path'], 'imfit')
     command = [imfit_cmd, "-c", config_file, f"image_{band}.fits", "--save-params", f"{fit_type}_{band}_fit_params.txt", "--max-threads", f"{max_threads}"]
     if mask:
         command.extend(["--mask", "image_mask.fits"])

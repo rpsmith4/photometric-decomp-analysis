@@ -1219,7 +1219,7 @@ class MainWindow(QMainWindow):
             return
         path = self.selected_galaxy_path
         config_path = self.get_config_path(path, self.band, self.fit_type)
-        dlg = fit_monitor.FitMonitorDialog(path, self.band, self.solvertype, max_threads=self.gui_config["imfit_maxthreads"], fit_type=self.fit_type, config_file=config_path, parent=self)
+        dlg = fit_monitor.FitMonitorDialog(path, self.band, self.solvertype, max_threads=self.gui_config["imfit_maxthreads"], fit_type=self.fit_type, config_file=config_path, gui_config=self.gui_config, parent=self)
         dlg.show()
         self.fit_dialogs.append(dlg)
 

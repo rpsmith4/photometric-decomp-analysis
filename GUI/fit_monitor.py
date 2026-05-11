@@ -20,7 +20,7 @@ class FitWorker(QtCore.QThread):
     output = QtCore.Signal(str)
     finished = QtCore.Signal(int)
 
-    def __init__(self, path, band, solver, max_threads, fit_type, mask=True, psf=True, invvar=True, config_file=None, parent=None):
+    def __init__(self, path, band, solver, max_threads, fit_type, mask=True, psf=True, invvar=True, config_file=None, gui_config=None, parent=None):
         super().__init__(parent)
         self.path = str(Path(path).resolve())
         self.band = band
@@ -31,6 +31,7 @@ class FitWorker(QtCore.QThread):
         self.psf = psf
         self.invvar = invvar
         self.config_file = config_file
+        self.gui_config = gui_config
 
     def run(self):
         # Change to target directory and run imfit, streaming stdout
@@ -49,7 +50,7 @@ class FitWorker(QtCore.QThread):
         try:
             imfit_run.run_imfit(self.band, mask=self.mask, psf=self.psf, invvar=self.invvar,
                                 alg=self.solver, max_threads=self.max_threads, fit_type=self.fit_type,
-                                config_file=self.config_file, stdout_callback=cb)
+                                config_file=self.config_file, gui_config=self.gui_config, stdout_callback=cb)
         except Exception as e:
             self.output.emit(f"Error running imfit: {e}\n")
             try:
@@ -75,13 +76,13 @@ class FitWorker(QtCore.QThread):
                     mask_img = fits.open(mask_file)[0].data
                     img = img * (1 - mask_img)
                     fits.writeto("masked.fits", data=img, header=img_dat[0].header, overwrite=True)
-                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"])
+                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"], imfitPath=self.gui_config["imfit_path"])
                     try:
                         os.remove("./masked.fits")
                     except Exception:
                         pass
                 else:
-                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"])
+                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"], imfitPath=self.gui_config["imfit_path"])
 
         except Exception as e:
             self.output.emit(f"Warning: failed to make composed image: {e}\n")
@@ -95,7 +96,7 @@ class FitWorker(QtCore.QThread):
 
 
 class FitMonitorDialog:
-    def __init__(self, path, band, solver, max_threads=8, fit_type="2_sersic", config_file=None, parent=None):
+    def __init__(self, path, band, solver, max_threads=8, fit_type="2_sersic", config_file=None, gui_config=None, parent=None):
         self.parent = parent
         ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_monitor.ui'))
         loader = QUiLoader()
@@ -114,7 +115,7 @@ class FitMonitorDialog:
         self.ui.closeButton.clicked.connect(self.close)
 
         # Worker thread
-        self.worker = FitWorker(path, band, solver, max_threads, fit_type, config_file=config_file)
+        self.worker = FitWorker(path, band, solver, max_threads, fit_type, config_file=config_file, gui_config=gui_config)
         self.worker.output.connect(self._append_output)
         self.worker.finished.connect(self._finished)
 
