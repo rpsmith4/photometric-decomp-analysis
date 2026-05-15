@@ -50,7 +50,7 @@ def main(galpath, save_path, copy_list: list = ['fitted'], overwrite: bool = Tru
         files_tocopy = glob.glob(str(gal_dir) + "/*")
         # print(f"{files_tocopy}\n")
         for part in save_loc:
-            print(f"Copying files from {part}")
+            print(f"Copying files from {gal_dir} to {part}")
             for file in files_tocopy:
                 new_file =str(part) + "/" + Path(file).parts[-1]
                 # print(new_file)
