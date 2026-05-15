@@ -44,6 +44,7 @@ def main(galpath: Path, name: str, confpath: Path, overwrite: bool = False, matc
             print(f"\nDirectory could not be created as it already exists. Set --overwrite or choose a new name. \n{e}\n")
             return
     
+    shutil.copy2(confpath, out_path)
     # Create output directories to discriminate the how good the user-supplied fit is
     fitted_path = out_path / "fitted"
     review_path = out_path / "return"
