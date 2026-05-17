@@ -638,7 +638,7 @@ class MainWindow(QMainWindow):
             
         # Read in the ellipse fit data 
         if ellipse_fit_p != None:
-            csvs = glob.glob(os.path.join(Path(ellipse_fit_p), "*.csv"))
+            csvs = glob.glob(os.path.join(Path(ellipse_fit_p), "*csv"))
             ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
             for csv in csvs:
                 dat = pd.read_csv(csv, sep = " ")

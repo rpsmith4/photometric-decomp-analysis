@@ -100,6 +100,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     """
     import math
     from pathlib import Path
+    
 
     # ---------- helpers (local, from scratch) ----------
     def clamp(x, lo, hi):
@@ -157,7 +158,6 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     # cx, cy = host_e["x_center"], host_e["y_center"]  # shared center
     sci_header = sci_fits.header
     cx, cy = sci_header["CRPIX1"], sci_header["CRPIX2"] # IMO this is the best method to try to find the center. Perhaps with a centroiding algorithm to add in.
-    
     host_pa = host_e["angle"].iloc[0]
     polar_pa = polar_e["angle"].iloc[0]
     host_pa_imfit = pa_to_imfit(host_pa)
@@ -178,7 +178,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
 
     pa_diff = np.abs(host_pa-polar_pa)
     # Trying to refine the 1-D fitting by getting better constraints on the bounds in which to fit both host and polar components. Make it so that it stops failing. There's a lot of work to be done here:
-    # print((host_a, polar_a))
+
     if host_a < polar_a:
         polar_rmin = host_a*(1-host_ell)/np.sqrt((1-host_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2)
         # print((1-polar_ell)/np.sqrt((1-host_ell)**2 * np.cos(pa_diff*np.pi/180)**2 + np.sin(pa_diff*np.pi/180)**2))
@@ -195,7 +195,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     host_rmin *= pixel_scale
     polar_rmin *= pixel_scale
     # print((host_rmin, polar_rmin)) # Just to test how it's doing
-    
+
     
     # ---------- photometric estimates (n, Re_arcsec, mu_e) ----------
     # This calls your new machinery in photometric_cut.py
@@ -267,7 +267,6 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
         import json
         import glob
 
-        
         if phot_params == "polar_manual":
             # find file name for just polar manual fitting
             # parse
@@ -414,7 +413,7 @@ def main():
     
 
     # gather ellipse fit results
-    csvs = glob.glob(os.path.join(Path("./EllipseFitResults/", "*.csv")))
+    csvs = glob.glob(os.path.join(Path("./EllipseFitResults/", "*csv")))
     ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
     for csv in csvs:
         dat = pd.read_csv(csv)
