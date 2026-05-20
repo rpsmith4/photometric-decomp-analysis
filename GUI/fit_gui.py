@@ -641,8 +641,11 @@ class MainWindow(QMainWindow):
             csvs = glob.glob(os.path.join(Path(ellipse_fit_p), "*csv"))
             ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
             for csv in csvs:
-                dat = pd.read_csv(csv, sep = " ")
-                ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+                try:
+                    dat = pd.read_csv(csv, sep = " ")
+                    ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+                except:
+                    continue
             self.ellipse_fit_data = ellipse_fit_data
 
         # Read in the master table (I might change this later so we don't have to do this in the GUI code)
