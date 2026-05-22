@@ -49,16 +49,13 @@ def main(args, fit_band = 'all'):
     galpathlist = []
 
     # Gather Ellipse Fit results for all objects
-    csvs = glob.glob(os.path.join(Path(args.ellipse_fit), "*.ecsv"))
-    ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
+    ellipse_fit_data = pd.DataFrame(columns=["file","x_center","y_center","semi_major","semi_minor","angle","MorphType","PSType1","PolarOrHost","IsophoteLevel"])
+    dat = pd.read_csv(Path(args.ellipse_fit), sep = ",")
+    ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
 
     # The following was for the old ellipse fit results
     # csvs = glob.glob(os.path.join(Path(args.ellipse_fit), "*.csv"))
     # ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
-
-    for csv in csvs:
-        dat = pd.read_csv(csv, sep=" ")
-        ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
     # print(dat.columns)
     # print(ellipse_fit_data)
     
