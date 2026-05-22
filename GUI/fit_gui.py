@@ -639,12 +639,26 @@ class MainWindow(QMainWindow):
         # Read in the ellipse fit data 
         if ellipse_fit_p != None:
             # ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
-            ellipse_fit_data = pd.DataFrame(columns=["file","x_center","y_center","semi_major","semi_minor","angle","MorphType","PSType1","PolarOrHost","IsophoteLevel"])
-            try:
-                dat = pd.read_csv(Path(ellipse_fit_p), sep = ",")
-                ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
-            except Exception as e:
-                print(e)
+
+            # IsoLevel and IsophoteLevel aren't currently used anywhere to my knowledge. Updated the separation so that with both ellipse result files included it will run properly, as one is comma delineated and the other space delineated. To my knowledge, both are needed atm, so I'm adding back the ability for both to be used if the folder containing ellipse results is passed.
+            ellipse_fit_data = pd.DataFrame(columns=["file","x_center","y_center","semi_major","semi_minor","angle","MorphType","PSType1","PolarOrHost","IsophoteLevel","IsoLevel"])
+
+            if not str(ellipse_fit_p).endswith("csv"):
+                csvs = glob.glob(os.path.join(Path(ellipse_fit_p), "*csv"))
+                for csv in csvs:
+                    try:
+                        dat = pd.read_csv(csv, sep = r"\s+|,",
+                    engine="python")
+                        ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+                    except Exception as e:
+                        print(e)
+            else:
+                try:
+                    dat = pd.read_csv(Path(ellipse_fit_p), sep = r"\s+|,",
+                engine="python")
+                    ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+                except Exception as e:
+                    print(e)
             self.ellipse_fit_data = ellipse_fit_data
 
         # Read in the master table (I might change this later so we don't have to do this in the GUI code)
