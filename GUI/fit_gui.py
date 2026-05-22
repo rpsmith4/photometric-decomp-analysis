@@ -1528,7 +1528,7 @@ if __name__ == "__main__":
     )
     
     parser.add_argument("-p", help="Path to folder containing galaxies", default=".")
-    parser.add_argument("--ellipse_fit", help="Path to folder ellipse fit data", default=None)
+    parser.add_argument("--ellipse_fit", help="Path to ellipse fit data", default=None)
     parser.add_argument("--master_table", help="Path to master table data", default=None)
 
     args = parser.parse_args()
