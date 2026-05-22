@@ -49,19 +49,25 @@ def main(args, fit_band = 'all'):
     galpathlist = []
 
     # Gather Ellipse Fit results for all objects
-    csvs = glob.glob(os.path.join(Path(args.ellipse_fit), "*csv"))
     ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
+    if not str(args.ellipse_fit).endswith("csv"):
+        csvs = glob.glob(os.path.join(Path(args.ellipse_fit), "*csv"))
+        for csv in csvs:
+            try:
+                dat = pd.read_csv(csv, sep = r"\s+|,",
+            engine="python")
+                ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+            except Exception as e:
+                print(e)
+    else:
+        try:
+            dat = pd.read_csv(Path(args.ellipse_fit), sep = r"\s+|,",
+        engine="python")
+            ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+        except Exception as e:
+            print(e)
 
-    # The following was for the old ellipse fit results
-    # csvs = glob.glob(os.path.join(Path(args.ellipse_fit), "*.csv"))
-    # ellipse_fit_data = pd.DataFrame(columns=["file", "label","contour", "x_center", "y_center", "semi_major", "semi_minor", "angle", "center_offset", "axis_ratio", "pa_diff"])
 
-    for csv in csvs:
-        dat = pd.read_csv(csv, sep = r"\s+|,",
-                    engine="python")
-        ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
-    # print(dat.columns)
-    # print(ellipse_fit_data)
     
     # gather infromation from the master_table.csv (currently unused)
     master_table_csv = glob.glob(os.path.join(Path(args.master_table), "master_table.csv"))[0]

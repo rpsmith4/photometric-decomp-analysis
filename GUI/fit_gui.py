@@ -640,7 +640,7 @@ class MainWindow(QMainWindow):
         if ellipse_fit_p != None:
             # ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
 
-            # IsoLevel and IsophoteLevel aren't currently used anywhere to my knowledge. Updated the separation so that with both ellipse result files included it will run properly, as one is comma delineated and the other space delineated. To my knowledge, both are needed atm, so I'm adding back the ability for both to be used if the folder containing ellipse results is passed.
+            # IsoLevel and IsophoteLevel aren't currently used anywhere to my knowledge, so I'll keep both for the time being. Updated the separation so that with both ellipse result files included it will run properly, as one is comma delineated and the other space delineated. Either the path to the particular file
             ellipse_fit_data = pd.DataFrame(columns=["file","x_center","y_center","semi_major","semi_minor","angle","MorphType","PSType1","PolarOrHost","IsophoteLevel","IsoLevel"])
 
             if not str(ellipse_fit_p).endswith("csv"):
