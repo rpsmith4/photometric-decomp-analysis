@@ -76,7 +76,7 @@ class FitWorker(QtCore.QThread):
                     mask_img = fits.open(mask_file)[0].data
                     img = img * (1 - mask_img)
                     fits.writeto("masked.fits", data=img, header=img_dat[0].header, overwrite=True)
-                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"], imfitPath=self.gui_config["imfit_path"])
+                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"], imfitPath=self.gui_config["imfit_path"], mask=mask_img)
                     try:
                         os.remove("./masked.fits")
                     except Exception:

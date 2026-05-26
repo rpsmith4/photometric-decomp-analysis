@@ -936,9 +936,12 @@ class MainWindow(QMainWindow):
 
         return im
     
-    def getconfigresid(self, im, imconfig):
+    def getconfigresid(self, im, imconfig, mask=np.array([])):
         try:
-            return im - imconfig
+            if mask.size != 0:
+                return np.where(mask >0, 0, im - imconfig)
+            else:
+                return im - imconfig
         except:
             return np.array([])
 
@@ -1032,7 +1035,7 @@ class MainWindow(QMainWindow):
         
         imconfig = self.getconfigim(galaxypath, config_path, np.shape(self.sci_im), maxThreads=self.gui_config["imfit_maxthreads"])
         self.config_im = imconfig
-        self.config_residual_im = self.getconfigresid(self.sci_im, self.config_im)
+        self.config_residual_im = self.getconfigresid(self.sci_im, self.config_im, self.mask_fits.data)
 
         galname = self.selected_galaxy_path.name
         if ellipse_fit_p != None:
