@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
+from matplotlib.ticker import LogLocator
 from astropy.visualization.stretch import LogStretch, LinearStretch
 from astropy.visualization import ImageNormalize
 import math
@@ -27,6 +28,7 @@ import pandas as pd
 import matplotlib.patches
 import glob
 from PIL import Image
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
 sys.path.append(str(BASE_DIR))
@@ -66,16 +68,45 @@ class PlotCanvas(FigureCanvas):
         super().__init__(self.fig)
         self.setParent(parent)
 
-    def plot(self, im, limits, cmap, stretch=LogStretch(), ellipse_params=pd.DataFrame, plottext=None):
+    def plot(self, im, limits, cmap, stretch=LogStretch(), ellipse_params=pd.DataFrame, plottext=None, cbar=True):
         self.fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
         self.ax.cla()
         self.ax.set_axis_off()
         if im.any():
             if limits != None:
                 norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
-                self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
+                implt = self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
             else:
-                self.ax.imshow(im, origin="lower", cmap=cmap)
+                implt = self.ax.imshow(im, origin="lower", cmap=cmap)
+
+            if cbar:
+                # cbbox = inset_axes(self.ax, '15%', '90%', loc = 7)
+                cbbox = inset_axes(self.ax, '100%', '10%', loc = "lower center", borderpad=-0.3)
+                cbbox.tick_params(
+                    axis = 'both',
+                    left = False,
+                    top = False,
+                    right = False,
+                    bottom = False,
+                    labelleft = False,
+                    labeltop = False,
+                    labelright = False,
+                    labelbottom = False
+                )
+                [cbbox.spines[k].set_visible(False) for k in cbbox.spines]
+                cbbox.set_facecolor([1,1,1,0.7])
+
+                # cbaxes = inset_axes(cbbox, '30%', '95%', loc = 6)
+                cbaxes = inset_axes(cbbox, '90%', '30%', loc = "upper center")
+                # cb = self.fig.colorbar(implt, cax=cbaxes, orientation="horizontal")#,shrink=0.7,pad=-0.3)
+                if isinstance(stretch, LogStretch):
+                    cb = self.fig.colorbar(implt, cax=cbaxes, orientation="horizontal", ticks = LogLocator(base=10))
+                else:
+                    cb = self.fig.colorbar(implt, cax=cbaxes, orientation="horizontal")#,shrink=0.7,pad=-0.3)
+
+                cb.ax.minorticks_on()
+                
+                # cb.ax.tick_params(labelsize=15) 
 
             if plottext != None:
                 self.ax.text(0.05, 0.95, plottext, size=15,
@@ -1039,7 +1070,7 @@ class MainWindow(QMainWindow):
         # pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
         self.jpg_img = np.asarray(Image.open(os.path.join(galaxypath, "image.jpg")))
         self.jpg_img = np.flipud(self.jpg_img)
-        self.jpg_img_plot.plot(self.jpg_img, limits=None, cmap=None, stretch=None, plottext="JPG Image")
+        self.jpg_img_plot.plot(self.jpg_img, limits=None, cmap=None, stretch=None, plottext="JPG Image", cbar=False)
 
         # self.img.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
         self.sci_im = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
