@@ -26,6 +26,7 @@ import re
 import pandas as pd
 import matplotlib.patches
 import glob
+from PIL import Image
 
 BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
 sys.path.append(str(BASE_DIR))
@@ -65,13 +66,29 @@ class PlotCanvas(FigureCanvas):
         super().__init__(self.fig)
         self.setParent(parent)
 
-    def plot(self, im, limits, cmap, stretch=LogStretch(), ellipse_params=pd.DataFrame):
+    def plot(self, im, limits, cmap, stretch=LogStretch(), ellipse_params=pd.DataFrame, plottext=None):
         self.fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
         self.ax.cla()
         self.ax.set_axis_off()
         if im.any():
-            norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
-            self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
+            if limits != None:
+                norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
+                self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
+            else:
+                self.ax.imshow(im, origin="lower", cmap=cmap)
+
+            if plottext != None:
+                self.ax.text(0.05, 0.95, plottext, size=15,
+                        ha="left", va="center",
+                        bbox=dict(boxstyle="square",
+                                ec=(1., 1, 1),
+                                fc=(0,0,0),
+                                ),
+                        transform=self.ax.transAxes,
+                        color="lightgreen"
+                        )
+
+
             if not ellipse_params.empty:
                 host = ellipse_params[ellipse_params["PolarOrHost"] == "Host"].iloc[0]
                 polar = ellipse_params[ellipse_params["PolarOrHost"] == "Polar"].iloc[0]
@@ -759,7 +776,8 @@ class MainWindow(QMainWindow):
         self.ps = []
         self.fit_dialogs = []
 
-        # Setting up the FITs plots for the iamge, model, and residual
+        # Setting up the FITs plots for the image, model, and residual
+        self.jpg_img_plot =  PlotCanvas(parent=self.ui.galaxyjpg)
         self.img = PlotCanvas(parent=self.ui.galimg)
         self.model = PlotCanvas(parent=self.ui.galmodel)
         self.resid = PlotCanvas(parent=self.ui.galresid)
@@ -1018,9 +1036,10 @@ class MainWindow(QMainWindow):
             self.params.setPlainText("Fit Params not found!")
             self.params.repaint()
 
-        pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
-        self.ui.galaxyjpg.setPixmap(pixmap)
-        
+        # pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
+        self.jpg_img = np.asarray(Image.open(os.path.join(galaxypath, "image.jpg")))
+        self.jpg_img = np.flipud(self.jpg_img)
+        self.jpg_img_plot.plot(self.jpg_img, limits=None, cmap=None, stretch=None, plottext="JPG Image")
 
         # self.img.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
         self.sci_im = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
@@ -1064,7 +1083,7 @@ class MainWindow(QMainWindow):
                     # layout.removeItem(item)
  
     def plot_image(self):
-        self.img.plot(self.sci_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=self.current_ellipse_params)
+        self.img.plot(self.sci_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=self.current_ellipse_params, plottext=f"{self.band} Band Image")
 
     def plot_model(self):
         if self.is_1d_mode:
@@ -1072,7 +1091,7 @@ class MainWindow(QMainWindow):
             if data is not None:
                 self.model.plot_profiles(data['model']['host'], data['model']['polar'], 'Model Radial Profile', overplot=data['image'])
                 return
-        self.model.plot(self.model_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+        self.model.plot(self.model_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
 
     def plot_residual(self):
         if self.is_1d_mode:
@@ -1085,7 +1104,7 @@ class MainWindow(QMainWindow):
                     y_label='Residual Flux (nanomaggies/arcsec^2)'
                 )
                 return
-        self.resid.plot(self.residual_im, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
+        self.resid.plot(self.residual_im, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=f"Image - Model") # Update to show relative residual
 
     def plot_config(self):
         if self.is_1d_mode:
@@ -1093,7 +1112,7 @@ class MainWindow(QMainWindow):
             if data is not None:
                 self.configimg.plot_profiles(data['config']['host'], data['config']['polar'], 'Config Radial Profile', overplot=data['image'])
                 return
-        self.configimg.plot(self.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+        self.configimg.plot(self.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext="2D Config Image")
 
     def plot_config_residual(self):
         if self.is_1d_mode:
@@ -1106,7 +1125,7 @@ class MainWindow(QMainWindow):
                     y_label='Config Residual Flux (nanomaggies/arcsec^2)'
                 )
                 return
-        self.configresid.plot(self.config_residual_im, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
+        self.configresid.plot(self.config_residual_im, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext="Image - Config")
 
     def get_radial_data(self, band):
         if self.current_ellipse_params is None or self.current_ellipse_params.empty:
