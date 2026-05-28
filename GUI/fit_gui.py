@@ -1372,12 +1372,14 @@ class MainWindow(QMainWindow):
                         if source_type == "fit_params":
                             # Copy from fit parameters - use value as fixed parameter
                             param_value = fit_params_values[func_idx]["parameters"][param_name]
-                            param_unc = fit_params_values[func_idx]["parameters_unc"][param_name]
+                            # param_unc = fit_params_values[func_idx]["parameters_unc"][param_name]
                             # Ngl I don't know how I feel about determining the bounds like this, but it works for now (subject to change)
-                            if param_unc != 0:
-                                current_functions[func_idx]["parameters"][param_name] = [param_value, param_value-param_unc, param_value+param_unc]
-                            else:
-                                current_functions[func_idx]["parameters"][param_name] = [param_value, 'fixed']
+                            # Now actually changed to just using the config bounds
+                            # if param_unc != 0:
+                            #     current_functions[func_idx]["parameters"][param_name] = [param_value, param_value-param_unc, param_value+param_unc]
+                            # else:
+                            #     current_functions[func_idx]["parameters"][param_name] = [param_value, 'fixed']
+                            current_functions[func_idx]["parameters"][param_name] = [param_value,  source_functions[func_idx]["parameters"][param_name][1],  source_functions[func_idx]["parameters"][param_name][2]]
                             copied_count += 1
                         else:
                             # Copy from config file
