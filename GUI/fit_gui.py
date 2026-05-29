@@ -24,6 +24,7 @@ import pyimfit
 import shutil
 import numpy as np
 import re
+import html
 import pandas as pd
 import matplotlib.patches
 import glob
@@ -31,6 +32,7 @@ from PIL import Image
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import scipy
 import astropy.units as u
+import traceback
 
 BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
 sys.path.append(str(BASE_DIR))
@@ -1091,24 +1093,22 @@ class MainWindow(QMainWindow):
             pass
 
 
+        params_file = None
+        fit_results = None
         try:
             with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
                 params_file = f.readlines()
-            self.params.setPlainText("".join(params_file))
-            self.params.repaint()
-        except:
-            self.params.setPlainText("Fit Params not found!")
-            self.params.repaint()
-            fit_results = None
-        else:
-            fit_results = None
             fit_params_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt")
             if os.path.exists(fit_params_path):
                 try:
                     fit_results = parse_results(fit_params_path)[0]
                 except Exception:
                     fit_results = None
-            self.highlight_boundary_params(fit_results)
+            self.highlight_boundary_params(params_file, fit_results)
+        except Exception as e:
+            print(traceback.format_exc())
+            self.params.setPlainText("Fit Params not found!")
+            self.params.repaint()
 
         # pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
         self.jpg_img = np.asarray(Image.open(os.path.join(galaxypath, "image.jpg")))
@@ -1317,46 +1317,61 @@ class MainWindow(QMainWindow):
         layout.addWidget(widget)
         self.param_widgets[paramkey] = widget
 
-    def highlight_boundary_params(self, fit_results):
+    def highlight_boundary_params(self, params_file_lines, fit_results):
+        if params_file_lines is None:
+            return
+
         if fit_results is None or self.current_config_dict is None:
+            self.params.setHtml("<pre>" + html.escape("".join(params_file_lines)) + "</pre>")
             return
 
         try:
             function_list = self.current_config_dict["function_sets"][0]["function_list"]
         except Exception:
+            self.params.setHtml("<pre>" + html.escape("".join(params_file_lines)) + "</pre>")
             return
 
-        for paramkey, widget in self.param_widgets.items():
-            func_idx, param_name = paramkey
-            if func_idx not in fit_results:
-                widget.setStyleSheet("")
+        html_lines = []
+        func_idx = -1
+        for line in params_file_lines:
+            stripped = line.strip()
+            if stripped.startswith("FUNCTION"):
+                func_idx += 1
+                html_lines.append(html.escape(line))
                 continue
 
-            fit_entry = fit_results[func_idx]
-            param_val = fit_entry["parameters"].get(param_name)
-            param_unc = fit_entry["parameters_unc"].get(param_name)
-            if param_val is None or param_unc is None:
-                widget.setStyleSheet("")
-                continue
+            highlight = False
+            if "+/-" in line and func_idx >= 0 and func_idx in fit_results:
+                m = re.match(r"^\s*(\S+)\s+([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)\s*#\s*\+/\-\s*([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)", line)
+                if m:
+                    param_name = m.group(1)
+                    try:
+                        param_val = float(m.group(2))
+                        param_unc = float(m.group(3))
+                    except ValueError:
+                        param_val = None
+                        param_unc = None
 
-            if param_unc == 0:
-                func_params = function_list[func_idx]["parameters"]
-                if param_name not in func_params:
-                    widget.setStyleSheet("")
-                    continue
-                bounds = func_params[param_name]
-                if bounds[1] == 'fixed':
-                    lowlim = bounds[0]
-                    hilim = bounds[0]
-                else:
-                    lowlim = bounds[1]
-                    hilim = bounds[2]
+                    if param_val is not None and param_unc == 0:
+                        func_params = function_list[func_idx]["parameters"]
+                        if param_name in func_params:
+                            bounds = func_params[param_name]
+                            if bounds[1] == 'fixed':
+                                lowlim = bounds[0]
+                                hilim = bounds[0]
+                            else:
+                                lowlim = bounds[1]
+                                hilim = bounds[2]
+                            if math.isclose(param_val, lowlim, rel_tol=1e-9, abs_tol=1e-12) or math.isclose(param_val, hilim, rel_tol=1e-9, abs_tol=1e-12):
+                                highlight = True
 
-                if math.isclose(param_val, lowlim, rel_tol=1e-9, abs_tol=1e-12) or math.isclose(param_val, hilim, rel_tol=1e-9, abs_tol=1e-12):
-                    widget.setStyleSheet("background-color: rgba(255, 0, 0, 0.18);")
-                    continue
+            escaped_line = html.escape(line)
+            if highlight:
+                html_lines.append(f"<span style='color:red'>%s></span>" % escaped_line)
+            else:
+                html_lines.append(escaped_line)
 
-            widget.setStyleSheet("")
+        self.params.setHtml("<pre>" + "".join(html_lines) + "</pre>")
 
     def on_galaxytree_selection_changed(self, selected, deselected):
         """Called when the tree selection changes. If the selected item is a lowest-level
