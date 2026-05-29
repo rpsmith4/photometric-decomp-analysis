@@ -32,6 +32,8 @@ from PIL import Image
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import scipy
 import astropy.units as u
+from astropy.cosmology import WMAP9 as cosmo
+import astropy.cosmology.units as cu
 import traceback
 
 BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
@@ -160,11 +162,14 @@ class PlotCanvas(FigureCanvas):
 
         self.draw()
 
-    def plot_profiles(self, host_data, polar_data, title, overplot=None, y_label='Surface Brightness (mag/arcsec^2)', surfbright=False, is_resid=False):
+    def plot_profiles(self, host_data, polar_data, title, overplot=None, y_label='Surface Brightness (mag/arcsec^2)', surfbright=False, is_resid=False, d_A=None):
         self.fig.clear()
         self.ax = self.fig.subplots()
 
-        self.fig.subplots_adjust(left=0.13, right=0.9,bottom=0.1,top=0.9)
+        if d_A == None:
+            self.fig.subplots_adjust(left=0.13, right=0.9,bottom=0.1,top=0.90)
+        else:
+            self.fig.subplots_adjust(left=0.13, right=0.9,bottom=0.1,top=0.85)
         self.ax.cla()
         self.ax.set_title(title, fontsize=12)
         try:
@@ -184,6 +189,13 @@ class PlotCanvas(FigureCanvas):
 
             if is_resid:
                 self.ax.axhline(y=0, ls="--", color="black")
+
+            if d_A != None:
+                self.secax = self.ax.secondary_xaxis('top', functions=(
+                    lambda x: ((x*u.arcsec * d_A).to(u.kpc, u.dimensionless_angles())).value,
+                    lambda y: ((y*u.kpc / d_A).to(u.arcsec, u.dimensionless_angles())).value
+                    ))
+                self.secax.set_xlabel('Radius (kpc)', fontsize=10)
         except:
             self.ax.text(0.2,0.5, "No Radial Data!", fontsize=24)
         self.draw()
@@ -240,12 +252,13 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
         return super().data(index, role)
 
 class ParamSliderWidget(QWidget):
-    def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None):
+    def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None, d_A=None):
         super().__init__(parent)
         self.paramname = paramname
         self.ndigits = ndigits
         self.scale = 10 ** ndigits
         self.fixed = fixed
+        self.d_A = d_A # Angular size distance (I should probably find a way to avoid just passing it to here but whatever)
 
         parameter_adjust_layout = QHBoxLayout()
         parameter_adjust_layout.setContentsMargins(0,0,0,0)
@@ -390,10 +403,17 @@ class ParamSliderWidget(QWidget):
         minval = self.minspinbox.value()
         maxval = self.maxspinbox.value()
         if self.paramname in ["r_e", "R_ring", "sigma_r"]:
-            valarcsec = val * 0.262
-            minvalarcsec = minval * 0.262
-            maxvalarcsec = maxval * 0.262
-            self.converted_label.setText(f"Min: {minvalarcsec:.3f} Val: {valarcsec:.3f} Max: {maxvalarcsec:.3f} arcsec")
+            valarcsec = val * 0.262 * u.arcsec
+            minvalarcsec = minval * 0.262 * u.arcsec
+            maxvalarcsec = maxval * 0.262 * u.arcsec
+
+            if self.d_A != None:
+                minvalkpc = (minvalarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
+                maxvalkpc = (maxvalarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
+                valkpc = (valarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
+                self.converted_label.setText(f"Min: {minvalarcsec.value:.3f} Val: {valarcsec.value:.3f} Max: {maxvalarcsec.value:.3f} (Min: {minvalkpc.value:.3f} Val: {valkpc.value:.3f} Max: {maxvalkpc.value:.3f} kpc)")
+            else:
+                self.converted_label.setText(f"Min: {minvalarcsec.value:.3f} Val: {valarcsec.value:.3f} Max: {maxvalarcsec.value:.3f} arcsec")
         elif self.paramname in ["I_e", "A"]:
             if val > 0 and minval > 0 and maxval > 0:
                 valmag = 22.5 - 2.5 * math.log10(val/0.262**2)
@@ -872,7 +892,7 @@ class MainWindow(QMainWindow):
         self.galaxytree.setColumnHidden(3, True)
         # Detect selections on the tree to identify when a leaf directory is selected
         self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
-        
+
         self.ui.show()
 
     def on_toggle_1d(self, state):
@@ -1045,6 +1065,15 @@ class MainWindow(QMainWindow):
         self.currentgalaxytext.repaint()
 
         try:
+            master_table_data_gal = self.master_table_data[self.master_table_data["NAME"] == galaxy]
+            self.curr_z = master_table_data_gal["REDSHIFT"].iloc[0]
+            self.curr_d_A = cosmo.angular_diameter_distance(z=self.curr_z)
+        except:
+            self.curr_d_A = self.curr_z = None
+        if self.curr_z != self.curr_z:
+            self.curr_d_A = self.curr_z = None
+
+        try:
             config_path = self.get_config_path(galaxypath, self.band, self.fit_type)
             config_model = pyimfit.parse_config_file(config_path)
             self.current_config_model = config_model
@@ -1171,7 +1200,7 @@ class MainWindow(QMainWindow):
     def plot_model(self):
         if self.is_1d_mode:
             if self.radial_data is not None:
-                self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'], surfbright=True)
+                self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
                 return
         self.model.plot(self.model_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
 
@@ -1187,7 +1216,8 @@ class MainWindow(QMainWindow):
                     self.radial_data['residual']['polar'],
                     'Residual Radial Profile',
                     y_label=y_label,
-                    is_resid=True
+                    is_resid=True,
+                    d_A=self.curr_d_A
                 )
                 return
         if self.plotrelresid:
@@ -1201,7 +1231,7 @@ class MainWindow(QMainWindow):
     def plot_config(self):
         if self.is_1d_mode:
             if self.radial_data is not None:
-                self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'], surfbright=True)
+                self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
                 return
         self.configimg.plot(self.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext="2D Config Image")
 
@@ -1217,7 +1247,8 @@ class MainWindow(QMainWindow):
                     self.radial_data['config_residual']['polar'],
                     'Config Residual Radial Profile',
                     y_label=y_label,
-                    is_resid=True
+                    is_resid=True,
+                    d_A=self.curr_d_A
                 )
                 return
         if self.plotrelresid:
@@ -1318,7 +1349,7 @@ class MainWindow(QMainWindow):
     def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
         func_idx, paramname = paramkey
         ndigits = 6
-        widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits)
+        widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits, d_A=self.curr_d_A)
         widget.setMinimumWidth(100)
         layout.addWidget(widget)
         self.param_widgets[paramkey] = widget
