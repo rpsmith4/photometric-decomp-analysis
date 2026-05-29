@@ -165,17 +165,20 @@ class PlotCanvas(FigureCanvas):
         self.fig.subplots_adjust(left=0.13, right=0.9,bottom=0.1,top=0.9)
         self.ax.cla()
         self.ax.set_title(title, fontsize=12)
-        self.ax.plot(host_data['r'], host_data['mu'], label='Host', color='blue')
-        self.ax.plot(polar_data['r'], polar_data['mu'], label='Polar', color='red')
-        if overplot:
-            self.ax.plot(overplot['host']['r'], overplot['host']['mu'], 'b--', label='Host Image')
-            self.ax.plot(overplot['polar']['r'], overplot['polar']['mu'], 'r--', label='Polar Image')
-        self.ax.legend(fontsize=8)
-        self.ax.set_xlabel('Radius (arcsec)', fontsize=10)
-        self.ax.set_ylabel(y_label, fontsize=10)
-        self.ax.tick_params(labelsize=8)
-        if surfbright:
-            self.ax.invert_yaxis()
+        try:
+            self.ax.plot(host_data['r'], host_data['mu'], label='Host', color='blue')
+            self.ax.plot(polar_data['r'], polar_data['mu'], label='Polar', color='red')
+            if overplot:
+                self.ax.plot(overplot['host']['r'], overplot['host']['mu'], 'b--', label='Host Image')
+                self.ax.plot(overplot['polar']['r'], overplot['polar']['mu'], 'r--', label='Polar Image')
+            self.ax.legend(fontsize=8)
+            self.ax.set_xlabel('Radius (arcsec)', fontsize=10)
+            self.ax.set_ylabel(y_label, fontsize=10)
+            self.ax.tick_params(labelsize=8)
+            if surfbright:
+                self.ax.invert_yaxis()
+        except:
+            self.ax.text(0.2,0.5, "No Radial Data!", fontsize=24)
         self.draw()
 
 
@@ -1108,10 +1111,7 @@ class MainWindow(QMainWindow):
         self.current_ellipse_params = ellipse_params
         self.toggle_1d.setEnabled(not ellipse_params.empty)
 
-        try:
-            self.radial_data = self.get_radial_data()
-        except:
-            self.radial_data = None
+        self.radial_data = self.get_radial_data()
 
         self.plot_image()
         self.plot_model()
@@ -1193,36 +1193,38 @@ class MainWindow(QMainWindow):
         self.configresid.plot(self.config_residual_im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext)
 
     def profile_from_image(self, image_data, pa, length, surf_bright=False):
-        
-        pa = np.deg2rad(pa + 90) # Need to account for the offset that imfit gives lol
-        # length = int(np.shape(image_data)[0]*np.cos(np.pi/4))
+        try:
+            pa = np.deg2rad(pa + 90) # Need to account for the offset that imfit gives lol
+            # length = int(np.shape(image_data)[0]*np.cos(np.pi/4))
 
-        c = (int(image_data.shape[0]/2)-1, int(image_data.shape[1]/2)-1) # Just assuming the center of the galaxy is the center of the image
+            c = (int(image_data.shape[0]/2)-1, int(image_data.shape[1]/2)-1) # Just assuming the center of the galaxy is the center of the image
 
-        x0 = c[0] + np.cos(pa)*length
-        x1 = c[0] + np.cos(pa+np.pi)*length
+            x0 = c[0] + np.cos(pa)*length
+            x1 = c[0] + np.cos(pa+np.pi)*length
 
-        y0 = c[1] + np.sin(pa)*length
-        y1 = c[1] + np.sin(pa+np.pi)*length
+            y0 = c[1] + np.sin(pa)*length
+            y1 = c[1] + np.sin(pa+np.pi)*length
 
-        npts = 1000
-        x, y = np.linspace(x0, x1, npts), np.linspace(y0, y1, npts)
+            npts = 1000
+            x, y = np.linspace(x0, x1, npts), np.linspace(y0, y1, npts)
 
-        coords = np.array([x,y])
-        prof = scipy.ndimage.map_coordinates(image_data, coords, cval=np.nan)
-        upper = prof[int(x.size/2):]
-        lower = np.flip(prof[:int(x.size/2)])
-        r = np.linspace(0, length/2, np.size(upper))
-        prof_avg = (upper + lower)/2 
+            coords = np.array([x,y])
+            prof = scipy.ndimage.map_coordinates(image_data, coords, cval=np.nan)
+            upper = prof[int(x.size/2):]
+            lower = np.flip(prof[:int(x.size/2)])
+            r = np.linspace(0, length/2, np.size(upper))
+            prof_avg = (upper + lower)/2 
 
 
-        prof_avg = prof_avg * u.nmgy / self.pixel_scale**2 # nmgy /pix -> nmgy/arcsec**2
+            prof_avg = prof_avg * u.nmgy / self.pixel_scale**2 # nmgy /pix -> nmgy/arcsec**2
 
-        if surf_bright:
-            zero_point_star_equiv = u.zero_point_flux(3631.1 * u.Jy)
-            prof_avg = u.Magnitude(prof_avg.to(u.AB, zero_point_star_equiv))
+            if surf_bright:
+                zero_point_star_equiv = u.zero_point_flux(3631.1 * u.Jy)
+                prof_avg = u.Magnitude(prof_avg.to(u.AB, zero_point_star_equiv))
 
-        return {"r": r[prof_avg != np.nan]*self.pixel_scale, "mu": prof_avg[prof_avg != np.nan].value}
+            return {"r": r[prof_avg != np.nan]*self.pixel_scale, "mu": prof_avg[prof_avg != np.nan].value}
+        except:
+            return None
 
     def get_radial_data(self):
         if self.current_ellipse_params is None or self.current_ellipse_params.empty:
@@ -1245,23 +1247,29 @@ class MainWindow(QMainWindow):
 
         model_host = self.profile_from_image(self.model_im, host_pa, host_len, surf_bright=True)
         model_polar = self.profile_from_image(self.model_im, polar_pa, polar_len, surf_bright=True)
+        
+        try:
+            if self.plotrelresid:
+                residual_data = np.where(sci_image != 0, (sci_image - self.model_im)/sci_image, 0)
+            else:
+                residual_data = sci_image - self.model_im
+            residual_host = self.profile_from_image(residual_data, host_pa, host_len)
+            residual_polar = self.profile_from_image(residual_data, polar_pa, polar_len)
+        except:
+            residual_host = residual_polar = None
 
-        if self.plotrelresid:
-            residual_data = np.where(sci_image != 0, (sci_image - self.model_im)/sci_image, 0)
+        if self.config_im.size != 0:
+            config_host = self.profile_from_image(self.config_im, host_pa, host_len, surf_bright=True) 
+            config_polar = self.profile_from_image(self.config_im, polar_pa, polar_len, surf_bright=True)
+
+            if self.plotrelresid:
+                config_residual_data = np.where(sci_image !=0, (sci_image - self.config_im)/sci_image, 0)
+            else:
+                config_residual_data = sci_image - self.config_im
+            config_residual_host = self.profile_from_image(config_residual_data, host_pa, host_len)
+            config_residual_polar = self.profile_from_image(config_residual_data, polar_pa, polar_len)
         else:
-            residual_data = sci_image - self.model_im
-        residual_host = self.profile_from_image(residual_data, host_pa, host_len)
-        residual_polar = self.profile_from_image(residual_data, polar_pa, polar_len)
-
-        config_host = self.profile_from_image(self.config_im, host_pa, host_len, surf_bright=True) 
-        config_polar = self.profile_from_image(self.config_im, polar_pa, polar_len, surf_bright=True)
-
-        if self.plotrelresid:
-            config_residual_data = np.where(sci_image !=0, (sci_image - self.config_im)/sci_image, 0)
-        else:
-            config_residual_data = sci_image - self.config_im
-        config_residual_host = self.profile_from_image(config_residual_data, host_pa, host_len)
-        config_residual_polar = self.profile_from_image(config_residual_data, polar_pa, polar_len)
+            config_host = config_polar = config_residual_host = config_residual_polar = None
 
         return {
             'image': {'host': image_host, 'polar': image_polar},
