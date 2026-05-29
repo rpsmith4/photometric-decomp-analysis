@@ -158,7 +158,7 @@ class PlotCanvas(FigureCanvas):
 
         self.draw()
 
-    def plot_profiles(self, host_data, polar_data, title, overplot=None, y_label='Surface Brightness (mag/arcsec^2)'):
+    def plot_profiles(self, host_data, polar_data, title, overplot=None, y_label='Surface Brightness (mag/arcsec^2)', surfbright=False):
         self.fig.clear()
         self.ax = self.fig.subplots()
 
@@ -174,6 +174,8 @@ class PlotCanvas(FigureCanvas):
         self.ax.set_xlabel('Radius (arcsec)', fontsize=10)
         self.ax.set_ylabel(y_label, fontsize=10)
         self.ax.tick_params(labelsize=8)
+        if surfbright:
+            self.ax.invert_yaxis()
         self.draw()
 
 
@@ -1137,7 +1139,7 @@ class MainWindow(QMainWindow):
     def plot_model(self):
         if self.is_1d_mode:
             if self.radial_data is not None:
-                self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'])
+                self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'], surfbright=True)
                 return
         self.model.plot(self.model_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
 
@@ -1166,7 +1168,7 @@ class MainWindow(QMainWindow):
     def plot_config(self):
         if self.is_1d_mode:
             if self.radial_data is not None:
-                self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'])
+                self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'], surfbright=True)
                 return
         self.configimg.plot(self.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext="2D Config Image")
 
