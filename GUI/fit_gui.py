@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
+from matplotlib.ticker import LogLocator
 from astropy.visualization.stretch import LogStretch, LinearStretch
 from astropy.visualization import ImageNormalize
 import math
@@ -23,9 +24,17 @@ import pyimfit
 import shutil
 import numpy as np
 import re
+import html
 import pandas as pd
 import matplotlib.patches
 import glob
+from PIL import Image
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+import scipy
+import astropy.units as u
+from astropy.cosmology import WMAP9 as cosmo
+import astropy.cosmology.units as cu
+import traceback
 
 BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
 sys.path.append(str(BASE_DIR))
@@ -65,13 +74,60 @@ class PlotCanvas(FigureCanvas):
         super().__init__(self.fig)
         self.setParent(parent)
 
-    def plot(self, im, limits, cmap, stretch=LogStretch(), ellipse_params=pd.DataFrame):
+    def plot(self, im, limits, cmap, stretch=LogStretch(), ellipse_params=pd.DataFrame, plottext=None, cbar=True):
+        self.fig.clear()
+        self.ax = self.fig.subplots()
         self.fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
-        self.ax.cla()
-        self.ax.set_axis_off()
+        # self.ax.set_axis_off()
+
         if im.any():
-            norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
-            self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
+            if limits != None:
+                norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
+                implt = self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
+            else:
+                implt = self.ax.imshow(im, origin="lower", cmap=cmap)
+
+            if cbar:
+                # cbbox = inset_axes(self.ax, '15%', '90%', loc = 7)
+                self.cbbox = inset_axes(self.ax, '100%', '10%', loc = "lower center", borderpad=-0.3)
+                self.cbbox.tick_params(
+                    axis = 'both',
+                    left = False,
+                    top = False,
+                    right = False,
+                    bottom = False,
+                    labelleft = False,
+                    labeltop = False,
+                    labelright = False,
+                    labelbottom = False
+                )
+                [self.cbbox.spines[k].set_visible(False) for k in self.cbbox.spines]
+                self.cbbox.set_facecolor([1,1,1,0.7])
+
+                # cbaxes = inset_axes(cbbox, '30%', '95%', loc = 6)
+                cbaxes = inset_axes(self.cbbox, '90%', '30%', loc = "upper center")
+                # cb = self.fig.colorbar(implt, cax=cbaxes, orientation="horizontal")#,shrink=0.7,pad=-0.3)
+                if isinstance(stretch, LogStretch):
+                    cb = self.fig.colorbar(implt, cax=cbaxes, orientation="horizontal", ticks = LogLocator(base=10))
+                else:
+                    cb = self.fig.colorbar(implt, cax=cbaxes, orientation="horizontal")#,shrink=0.7,pad=-0.3)
+
+                cb.ax.minorticks_on()
+                
+                # cb.ax.tick_params(labelsize=15) 
+
+            if plottext != None:
+                self.ax.text(0.05, 0.95, plottext, size=15,
+                        ha="left", va="center",
+                        bbox=dict(boxstyle="square",
+                                ec=(1., 1, 1),
+                                fc=(0,0,0),
+                                ),
+                        transform=self.ax.transAxes,
+                        color="lightgreen"
+                        )
+
+
             if not ellipse_params.empty:
                 host = ellipse_params[ellipse_params["PolarOrHost"] == "Host"].iloc[0]
                 polar = ellipse_params[ellipse_params["PolarOrHost"] == "Polar"].iloc[0]
@@ -106,22 +162,42 @@ class PlotCanvas(FigureCanvas):
 
         self.draw()
 
-    def plot_profiles(self, host_data, polar_data, title, overplot=None, y_label='Surface Brightness (mag/arcsec^2)'):
+    def plot_profiles(self, host_data, polar_data, title, overplot=None, y_label='Surface Brightness (mag/arcsec^2)', surfbright=False, is_resid=False, d_A=None):
         self.fig.clear()
         self.ax = self.fig.subplots()
 
-        self.fig.subplots_adjust(left=0.13, right=0.9,bottom=0.1,top=0.9)
+        if d_A == None:
+            self.fig.subplots_adjust(left=0.13, right=0.9,bottom=0.1,top=0.90)
+        else:
+            self.fig.subplots_adjust(left=0.13, right=0.9,bottom=0.1,top=0.85)
         self.ax.cla()
         self.ax.set_title(title, fontsize=12)
-        self.ax.plot(host_data['r'], host_data['mu'], label='Host', color='blue')
-        self.ax.plot(polar_data['r'], polar_data['mu'], label='Polar', color='red')
-        if overplot:
-            self.ax.plot(overplot['host']['r'], overplot['host']['mu'], 'b--', label='Host Image')
-            self.ax.plot(overplot['polar']['r'], overplot['polar']['mu'], 'r--', label='Polar Image')
-        self.ax.legend(fontsize=8)
-        self.ax.set_xlabel('Radius (arcsec)', fontsize=10)
-        self.ax.set_ylabel(y_label, fontsize=10)
-        self.ax.tick_params(labelsize=8)
+        try:
+            self.ax.plot(host_data['r'], host_data['mu'], label='Host', color='blue')
+            self.ax.plot(polar_data['r'], polar_data['mu'], label='Polar', color='red')
+            if overplot:
+                self.ax.plot(overplot['host']['r'], overplot['host']['mu'], 'b--', label='Host Image')
+                self.ax.plot(overplot['polar']['r'], overplot['polar']['mu'], 'r--', label='Polar Image')
+            self.ax.legend(fontsize=8)
+            self.ax.set_xlabel('Radius (arcsec)', fontsize=10)
+            self.ax.set_ylabel(y_label, fontsize=10)
+            self.ax.tick_params(labelsize=8)
+            self.ax.grid()
+            self.ax.minorticks_on()
+            if surfbright:
+                self.ax.invert_yaxis()
+
+            if is_resid:
+                self.ax.axhline(y=0, ls="--", color="black")
+
+            if d_A != None:
+                self.secax = self.ax.secondary_xaxis('top', functions=(
+                    lambda x: ((x*u.arcsec * d_A).to(u.kpc, u.dimensionless_angles())).value,
+                    lambda y: ((y*u.kpc / d_A).to(u.arcsec, u.dimensionless_angles())).value
+                    ))
+                self.secax.set_xlabel('Radius (kpc)', fontsize=10)
+        except:
+            self.ax.text(0.2,0.5, "No Radial Data!", fontsize=24)
         self.draw()
 
 
@@ -176,12 +252,13 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
         return super().data(index, role)
 
 class ParamSliderWidget(QWidget):
-    def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None):
+    def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None, d_A=None):
         super().__init__(parent)
         self.paramname = paramname
         self.ndigits = ndigits
         self.scale = 10 ** ndigits
         self.fixed = fixed
+        self.d_A = d_A # Angular size distance (I should probably find a way to avoid just passing it to here but whatever)
 
         parameter_adjust_layout = QHBoxLayout()
         parameter_adjust_layout.setContentsMargins(0,0,0,0)
@@ -325,17 +402,24 @@ class ParamSliderWidget(QWidget):
         val = self.valspinbox.value()
         minval = self.minspinbox.value()
         maxval = self.maxspinbox.value()
-        if self.paramname in ["r_e", "R_ring"]:
-            valarcsec = val * 0.262
-            minvalarcsec = minval * 0.262
-            maxvalarcsec = maxval * 0.262
-            self.converted_label.setText(f"Min: {minvalarcsec:.3f} Val: {valarcsec:.3f} Max: {maxvalarcsec:.3f}arcsec")
-        elif self.paramname in ["I_e", "sigma_r", "A"]:
+        if self.paramname in ["r_e", "R_ring", "sigma_r"]:
+            valarcsec = val * 0.262 * u.arcsec
+            minvalarcsec = minval * 0.262 * u.arcsec
+            maxvalarcsec = maxval * 0.262 * u.arcsec
+
+            if self.d_A != None:
+                minvalkpc = (minvalarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
+                maxvalkpc = (maxvalarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
+                valkpc = (valarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
+                self.converted_label.setText(f"Min: {minvalarcsec.value:.3f} Val: {valarcsec.value:.3f} Max: {maxvalarcsec.value:.3f} (Min: {minvalkpc.value:.3f} Val: {valkpc.value:.3f} Max: {maxvalkpc.value:.3f} kpc)")
+            else:
+                self.converted_label.setText(f"Min: {minvalarcsec.value:.3f} Val: {valarcsec.value:.3f} Max: {maxvalarcsec.value:.3f} arcsec")
+        elif self.paramname in ["I_e", "A"]:
             if val > 0 and minval > 0 and maxval > 0:
                 valmag = 22.5 - 2.5 * math.log10(val/0.262**2)
                 minvalmag = 22.5 - 2.5 * math.log10(minval/0.262**2)
                 maxvalmag = 22.5 - 2.5 * math.log10(maxval/0.262**2)
-                self.converted_label.setText(f"Min: {minvalmag:.3f} Val: {valmag:.3f} Max: {maxvalmag:.3f}arcsec")
+                self.converted_label.setText(f"Min: {minvalmag:.3f} Val: {valmag:.3f} Max: {maxvalmag:.3f} mag/arcsec^2")
             else:
                 self.converted_label.setText("N/A")
         else:
@@ -444,7 +528,6 @@ def parse_results(file):
     for k, function in enumerate(model.functionList()):
         func_dict = function.getFunctionAsDict()
         for param in func_dict["parameters"]:
-            # func_dict["parameters_unc"][param] = func_dict["parameters"][param] 
             func_dict["parameters"][param] = func_dict["parameters"][param][0]
         if k == 0:
             func_dict["label"] = "Host"
@@ -453,8 +536,9 @@ def parse_results(file):
         func_dict["parameters_unc"] = uncs[func_dict["label"]]
         func_dict["band"] = band
         functions.append(func_dict)
-    
-    return functions, chi_sq, chi_sq_red, status, status_message
+
+    function_map = {idx: func for idx, func in enumerate(functions)}
+    return function_map, chi_sq, chi_sq_red, status, status_message
 
 class CopyParametersDialog(QDialog):
     """Dialog for copying parameters from one band to another."""
@@ -589,14 +673,29 @@ class CopyParametersDialog(QDialog):
                 for param_name in params.keys():
                     # Add source indicator if using fit_params
                     source_indicator = ""
+                    highlight_item = False
                     if self.source_type == "fit_params" and func_idx in self.fit_params_values:
-                        if param_name in self.fit_params_values[func_idx]:
-                            param_val = self.fit_params_values[func_idx][param_name]
+                        fit_entry = self.fit_params_values[func_idx]
+                        if param_name in fit_entry["parameters"]:
+                            param_val = fit_entry["parameters"][param_name]
                             source_indicator = f" (fit: {param_val:.6g})"
+                            param_unc = fit_entry["parameters_unc"].get(param_name)
+                            if param_unc == 0:
+                                param_bounds = params[param_name]
+                                if param_bounds[1] == 'fixed':
+                                    lowlim = param_bounds[0]
+                                    hilim = param_bounds[0]
+                                else:
+                                    lowlim = param_bounds[1]
+                                    hilim = param_bounds[2]
+                                if math.isclose(param_val, lowlim, rel_tol=1e-9, abs_tol=1e-12) or math.isclose(param_val, hilim, rel_tol=1e-9, abs_tol=1e-12):
+                                    highlight_item = True
                     
                     item_text = f"  └─ {param_name}{source_indicator}"
                     item = QListWidgetItem(item_text)
                     item.setData(QtCore.Qt.UserRole, (func_idx, param_name))
+                    if highlight_item:
+                        item.setForeground(QtGui.QBrush(QtGui.QColor(255, 0, 0)))
                     self.param_list.addItem(item)
         
         except Exception as e:
@@ -682,6 +781,7 @@ class MainWindow(QMainWindow):
         self.solvertype = "LM"
         self.band = "g"
         self.param_widgets = {}
+        self.plotrelresid = True
 
         # Setting up the buttons
         self.ui.LMbutton.clicked.connect(lambda: self.set_solver("LM"))
@@ -703,6 +803,7 @@ class MainWindow(QMainWindow):
         self.ui.markunable.setShortcut(QKeySequence("u"))
         self.ui.saveconfigbutton.clicked.connect(self.saveconfig)
         self.ui.saveconfigbutton.setShortcut(QKeySequence("CTRL+S"))
+        self.ui.relresidcheckbox.toggled.connect(self.setresidtype)
 
         self.ui.opends9button.clicked.connect(self.open_ds9)
         self.ui.opends9button.setShortcut(QKeySequence("O"))
@@ -710,8 +811,6 @@ class MainWindow(QMainWindow):
         self.ui.importds9maskbutton.setShortcut(QKeySequence("CTRL+M"))
         self.ui.refitbutton.clicked.connect(self.refit)
         self.ui.refitbutton.setShortcut(QKeySequence("CTRL+R"))
-        self.ui.cancelbutton.clicked.connect(self.cancel)
-        self.ui.cancelbutton.setShortcut(QKeySequence("CTRL+C"))
 
         self.ui.fileexplorerbutton.clicked.connect(self.open_gal_fileexplorer)
         self.ui.fileexplorerbutton.setShortcut(QKeySequence("CTRL+F"))
@@ -759,7 +858,8 @@ class MainWindow(QMainWindow):
         self.ps = []
         self.fit_dialogs = []
 
-        # Setting up the FITs plots for the iamge, model, and residual
+        # Setting up the FITs plots for the image, model, and residual
+        self.jpg_img_plot =  PlotCanvas(parent=self.ui.galaxyjpg)
         self.img = PlotCanvas(parent=self.ui.galimg)
         self.model = PlotCanvas(parent=self.ui.galmodel)
         self.resid = PlotCanvas(parent=self.ui.galresid)
@@ -792,7 +892,7 @@ class MainWindow(QMainWindow):
         self.galaxytree.setColumnHidden(3, True)
         # Detect selections on the tree to identify when a leaf directory is selected
         self.galaxytree.selectionModel().selectionChanged.connect(self.on_galaxytree_selection_changed)
-        
+
         self.ui.show()
 
     def on_toggle_1d(self, state):
@@ -834,9 +934,14 @@ class MainWindow(QMainWindow):
         if p is None:
             QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
             return
-        files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
         ds9_cmd = self.gui_config.get("ds9_path", "ds9") or "ds9"
-        arg = [ds9_cmd, "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config['ds9_limits'][0]}", f"{self.gui_config['ds9_limits'][1]}", "-cube", "3"]
+        if f'{self.fit_type}_{self.band}_composed.fits' in os.listdir(p):
+            files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
+            arg = [ds9_cmd, "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config['ds9_limits'][0]}", f"{self.gui_config['ds9_limits'][1]}", "-cube", "3"]
+        else:
+            files = [f"{os.path.join(p, f'image_{self.band}.fits')}"]
+            arg = [ds9_cmd, "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config['ds9_limits'][0]}", f"{self.gui_config['ds9_limits'][1]}"]
+
         arg.extend(files)
         subprocess.Popen(arg)
 
@@ -936,12 +1041,16 @@ class MainWindow(QMainWindow):
 
         return im
     
-    def getconfigresid(self, im, imconfig, mask=np.array([])):
+    def getconfigresid(self, im, imconfig, mask=np.array([]), relresid=False):
         try:
-            if mask.size != 0:
-                return np.where(mask >0, 0, im - imconfig)
+            if relresid:
+                resid_im = (im - imconfig)/im
             else:
-                return im - imconfig
+                resid_im = im-imconfig
+            if mask.size != 0:
+                return np.where(mask >0, 0, resid_im)
+            else:
+                return resid_im
         except:
             return np.array([])
 
@@ -954,6 +1063,15 @@ class MainWindow(QMainWindow):
         galaxy = galaxypath.name
         self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
         self.currentgalaxytext.repaint()
+
+        try:
+            master_table_data_gal = self.master_table_data[self.master_table_data["NAME"] == galaxy]
+            self.curr_z = master_table_data_gal["REDSHIFT"].iloc[0]
+            self.curr_d_A = cosmo.angular_diameter_distance(z=self.curr_z)
+        except:
+            self.curr_d_A = self.curr_z = None
+        if self.curr_z != self.curr_z:
+            self.curr_d_A = self.curr_z = None
 
         try:
             config_path = self.get_config_path(galaxypath, self.band, self.fit_type)
@@ -1009,18 +1127,26 @@ class MainWindow(QMainWindow):
             pass
 
 
+        params_file = None
+        fit_results = None
         try:
             with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
                 params_file = f.readlines()
-            self.params.setPlainText("".join(params_file))
-            self.params.repaint()
+            fit_params_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt")
+            if os.path.exists(fit_params_path):
+                try:
+                    fit_results = parse_results(fit_params_path)[0]
+                except Exception:
+                    fit_results = None
+            self.highlight_boundary_params(params_file, fit_results)
         except:
             self.params.setPlainText("Fit Params not found!")
             self.params.repaint()
 
-        pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
-        self.ui.galaxyjpg.setPixmap(pixmap)
-        
+        # pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
+        self.jpg_img = np.asarray(Image.open(os.path.join(galaxypath, "image.jpg")))
+        self.jpg_img = np.flipud(self.jpg_img)
+        self.jpg_img_plot.plot(self.jpg_img, limits=None, cmap=None, stretch=None, plottext="JPG Image", cbar=False)
 
         # self.img.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
         self.sci_im = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
@@ -1031,11 +1157,14 @@ class MainWindow(QMainWindow):
         self.psf_fits = fits.open(os.path.join(galaxypath, f"psf_patched_{self.band}.fits"))[0] if os.path.exists(os.path.join(galaxypath, f"psf_patched_{self.band}.fits")) else None
 
         self.model_im = self.get_composed_data(galaxypath, self.band, idx=1, fit_type=self.fit_type)
-        self.residual_im = self.get_composed_data(galaxypath, self.band, idx=2, fit_type=self.fit_type)
+        if self.plotrelresid:
+            self.residual_im = self.get_composed_data(galaxypath, self.band, idx=3, fit_type=self.fit_type)
+        else:
+            self.residual_im = self.get_composed_data(galaxypath, self.band, idx=2, fit_type=self.fit_type)
         
         imconfig = self.getconfigim(galaxypath, config_path, np.shape(self.sci_im), maxThreads=self.gui_config["imfit_maxthreads"])
         self.config_im = imconfig
-        self.config_residual_im = self.getconfigresid(self.sci_im, self.config_im, self.mask_fits.data)
+        self.config_residual_im = self.getconfigresid(self.sci_im, self.config_im, self.mask_fits.data, self.plotrelresid)
 
         galname = self.selected_galaxy_path.name
         if ellipse_fit_p != None:
@@ -1044,6 +1173,8 @@ class MainWindow(QMainWindow):
             ellipse_params = pd.DataFrame()
         self.current_ellipse_params = ellipse_params
         self.toggle_1d.setEnabled(not ellipse_params.empty)
+
+        self.radial_data = self.get_radial_data()
 
         self.plot_image()
         self.plot_model()
@@ -1064,51 +1195,105 @@ class MainWindow(QMainWindow):
                     # layout.removeItem(item)
  
     def plot_image(self):
-        self.img.plot(self.sci_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=self.current_ellipse_params)
+        self.img.plot(self.sci_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=self.current_ellipse_params, plottext=f"{self.band} Band Image")
 
     def plot_model(self):
         if self.is_1d_mode:
-            data = self.get_radial_data(self.band)
-            if data is not None:
-                self.model.plot_profiles(data['model']['host'], data['model']['polar'], 'Model Radial Profile', overplot=data['image'])
+            if self.radial_data is not None:
+                self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
                 return
-        self.model.plot(self.model_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+        self.model.plot(self.model_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
 
     def plot_residual(self):
         if self.is_1d_mode:
-            data = self.get_radial_data(self.band)
-            if data is not None:
-                self.resid.plot_profiles(
-                    data['residual']['host'],
-                    data['residual']['polar'],
-                    'Residual Radial Profile',
+            if self.radial_data is not None:
+                if self.plotrelresid:
+                    y_label='Relative Residual'
+                else:
                     y_label='Residual Flux (nanomaggies/arcsec^2)'
+                self.resid.plot_profiles(
+                    self.radial_data['residual']['host'],
+                    self.radial_data['residual']['polar'],
+                    'Residual Radial Profile',
+                    y_label=y_label,
+                    is_resid=True,
+                    d_A=self.curr_d_A
                 )
                 return
-        self.resid.plot(self.residual_im, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
+        if self.plotrelresid:
+            plottext = "(Image - Model)/Image" 
+            limits = self.gui_config["plot_relresid_limits"]
+        else:
+            plottext = "Image - Model"
+            limits = self.gui_config["plot_resid_limits"]
+        self.resid.plot(self.residual_im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
 
     def plot_config(self):
         if self.is_1d_mode:
-            data = self.get_radial_data(self.band)
-            if data is not None:
-                self.configimg.plot_profiles(data['config']['host'], data['config']['polar'], 'Config Radial Profile', overplot=data['image'])
+            if self.radial_data is not None:
+                self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
                 return
-        self.configimg.plot(self.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"])
+        self.configimg.plot(self.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext="2D Config Image")
 
     def plot_config_residual(self):
         if self.is_1d_mode:
-            data = self.get_radial_data(self.band)
-            if data is not None:
+            if self.plotrelresid:
+                y_label = 'Relative Config Residual'
+            else:
+                y_label = 'Config Residual Flux (nanomaggies/arcsec^2)'
+            if self.radial_data is not None:
                 self.configresid.plot_profiles(
-                    data['config_residual']['host'],
-                    data['config_residual']['polar'],
+                    self.radial_data['config_residual']['host'],
+                    self.radial_data['config_residual']['polar'],
                     'Config Residual Radial Profile',
-                    y_label='Config Residual Flux (nanomaggies/arcsec^2)'
+                    y_label=y_label,
+                    is_resid=True,
+                    d_A=self.curr_d_A
                 )
                 return
-        self.configresid.plot(self.config_residual_im, limits=self.gui_config["plot_resid_limits"], cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch())
+        if self.plotrelresid:
+            plottext = "(Image - Config)/Image" 
+            limits = self.gui_config["plot_relresid_limits"]
+        else:
+            plottext = "Image - Config"
+            limits = self.gui_config["plot_resid_limits"]
+        self.configresid.plot(self.config_residual_im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext)
 
-    def get_radial_data(self, band):
+    def profile_from_image(self, image_data, pa, length, surf_bright=False):
+        try:
+            pa = np.deg2rad(pa + 90) # Need to account for the offset that imfit gives lol
+            # length = int(np.shape(image_data)[0]*np.cos(np.pi/4))
+
+            c = (int(image_data.shape[0]/2)-1, int(image_data.shape[1]/2)-1) # Just assuming the center of the galaxy is the center of the image
+
+            x0 = c[0] + np.cos(pa)*length
+            x1 = c[0] + np.cos(pa+np.pi)*length
+
+            y0 = c[1] + np.sin(pa)*length
+            y1 = c[1] + np.sin(pa+np.pi)*length
+
+            npts = 1000
+            x, y = np.linspace(x0, x1, npts), np.linspace(y0, y1, npts)
+
+            coords = np.array([x,y])
+            prof = scipy.ndimage.map_coordinates(image_data, coords, cval=np.nan)
+            upper = prof[int(x.size/2):]
+            lower = np.flip(prof[:int(x.size/2)])
+            r = np.linspace(0, length/2, np.size(upper))
+            prof_avg = (upper + lower)/2 
+
+
+            prof_avg = prof_avg * u.nmgy / self.pixel_scale**2 # nmgy /pix -> nmgy/arcsec**2
+
+            if surf_bright:
+                zero_point_star_equiv = u.zero_point_flux(3631.1 * u.Jy)
+                prof_avg = u.Magnitude(prof_avg.to(u.AB, zero_point_star_equiv))
+
+            return {"r": r[prof_avg != np.nan]*self.pixel_scale, "mu": prof_avg[prof_avg != np.nan].value}
+        except:
+            return None
+
+    def get_radial_data(self):
         if self.current_ellipse_params is None or self.current_ellipse_params.empty:
             return None
         host_e = self.current_ellipse_params[self.current_ellipse_params["PolarOrHost"] == "Host"]
@@ -1117,56 +1302,41 @@ class MainWindow(QMainWindow):
             return None
         host_pa = host_e["angle"].iloc[0]
         polar_pa = polar_e["angle"].iloc[0]
-        host_a = host_e["semi_major"].iloc[0]
-        polar_a = polar_e["semi_major"].iloc[0]
+        host_len = host_e["semi_major"].iloc[0] * 2 # Just a bit larger
+        polar_len = polar_e["semi_major"].iloc[0] * 2
+
         zeropoint = 22.5
-        center = (float(self.sci_fits.header['CRPIX1']) - 1.0, float(self.sci_fits.header['CRPIX2']) - 1.0)
-        host_len = int(max(200, 2.5 * host_a))
-        polar_len = int(max(250, 2.5 * polar_a))
-        width_pix = 7.0
-        oversample = 2
 
-        mask_array = self.mask_fits.data if getattr(self.mask_fits, 'data', None) is not None else self.mask_fits
-        invvar_array = self.invvar_fits.data if getattr(self.invvar_fits, 'data', None) is not None else self.invvar_fits
-        psf_array = self.psf_fits.data if getattr(self.psf_fits, 'data', None) is not None else self.psf_fits
+        mask = self.mask_fits.data
+        sci_image = np.where(mask == 0, self.sci_fits.data, 0)
+        image_host = self.profile_from_image(sci_image, host_pa, host_len, surf_bright=True)
+        image_polar = self.profile_from_image(sci_image, polar_pa, polar_len, surf_bright=True)
 
-        def profile_from_image(image_data, pa, length, quantity='mu'):
-            if hasattr(image_data, 'data'):
-                sci_input = image_data
+        model_host = self.profile_from_image(self.model_im, host_pa, host_len, surf_bright=True)
+        model_polar = self.profile_from_image(self.model_im, polar_pa, polar_len, surf_bright=True)
+        
+        try:
+            if self.plotrelresid:
+                residual_data = np.where(sci_image != 0, (sci_image - self.model_im)/sci_image, 0)
             else:
-                sci_input = type('FITSLike', (), {'data': image_data})()
-            cut = photometric_cut(
-                sci_fits=sci_input,
-                center_xy=center,
-                pa_deg=pa,
-                length_pix=length,
-                width_pix=width_pix,
-                oversample=oversample,
-                mask_fits=mask_array,
-                invvar_fits=invvar_array,
-                psf_fits=psf_array,
-                zeropoint=zeropoint,
-                pixel_scale_arcsec=self.pixel_scale,
-            )
-            r, values, values_err, _ = fold_cut_to_radial_profile(cut, quantity=quantity)
-            return {'r': r, 'mu': values, 'mu_err': values_err}
+                residual_data = sci_image - self.model_im
+            residual_host = self.profile_from_image(residual_data, host_pa, host_len)
+            residual_polar = self.profile_from_image(residual_data, polar_pa, polar_len)
+        except:
+            residual_host = residual_polar = None
 
-        image_host = profile_from_image(self.sci_fits, host_pa, host_len)
-        image_polar = profile_from_image(self.sci_fits, polar_pa, polar_len)
+        if self.config_im.size != 0:
+            config_host = self.profile_from_image(self.config_im, host_pa, host_len, surf_bright=True) 
+            config_polar = self.profile_from_image(self.config_im, polar_pa, polar_len, surf_bright=True)
 
-        model_host = profile_from_image(self.model_im, host_pa, host_len)
-        model_polar = profile_from_image(self.model_im, polar_pa, polar_len)
-
-        residual_data = self.sci_fits.data - self.model_im
-        residual_host = profile_from_image(residual_data, host_pa, host_len, quantity='I')
-        residual_polar = profile_from_image(residual_data, polar_pa, polar_len, quantity='I')
-
-        config_host = profile_from_image(self.config_im, host_pa, host_len)
-        config_polar = profile_from_image(self.config_im, polar_pa, polar_len)
-
-        config_residual_data = self.sci_fits.data - self.config_im
-        config_residual_host = profile_from_image(config_residual_data, host_pa, host_len, quantity='I')
-        config_residual_polar = profile_from_image(config_residual_data, polar_pa, polar_len, quantity='I')
+            if self.plotrelresid:
+                config_residual_data = np.where(sci_image !=0, (sci_image - self.config_im)/sci_image, 0)
+            else:
+                config_residual_data = sci_image - self.config_im
+            config_residual_host = self.profile_from_image(config_residual_data, host_pa, host_len)
+            config_residual_polar = self.profile_from_image(config_residual_data, polar_pa, polar_len)
+        else:
+            config_host = config_polar = config_residual_host = config_residual_polar = None
 
         return {
             'image': {'host': image_host, 'polar': image_polar},
@@ -1179,12 +1349,67 @@ class MainWindow(QMainWindow):
     def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
         func_idx, paramname = paramkey
         ndigits = 6
-        widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits)
-        # widget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Maximum)
+        widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits, d_A=self.curr_d_A)
         widget.setMinimumWidth(100)
         layout.addWidget(widget)
         self.param_widgets[paramkey] = widget
-        
+
+    def highlight_boundary_params(self, params_file_lines, fit_results):
+        if params_file_lines is None:
+            return
+
+        if fit_results is None or self.current_config_dict is None:
+            self.params.setHtml("<pre>" + html.escape("".join(params_file_lines)) + "</pre>")
+            return
+
+        try:
+            function_list = self.current_config_dict["function_sets"][0]["function_list"]
+        except Exception:
+            self.params.setHtml("<pre>" + html.escape("".join(params_file_lines)) + "</pre>")
+            return
+
+        html_lines = []
+        func_idx = -1
+        for line in params_file_lines:
+            stripped = line.strip()
+            if stripped.startswith("FUNCTION"):
+                func_idx += 1
+                html_lines.append(html.escape(line))
+                continue
+
+            highlight = False
+            if "+/-" in line and func_idx >= 0 and func_idx in fit_results:
+                m = re.match(r"^\s*(\S+)\s+([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)\s*#\s*\+/\-\s*([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)", line)
+                if m:
+                    param_name = m.group(1)
+                    try:
+                        param_val = float(m.group(2))
+                        param_unc = float(m.group(3))
+                    except ValueError:
+                        param_val = None
+                        param_unc = None
+
+                    if param_val is not None and param_unc == 0:
+                        func_params = function_list[func_idx]["parameters"]
+                        if param_name in func_params:
+                            bounds = func_params[param_name]
+                            if bounds[1] == 'fixed':
+                                lowlim = bounds[0]
+                                hilim = bounds[0]
+                            else:
+                                lowlim = bounds[1]
+                                hilim = bounds[2]
+                            if lowlim != hilim: # Parameter is fixed if these are equal
+                                highlight = True
+
+            escaped_line = html.escape(line)
+            if highlight:
+                html_lines.append(f"<span style='background-color: yellow; color: red;'>%s</span>" % escaped_line)
+            else:
+                html_lines.append(escaped_line)
+
+        self.params.setHtml("<pre>" + "".join(html_lines) + "</pre>")
+
     def on_galaxytree_selection_changed(self, selected, deselected):
         """Called when the tree selection changes. If the selected item is a lowest-level
         directory (a directory with no subdirectories) we store it as the current galaxy
@@ -1231,23 +1456,23 @@ class MainWindow(QMainWindow):
         # Just refreshing the configs and stats and whatnot
         self.changegal()
     
-    def cancel(self):
-        # Try to cancel dialog-based fits first
-        if len(self.fit_dialogs) > 0:
-            dlg = self.fit_dialogs[-1]
-            try:
-                dlg.cancel()
-                dlg.close()
-            except Exception:
-                pass
-            self.fit_dialogs.pop()
-            return
+    # def cancel(self):
+    #     # Try to cancel dialog-based fits first
+    #     if len(self.fit_dialogs) > 0:
+    #         dlg = self.fit_dialogs[-1]
+    #         try:
+    #             dlg.cancel()
+    #             dlg.close()
+    #         except Exception:
+    #             pass
+    #         self.fit_dialogs.pop()
+    #         return
 
-        if len(self.ps) > 0:
-            self.ps[-1].terminate()
-            self.ps.pop()
-        else:
-            print("No running IMFIT processes")
+    #     if len(self.ps) > 0:
+    #         self.ps[-1].terminate()
+    #         self.ps.pop()
+    #     else:
+    #         print("No running IMFIT processes")
     
     def markgalaxy(self, markas):
         if getattr(self, "selected_galaxy_path", None) is None:
@@ -1523,6 +1748,10 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Failed to open 1D fit", f"Could not launch 1D fit: {e}")
         
+    
+    def setresidtype(self, state):
+        self.plotrelresid = state 
+        self.changegal()
         
 
 

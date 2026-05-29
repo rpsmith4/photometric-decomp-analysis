@@ -326,7 +326,7 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     # Jonah: I'll test a few and see how the bounds are looking to determine appropriate, reasonable bounds based off of what seems truly impactful for the fit.
 
     # PA bounds (deg)
-    pa_tol = 2.0 # 10 was too much I think
+    pa_tol = 5.0 # 10 was too much I think
     # Note: wrap issues at 0/180 are annoying; simplest is to allow a broad range.
     # We’ll just clamp to [0,180] and let the solver move.
     def pa_bounds(pa):
@@ -336,14 +336,14 @@ def gather_parameters(fltr: str, sci_fits: np.array, mask_fits: np.array = None,
     polar_pa_lo, polar_pa_hi = pa_bounds(polar_pa_imfit)
 
     # Ellipticity bounds
-    ell_tol = 0.05
-    host_ell_lo, host_ell_hi = clamp(host_ell - ell_tol, 0.0, 0.95), clamp(host_ell + ell_tol, 0.0, 0.95)
-    polar_ell_lo, polar_ell_hi = clamp(polar_ell - ell_tol, 0.0, 0.95), clamp(polar_ell + ell_tol, 0.0, 0.95)
+    ell_tol = 0.1
+    host_ell_lo, host_ell_hi = clamp(host_ell - ell_tol, 0.0, 0.95), clamp(host_ell + ell_tol*2, 0.0, 0.95)
+    polar_ell_lo, polar_ell_hi = clamp(polar_ell - ell_tol, 0.0, 0.95), clamp(polar_ell + ell_tol*2, 0.0, 0.95)
 
     # Sérsic n bounds
     host_n_lo, host_n_hi = _frac_bounds(host_n, 0.75)
-    host_n_lo = min(0.75*host_n_lo, 0.01)
-    host_n_hi = max(10.0, 1.2*host_n_hi)
+    host_n_lo = max(0.30*host_n_lo, 0.1)
+    host_n_hi = min(8, 2*host_n_hi)
     polar_n_lo, polar_n_hi = _frac_bounds(polar_n, 0.75)
     polar_n_lo = max(polar_n_lo, 0.1)
 
