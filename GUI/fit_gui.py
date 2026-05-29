@@ -389,17 +389,17 @@ class ParamSliderWidget(QWidget):
         val = self.valspinbox.value()
         minval = self.minspinbox.value()
         maxval = self.maxspinbox.value()
-        if self.paramname in ["r_e", "R_ring"]:
+        if self.paramname in ["r_e", "R_ring", "sigma_r"]:
             valarcsec = val * 0.262
             minvalarcsec = minval * 0.262
             maxvalarcsec = maxval * 0.262
-            self.converted_label.setText(f"Min: {minvalarcsec:.3f} Val: {valarcsec:.3f} Max: {maxvalarcsec:.3f}arcsec")
-        elif self.paramname in ["I_e", "sigma_r", "A"]:
+            self.converted_label.setText(f"Min: {minvalarcsec:.3f} Val: {valarcsec:.3f} Max: {maxvalarcsec:.3f} arcsec")
+        elif self.paramname in ["I_e", "A"]:
             if val > 0 and minval > 0 and maxval > 0:
                 valmag = 22.5 - 2.5 * math.log10(val/0.262**2)
                 minvalmag = 22.5 - 2.5 * math.log10(minval/0.262**2)
                 maxvalmag = 22.5 - 2.5 * math.log10(maxval/0.262**2)
-                self.converted_label.setText(f"Min: {minvalmag:.3f} Val: {valmag:.3f} Max: {maxvalmag:.3f}arcsec")
+                self.converted_label.setText(f"Min: {minvalmag:.3f} Val: {valmag:.3f} Max: {maxvalmag:.3f} mag/arcsec^2")
             else:
                 self.converted_label.setText("N/A")
         else:
@@ -1110,8 +1110,7 @@ class MainWindow(QMainWindow):
                 except Exception:
                     fit_results = None
             self.highlight_boundary_params(params_file, fit_results)
-        except Exception as e:
-            print(traceback.format_exc())
+        except:
             self.params.setPlainText("Fit Params not found!")
             self.params.repaint()
 
