@@ -501,7 +501,6 @@ def parse_results(file):
     for k, function in enumerate(model.functionList()):
         func_dict = function.getFunctionAsDict()
         for param in func_dict["parameters"]:
-            # func_dict["parameters_unc"][param] = func_dict["parameters"][param] 
             func_dict["parameters"][param] = func_dict["parameters"][param][0]
         if k == 0:
             func_dict["label"] = "Host"
@@ -510,8 +509,9 @@ def parse_results(file):
         func_dict["parameters_unc"] = uncs[func_dict["label"]]
         func_dict["band"] = band
         functions.append(func_dict)
-    
-    return functions, chi_sq, chi_sq_red, status, status_message
+
+    function_map = {idx: func for idx, func in enumerate(functions)}
+    return function_map, chi_sq, chi_sq_red, status, status_message
 
 class CopyParametersDialog(QDialog):
     """Dialog for copying parameters from one band to another."""
@@ -646,14 +646,29 @@ class CopyParametersDialog(QDialog):
                 for param_name in params.keys():
                     # Add source indicator if using fit_params
                     source_indicator = ""
+                    highlight_item = False
                     if self.source_type == "fit_params" and func_idx in self.fit_params_values:
-                        if param_name in self.fit_params_values[func_idx]:
-                            param_val = self.fit_params_values[func_idx][param_name]
+                        fit_entry = self.fit_params_values[func_idx]
+                        if param_name in fit_entry["parameters"]:
+                            param_val = fit_entry["parameters"][param_name]
                             source_indicator = f" (fit: {param_val:.6g})"
+                            param_unc = fit_entry["parameters_unc"].get(param_name)
+                            if param_unc == 0:
+                                param_bounds = params[param_name]
+                                if param_bounds[1] == 'fixed':
+                                    lowlim = param_bounds[0]
+                                    hilim = param_bounds[0]
+                                else:
+                                    lowlim = param_bounds[1]
+                                    hilim = param_bounds[2]
+                                if math.isclose(param_val, lowlim, rel_tol=1e-9, abs_tol=1e-12) or math.isclose(param_val, hilim, rel_tol=1e-9, abs_tol=1e-12):
+                                    highlight_item = True
                     
                     item_text = f"  └─ {param_name}{source_indicator}"
                     item = QListWidgetItem(item_text)
                     item.setData(QtCore.Qt.UserRole, (func_idx, param_name))
+                    if highlight_item:
+                        item.setForeground(QtGui.QBrush(QtGui.QColor(255, 0, 0)))
                     self.param_list.addItem(item)
         
         except Exception as e:
@@ -1084,6 +1099,16 @@ class MainWindow(QMainWindow):
         except:
             self.params.setPlainText("Fit Params not found!")
             self.params.repaint()
+            fit_results = None
+        else:
+            fit_results = None
+            fit_params_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt")
+            if os.path.exists(fit_params_path):
+                try:
+                    fit_results = parse_results(fit_params_path)[0]
+                except Exception:
+                    fit_results = None
+            self.highlight_boundary_params(fit_results)
 
         # pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
         self.jpg_img = np.asarray(Image.open(os.path.join(galaxypath, "image.jpg")))
@@ -1288,11 +1313,51 @@ class MainWindow(QMainWindow):
         func_idx, paramname = paramkey
         ndigits = 6
         widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits)
-        # widget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Maximum)
         widget.setMinimumWidth(100)
         layout.addWidget(widget)
         self.param_widgets[paramkey] = widget
-        
+
+    def highlight_boundary_params(self, fit_results):
+        if fit_results is None or self.current_config_dict is None:
+            return
+
+        try:
+            function_list = self.current_config_dict["function_sets"][0]["function_list"]
+        except Exception:
+            return
+
+        for paramkey, widget in self.param_widgets.items():
+            func_idx, param_name = paramkey
+            if func_idx not in fit_results:
+                widget.setStyleSheet("")
+                continue
+
+            fit_entry = fit_results[func_idx]
+            param_val = fit_entry["parameters"].get(param_name)
+            param_unc = fit_entry["parameters_unc"].get(param_name)
+            if param_val is None or param_unc is None:
+                widget.setStyleSheet("")
+                continue
+
+            if param_unc == 0:
+                func_params = function_list[func_idx]["parameters"]
+                if param_name not in func_params:
+                    widget.setStyleSheet("")
+                    continue
+                bounds = func_params[param_name]
+                if bounds[1] == 'fixed':
+                    lowlim = bounds[0]
+                    hilim = bounds[0]
+                else:
+                    lowlim = bounds[1]
+                    hilim = bounds[2]
+
+                if math.isclose(param_val, lowlim, rel_tol=1e-9, abs_tol=1e-12) or math.isclose(param_val, hilim, rel_tol=1e-9, abs_tol=1e-12):
+                    widget.setStyleSheet("background-color: rgba(255, 0, 0, 0.18);")
+                    continue
+
+            widget.setStyleSheet("")
+
     def on_galaxytree_selection_changed(self, selected, deselected):
         """Called when the tree selection changes. If the selected item is a lowest-level
         directory (a directory with no subdirectories) we store it as the current galaxy
