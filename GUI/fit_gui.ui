@@ -893,7 +893,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
           </widget>
          </item>
          <item>
-          <widget class="QPlainTextEdit" name="params">
+          <widget class="QTextBrowser" name="params">
            <property name="enabled">
             <bool>true</bool>
            </property>

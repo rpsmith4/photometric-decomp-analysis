@@ -1367,7 +1367,7 @@ class MainWindow(QMainWindow):
 
             escaped_line = html.escape(line)
             if highlight:
-                html_lines.append(f"<span style='color:red'>%s></span>" % escaped_line)
+                html_lines.append(f"<span style='background-color: yellow; color: red;'>%s</span>" % escaped_line)
             else:
                 html_lines.append(escaped_line)
 
