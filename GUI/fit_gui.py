@@ -160,7 +160,7 @@ class PlotCanvas(FigureCanvas):
 
         self.draw()
 
-    def plot_profiles(self, host_data, polar_data, title, overplot=None, y_label='Surface Brightness (mag/arcsec^2)', surfbright=False):
+    def plot_profiles(self, host_data, polar_data, title, overplot=None, y_label='Surface Brightness (mag/arcsec^2)', surfbright=False, is_resid=False):
         self.fig.clear()
         self.ax = self.fig.subplots()
 
@@ -177,8 +177,13 @@ class PlotCanvas(FigureCanvas):
             self.ax.set_xlabel('Radius (arcsec)', fontsize=10)
             self.ax.set_ylabel(y_label, fontsize=10)
             self.ax.tick_params(labelsize=8)
+            self.ax.grid()
+            self.ax.minorticks_on()
             if surfbright:
                 self.ax.invert_yaxis()
+
+            if is_resid:
+                self.ax.axhline(y=0, ls="--", color="black")
         except:
             self.ax.text(0.2,0.5, "No Radial Data!", fontsize=24)
         self.draw()
@@ -1182,7 +1187,8 @@ class MainWindow(QMainWindow):
                     self.radial_data['residual']['host'],
                     self.radial_data['residual']['polar'],
                     'Residual Radial Profile',
-                    y_label=y_label
+                    y_label=y_label,
+                    is_resid=True
                 )
                 return
         if self.plotrelresid:
@@ -1211,7 +1217,8 @@ class MainWindow(QMainWindow):
                     self.radial_data['config_residual']['host'],
                     self.radial_data['config_residual']['polar'],
                     'Config Residual Radial Profile',
-                    y_label=y_label
+                    y_label=y_label,
+                    is_resid=True
                 )
                 return
         if self.plotrelresid:
