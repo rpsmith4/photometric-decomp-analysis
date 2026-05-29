@@ -766,8 +766,6 @@ class MainWindow(QMainWindow):
         self.ui.importds9maskbutton.setShortcut(QKeySequence("CTRL+M"))
         self.ui.refitbutton.clicked.connect(self.refit)
         self.ui.refitbutton.setShortcut(QKeySequence("CTRL+R"))
-        self.ui.cancelbutton.clicked.connect(self.cancel)
-        self.ui.cancelbutton.setShortcut(QKeySequence("CTRL+C"))
 
         self.ui.fileexplorerbutton.clicked.connect(self.open_gal_fileexplorer)
         self.ui.fileexplorerbutton.setShortcut(QKeySequence("CTRL+F"))
@@ -1328,23 +1326,23 @@ class MainWindow(QMainWindow):
         # Just refreshing the configs and stats and whatnot
         self.changegal()
     
-    def cancel(self):
-        # Try to cancel dialog-based fits first
-        if len(self.fit_dialogs) > 0:
-            dlg = self.fit_dialogs[-1]
-            try:
-                dlg.cancel()
-                dlg.close()
-            except Exception:
-                pass
-            self.fit_dialogs.pop()
-            return
+    # def cancel(self):
+    #     # Try to cancel dialog-based fits first
+    #     if len(self.fit_dialogs) > 0:
+    #         dlg = self.fit_dialogs[-1]
+    #         try:
+    #             dlg.cancel()
+    #             dlg.close()
+    #         except Exception:
+    #             pass
+    #         self.fit_dialogs.pop()
+    #         return
 
-        if len(self.ps) > 0:
-            self.ps[-1].terminate()
-            self.ps.pop()
-        else:
-            print("No running IMFIT processes")
+    #     if len(self.ps) > 0:
+    #         self.ps[-1].terminate()
+    #         self.ps.pop()
+    #     else:
+    #         print("No running IMFIT processes")
     
     def markgalaxy(self, markas):
         if getattr(self, "selected_galaxy_path", None) is None:
