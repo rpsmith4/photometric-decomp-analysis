@@ -7,10 +7,14 @@ from PySide6.QtUiTools import *
 import os
 import sys
 from pathlib import Path
+import html
+import math
+import re
 LOCAL_DIR = "GUI"
 MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
 sys.path.append(os.path.join(MAINDIR))
 import imfit_run
+import pyimfit
 
 IMAN_DIR = Path(os.path.dirname(__file__))
 sys.path.append(os.path.join(IMAN_DIR, 'iman_new/decomposition/make_model'))
@@ -108,6 +112,9 @@ class FitMonitorDialog:
         self.max_threads = max_threads
         self.fit_type = fit_type
         self.config_file = config_file
+        self._stdout_buffer = ""
+        self._current_func_idx = -1
+        self._config_bounds = self._load_config_bounds(config_file)
 
         # UI elements from the .ui
         self.ui.stdoutEdit.setReadOnly(True)
@@ -126,10 +133,69 @@ class FitMonitorDialog:
         self.worker.start()
 
     def _append_output(self, text):
-        # Append text to stdout view
-        self.ui.stdoutEdit.moveCursor(QTextCursor.MoveOperation.End)
-        self.ui.stdoutEdit.insertPlainText(text)
-        self.ui.stdoutEdit.moveCursor(QTextCursor.MoveOperation.End)
+        # Append text to stdout view with highlighting
+        self._stdout_buffer += text
+        lines = self._stdout_buffer.split("\n")
+        if not text.endswith("\n"):
+            self._stdout_buffer = lines.pop()
+        else:
+            self._stdout_buffer = ""
+            if lines and lines[-1] == "":
+                lines.pop()
+
+        for line in lines:
+            self._maybe_update_function_index(line)
+            formatted = self._format_monitor_line(line)
+            self.ui.stdoutEdit.moveCursor(QTextCursor.MoveOperation.End)
+            self.ui.stdoutEdit.insertHtml(formatted + "<br />")
+            self.ui.stdoutEdit.moveCursor(QTextCursor.MoveOperation.End)
+
+    def _maybe_update_function_index(self, line):
+        if "FUNCTION" in line:
+            self._current_func_idx += 1
+
+    def _load_config_bounds(self, config_file):
+        if config_file is None or not os.path.exists(config_file):
+            return None
+        try:
+            config = pyimfit.parse_config_file(config_file)
+            config_dict = config.getModelAsDict()
+            function_list = config_dict["function_sets"][0]["function_list"]
+            bounds = []
+            for func in function_list:
+                param_bounds = {}
+                for pname, pval in func["parameters"].items():
+                    if pval[1] == 'fixed':
+                        param_bounds[pname] = (pval[0], pval[0])
+                    else:
+                        param_bounds[pname] = (pval[1], pval[2])
+                bounds.append(param_bounds)
+            return bounds
+        except Exception:
+            return None
+
+    def _format_monitor_line(self, line):
+        escaped = html.escape(line).replace(" ", "&nbsp;")
+        highlight = False
+        if "+/-" in line and self._config_bounds is not None and self._current_func_idx >= 0 and self._current_func_idx < len(self._config_bounds):
+            match = re.match(r"^\s*(\S+)\s+([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)\s*#\s*\+/-\s*([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)", line)
+            if match:
+                pname = match.group(1)
+                try:
+                    pval = float(match.group(2))
+                    punc = float(match.group(3))
+                except ValueError:
+                    pval = None
+                    punc = None
+                if pval is not None and punc == 0:
+                    bounds = self._config_bounds[self._current_func_idx].get(pname)
+                    if bounds is not None:
+                        lowlim, hilim = bounds
+                        if math.isclose(pval, lowlim, rel_tol=1e-9, abs_tol=1e-12) or math.isclose(pval, hilim, rel_tol=1e-9, abs_tol=1e-12):
+                            highlight = True
+        if highlight:
+            return f"<span style='background-color:yellow; color:red;'>{escaped}</span>"
+        return escaped
 
     def _finished(self, code):
         self.ui.statusLabel.setText(f"Status: Finished (code={code})")
