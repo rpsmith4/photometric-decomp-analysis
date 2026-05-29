@@ -1362,7 +1362,7 @@ class MainWindow(QMainWindow):
                             else:
                                 lowlim = bounds[1]
                                 hilim = bounds[2]
-                            if math.isclose(param_val, lowlim, rel_tol=1e-9, abs_tol=1e-12) or math.isclose(param_val, hilim, rel_tol=1e-9, abs_tol=1e-12):
+                            if lowlim != hilim: # Parameter is fixed if these are equal
                                 highlight = True
 
             escaped_line = html.escape(line)

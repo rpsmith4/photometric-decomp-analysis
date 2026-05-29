@@ -191,7 +191,7 @@ class FitMonitorDialog:
                     bounds = self._config_bounds[self._current_func_idx].get(pname)
                     if bounds is not None:
                         lowlim, hilim = bounds
-                        if math.isclose(pval, lowlim, rel_tol=1e-9, abs_tol=1e-12) or math.isclose(pval, hilim, rel_tol=1e-9, abs_tol=1e-12):
+                        if lowlim != hilim: # Parameter is fixed is these are equal
                             highlight = True
         if highlight:
             return f"<span style='background-color:yellow; color:red;'>{escaped}</span>"
