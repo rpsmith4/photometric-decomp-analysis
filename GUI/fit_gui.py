@@ -892,9 +892,14 @@ class MainWindow(QMainWindow):
         if p is None:
             QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
             return
-        files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
         ds9_cmd = self.gui_config.get("ds9_path", "ds9") or "ds9"
-        arg = [ds9_cmd, "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config['ds9_limits'][0]}", f"{self.gui_config['ds9_limits'][1]}", "-cube", "3"]
+        if f'{self.fit_type}_{self.band}_composed.fits' in os.listdir(p):
+            files = [f"{os.path.join(p, f'{self.fit_type}_{self.band}_composed.fits')}"]
+            arg = [ds9_cmd, "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config['ds9_limits'][0]}", f"{self.gui_config['ds9_limits'][1]}", "-cube", "3"]
+        else:
+            files = [f"{os.path.join(p, f'image_{self.band}.fits')}"]
+            arg = [ds9_cmd, "-cmap", self.gui_config["ds9_cmap"], "-scale", self.gui_config["ds9_scale"], "-scale", "limits", f"{self.gui_config['ds9_limits'][0]}", f"{self.gui_config['ds9_limits'][1]}"]
+
         arg.extend(files)
         subprocess.Popen(arg)
 
