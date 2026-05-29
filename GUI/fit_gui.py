@@ -29,6 +29,8 @@ import matplotlib.patches
 import glob
 from PIL import Image
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+import scipy
+import astropy.units as u
 
 BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
 sys.path.append(str(BASE_DIR))
@@ -1106,6 +1108,11 @@ class MainWindow(QMainWindow):
         self.current_ellipse_params = ellipse_params
         self.toggle_1d.setEnabled(not ellipse_params.empty)
 
+        try:
+            self.radial_data = self.get_radial_data()
+        except:
+            self.radial_data = None
+
         self.plot_image()
         self.plot_model()
         self.plot_residual()
@@ -1129,23 +1136,21 @@ class MainWindow(QMainWindow):
 
     def plot_model(self):
         if self.is_1d_mode:
-            data = self.get_radial_data(self.band)
-            if data is not None:
-                self.model.plot_profiles(data['model']['host'], data['model']['polar'], 'Model Radial Profile', overplot=data['image'])
+            if self.radial_data is not None:
+                self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'])
                 return
         self.model.plot(self.model_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
 
     def plot_residual(self):
         if self.is_1d_mode:
-            data = self.get_radial_data(self.band)
-            if data is not None:
+            if self.radial_data is not None:
                 if self.plotrelresid:
                     y_label='Relative Residual'
                 else:
                     y_label='Residual Flux (nanomaggies/arcsec^2)'
                 self.resid.plot_profiles(
-                    data['residual']['host'],
-                    data['residual']['polar'],
+                    self.radial_data['residual']['host'],
+                    self.radial_data['residual']['polar'],
                     'Residual Radial Profile',
                     y_label=y_label
                 )
@@ -1160,23 +1165,21 @@ class MainWindow(QMainWindow):
 
     def plot_config(self):
         if self.is_1d_mode:
-            data = self.get_radial_data(self.band)
-            if data is not None:
-                self.configimg.plot_profiles(data['config']['host'], data['config']['polar'], 'Config Radial Profile', overplot=data['image'])
+            if self.radial_data is not None:
+                self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'])
                 return
         self.configimg.plot(self.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext="2D Config Image")
 
     def plot_config_residual(self):
         if self.is_1d_mode:
-            data = self.get_radial_data(self.band)
             if self.plotrelresid:
                 y_label = 'Relative Config Residual'
             else:
                 y_label = 'Config Residual Flux (nanomaggies/arcsec^2)'
-            if data is not None:
+            if self.radial_data is not None:
                 self.configresid.plot_profiles(
-                    data['config_residual']['host'],
-                    data['config_residual']['polar'],
+                    self.radial_data['config_residual']['host'],
+                    self.radial_data['config_residual']['polar'],
                     'Config Residual Radial Profile',
                     y_label=y_label
                 )
@@ -1189,7 +1192,39 @@ class MainWindow(QMainWindow):
             limits = self.gui_config["plot_resid_limits"]
         self.configresid.plot(self.config_residual_im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext)
 
-    def get_radial_data(self, band):
+    def profile_from_image(self, image_data, pa, length, surf_bright=False):
+        
+        pa = np.deg2rad(pa + 90) # Need to account for the offset that imfit gives lol
+        # length = int(np.shape(image_data)[0]*np.cos(np.pi/4))
+
+        c = (int(image_data.shape[0]/2)-1, int(image_data.shape[1]/2)-1) # Just assuming the center of the galaxy is the center of the image
+
+        x0 = c[0] + np.cos(pa)*length
+        x1 = c[0] + np.cos(pa+np.pi)*length
+
+        y0 = c[1] + np.sin(pa)*length
+        y1 = c[1] + np.sin(pa+np.pi)*length
+
+        npts = 1000
+        x, y = np.linspace(x0, x1, npts), np.linspace(y0, y1, npts)
+
+        coords = np.array([x,y])
+        prof = scipy.ndimage.map_coordinates(image_data, coords, cval=np.nan)
+        upper = prof[int(x.size/2):]
+        lower = np.flip(prof[:int(x.size/2)])
+        r = np.linspace(0, length/2, np.size(upper))
+        prof_avg = (upper + lower)/2 
+
+
+        prof_avg = prof_avg * u.nmgy / self.pixel_scale**2 # nmgy /pix -> nmgy/arcsec**2
+
+        if surf_bright:
+            zero_point_star_equiv = u.zero_point_flux(3631.1 * u.Jy)
+            prof_avg = u.Magnitude(prof_avg.to(u.AB, zero_point_star_equiv))
+
+        return {"r": r[prof_avg != np.nan]*self.pixel_scale, "mu": prof_avg[prof_avg != np.nan].value}
+
+    def get_radial_data(self):
         if self.current_ellipse_params is None or self.current_ellipse_params.empty:
             return None
         host_e = self.current_ellipse_params[self.current_ellipse_params["PolarOrHost"] == "Host"]
@@ -1198,58 +1233,35 @@ class MainWindow(QMainWindow):
             return None
         host_pa = host_e["angle"].iloc[0]
         polar_pa = polar_e["angle"].iloc[0]
-        host_a = host_e["semi_major"].iloc[0]
-        polar_a = polar_e["semi_major"].iloc[0]
+        host_len = host_e["semi_major"].iloc[0] * 2 # Just a bit larger
+        polar_len = polar_e["semi_major"].iloc[0] * 2
+
         zeropoint = 22.5
-        center = (float(self.sci_fits.header['CRPIX1']) - 1.0, float(self.sci_fits.header['CRPIX2']) - 1.0)
-        host_len = int(max(200, 2.5 * host_a))
-        polar_len = int(max(250, 2.5 * polar_a))
-        width_pix = 7.0
-        oversample = 2
 
-        mask_array = self.mask_fits.data if getattr(self.mask_fits, 'data', None) is not None else self.mask_fits
-        invvar_array = self.invvar_fits.data if getattr(self.invvar_fits, 'data', None) is not None else self.invvar_fits
-        psf_array = self.psf_fits.data if getattr(self.psf_fits, 'data', None) is not None else self.psf_fits
+        mask = self.mask_fits.data
+        sci_image = np.where(mask == 0, self.sci_fits.data, 0)
+        image_host = self.profile_from_image(sci_image, host_pa, host_len, surf_bright=True)
+        image_polar = self.profile_from_image(sci_image, polar_pa, polar_len, surf_bright=True)
 
-        def profile_from_image(image_data, pa, length, quantity='mu'):
-            cut = photometric_cut(
-                sci_fits=image_data,#*self.pixel_scale**2,
-                center_xy=center,
-                pa_deg=pa,
-                length_pix=length,
-                width_pix=width_pix,
-                oversample=oversample,
-                mask_fits=mask_array,
-                invvar_fits=invvar_array,
-                psf_fits=psf_array,
-                zeropoint=zeropoint,
-                pixel_scale_arcsec=self.pixel_scale,
-            )
-            r, values, values_err, _ = fold_cut_to_radial_profile(cut, quantity=quantity)
-            return {'r': r, 'mu': values, 'mu_err': values_err}
-
-        image_host = profile_from_image(self.sci_fits.data, host_pa, host_len)
-        image_polar = profile_from_image(self.sci_fits.data, polar_pa, polar_len)
-
-        model_host = profile_from_image(self.model_im, host_pa, host_len)
-        model_polar = profile_from_image(self.model_im, polar_pa, polar_len)
+        model_host = self.profile_from_image(self.model_im, host_pa, host_len, surf_bright=True)
+        model_polar = self.profile_from_image(self.model_im, polar_pa, polar_len, surf_bright=True)
 
         if self.plotrelresid:
-            residual_data = np.where(self.sci_fits.data != 0, (self.sci_fits.data - self.model_im)/self.sci_fits.data, 0)
+            residual_data = np.where(sci_image != 0, (sci_image - self.model_im)/sci_image, 0)
         else:
-            residual_data = self.sci_fits.data - self.model_im
-        residual_host = profile_from_image(residual_data, host_pa, host_len, quantity='I')
-        residual_polar = profile_from_image(residual_data, polar_pa, polar_len, quantity='I')
+            residual_data = sci_image - self.model_im
+        residual_host = self.profile_from_image(residual_data, host_pa, host_len)
+        residual_polar = self.profile_from_image(residual_data, polar_pa, polar_len)
 
-        config_host = profile_from_image(self.config_im, host_pa, host_len)
-        config_polar = profile_from_image(self.config_im, polar_pa, polar_len)
+        config_host = self.profile_from_image(self.config_im, host_pa, host_len, surf_bright=True) 
+        config_polar = self.profile_from_image(self.config_im, polar_pa, polar_len, surf_bright=True)
 
         if self.plotrelresid:
-            config_residual_data = np.where(self.sci_fits.data !=0, (self.sci_fits.data - self.config_im)/self.sci_fits.data, 0)
+            config_residual_data = np.where(sci_image !=0, (sci_image - self.config_im)/sci_image, 0)
         else:
-            config_residual_data = self.sci_fits.data - self.config_im
-        config_residual_host = profile_from_image(config_residual_data, host_pa, host_len, quantity='I')
-        config_residual_polar = profile_from_image(config_residual_data, polar_pa, polar_len, quantity='I')
+            config_residual_data = sci_image - self.config_im
+        config_residual_host = self.profile_from_image(config_residual_data, host_pa, host_len)
+        config_residual_polar = self.profile_from_image(config_residual_data, polar_pa, polar_len)
 
         return {
             'image': {'host': image_host, 'polar': image_polar},
