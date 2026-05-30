@@ -576,7 +576,8 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     # magnification = (d_lo / d_hi * (1. + z_hi)**2 / (1. + z_lo)**2 * p_lo / p_hi)
 
     orig_p_hi = np.arctan2(100*u.pc, cosmo.luminosity_distance(z_hi)).to(u.arcsec).value
-    a = (orig_p_hi**2 * u.arcsec**2).to(u.sr)
+    # a = (orig_p_hi**2 * u.arcsec**2).to(u.sr)
+    a = orig_p_hi**2 * u.arcsec**2
     magnification = (orig_p_hi / p_hi)
     if upscl:
         magnification = 1. / magnification
@@ -603,27 +604,10 @@ def ferengi_downscale(im_lo, z_lo, z_hi, p_lo, p_hi, upscl=False, nofluxscl=Fals
     actual_zoom_x = nx_hi / sz_lo[0]
     actual_zoom_y = ny_hi / sz_lo[1]
     
-    # Perform the scaling. Use spline interpolation (order=3) for better quality.
-    # The output `zoomed_im` will be scaled by the square of the zoom factor if `mode='nearest'`.
-    # For flux conservation, we should divide by the square of the zoom factors to get total flux.
-    # (f1/sr * pixarea_lo + f2/sr * pixarea_lo) * pixareahi / z**2
-    im_lo = im_lo * u.nmgy/u.sr
     zoomed_im = zoom(im_lo*a*sb_ratio, (actual_zoom_x, actual_zoom_y), order=1, mode="nearest")/actual_zoom_x**2
     
-    # with np.errstate(divide='ignore'):
-    #     zoomed_im = zoomed_im / np.sum(zoomed_im) * np.sum(im_lo) # make sure that sum(im_lo) = sum(zoomed_im)
     
-    # zoomed_im[zoomed_im == np.nan] = 0
-    
-    # Adjust for total flux if the interpolation method does not inherently conserve it.
-    # If FREBIN /total means summing up pixel values, then a simple zoom followed by multiplication
-    # by the ratio of pixel areas (original_area / new_area) should work.
-    # Since we are effectively changing the pixel scale from p_lo to p_hi * (d_hi/d_lo)^2 / ((1+z_hi)^2/(1+z_lo)^2)
-    # the flux per pixel should scale by the inverse of the area change for surface brightness conservation.
-    # But since we're scaling the image itself, the total flux will be conserved by `zoom` if we normalize later.
-    # The original IDL code multiplies by flux_ratio * evo_fact.
-    
-    return zoomed_im #* evo_fact 
+    return zoomed_im * u.nmgy#* evo_fact 
 
 def ferengi_odd_n_square(psf0, centre=None):
     """
@@ -763,7 +747,7 @@ def ferengi_transformation_psf(psf_s0, psf_c0, z_lo, z_hi, p_lo, p_hi, same_size
     return ferengi_deconvolve(psf_c_final, psf_s_final)
 
 
-def ferengi_convolve_plus_noise(im, psf, sky, exptime, nonoise=False, border_clip=0, extend=False):
+def ferengi_convolve_plus_noise(im, psf, sky, nonoise=False, border_clip=0, extend=False):
     """
     Convolves an image with a PSF, adds sky background, and Poisson noise.
     """
@@ -807,52 +791,9 @@ def ferengi_convolve_plus_noise(im, psf, sky, exptime, nonoise=False, border_cli
         # If sky is smaller, it will be tiled or an error will occur. Assume sky is large enough.
         sky_clipped = sky[0:sz_out[0], 0:sz_out[1]]
         
-        # Original IDL: out += sky_clipped + sqrt(abs(out*exptime))*randomn(1, ...) / exptime
-        # This suggests out is in counts/sec, and noise is added based on counts, then converted back.
-        # `randomn` in IDL is standard normal (mean 0, std dev 1).
-        
-        # Calculate noise in counts
-        noise_counts = np.sqrt(np.abs(out * exptime)) * np.random.randn(sz_out[0], sz_out[1])
-        # Convert noise back to counts/sec (rate)
-        noise_rate = noise_counts / exptime
-        
         out += sky_clipped #+ noise_rate # Don't need Poisson Noise since it's already been added
 
     return out
-
-# KCORRECT functions would need a separate library or re-implementation.
-# For this script, we'll use placeholders for KCORRECT calls, as it's a significant external dependency.
-# You would need to integrate a Python K-correction package like `kcorrect_py` or `pz_kcorrect`.
-
-# Placeholder for KCORRECT functionality
-def kcorrect_placeholder(maggies, ivar, z, filterlist, rmatrix=None, zvals=None, lambda_wavel=None, vmatrix=None, coeffs=None):
-    """
-    Placeholder for KCORRECT. In a real application, you'd replace this with a Python K-correction library.
-    This function will simply return dummy values or pass through if no K-correction logic is implemented.
-    """
-    # For demonstration, we'll just return identity or simple scaling.
-    # In a real scenario, this would involve complex spectral fitting.
-    k_correction = np.zeros_like(maggies[0]) # Dummy K-correction
-    
-    # Dummy outputs for rmatrix, zvals, wavel, vmatrix, coeffs
-    # These would typically be determined by the KCORRECT library
-    rmatrix_out = np.array([[1.0]])
-    zvals_out = np.array([z])
-    lambda_wavel_out = np.array([5000.0]) # Example wavelength
-    vmatrix_out = np.array([[1.0]])
-    coeffs_out = np.zeros(maggies.shape[0]) # One coefficient per band
-    
-    return k_correction, rmatrix_out, zvals_out, lambda_wavel_out, vmatrix_out, coeffs_out
-
-def k_reconstruct_maggies_placeholder(coeffs, z_out, maggies_in, vmatrix=None, lambda_wavel=None, filterlist=None):
-    """
-    Placeholder for K_RECONSTRUCT_MAGGIES.
-    """
-    # In a real scenario, this would use the coefficients and filter information
-    # to predict magnitudes at the output redshift.
-    # For now, it will simply return the input maggies as is.
-    print(f"Applying dummy K-reconstruction at z={z_out}")
-    return np.array(maggies_in) # Return input maggies unchanged for placeholder
 
 def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
             lambda_lo, filter_lo, zlo, scllo, zplo, tlo,
@@ -872,339 +813,53 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         nbands = 1
         im = im[:, :, np.newaxis] # Make it 3D for consistent indexing
         imerr = imerr[:, :, np.newaxis] # Make it 3D
-    nok = (nbands == 1) # Flag for no K-correction if only 1 band
 
     # Convert from cts (input frame) to maggies and back to cts (output frame)
-    if nok:
-        im_nok = maggies2cts(cts2maggies(im[:,:,0], tlo, zplo), thi, zphi)
-        im_ds = ferengi_downscale(im_nok, zlo, zhi, scllo, sclhi,
-                                  nofluxscl=noflux, evo=evo)
-        psf_lo = psflo
-        im_ds = np.expand_dims(im_ds, axis=-1)
-    else:
-        # Select best matching PSF for output redshift (based on wavelength)
-        dz = np.abs(lambda_hi / lambda_lo - 1)
-        idx_bestfilt = np.argmin(dz)
-        psf_lo = psflo[:, :, idx_bestfilt]
+    # Select best matching PSF for output redshift (based on wavelength)
+    dz = np.abs(lambda_hi / lambda_lo - 1)
+    idx_bestfilt = np.argmin(dz)
+    psf_lo = psflo[:, :, idx_bestfilt]
 
-        # Weight the closest filters in rest-frame more (this logic is complex from IDL)
-        # For simplicity, and until a full K-correct implementation, we will use a simplified weighting.
-        # This part of the code is highly dependent on the KCORRECT library.
-        # (Moved to the part that actually applies the weights)
-
-
-        # Initial downscale for the first band
-        im_ds = ferengi_downscale(im[:, :, 0], zlo, zhi, scllo, sclhi, nofluxscl=noflux, evo=evo)
-        
-        # If multiple bands, extend im_ds to 3D for all bands
-        if nbands > 1:
-            temp_im_ds_list = [im_ds]
-            for j in range(1, nbands):
-                temp_im_ds_list.append(ferengi_downscale(im[:, :, j], zlo, zhi, scllo, sclhi, nofluxscl=noflux, evo=evo))
-            im_ds = np.stack(temp_im_ds_list, axis=2)
-
-        # Subtract sky (example: using ring_sky)
-        # for j in range(nbands):
-            # This is a placeholder for `ring_sky`, which needs full implementation.
-            # Assuming it returns a scalar sky value for simplicity.
-            # sky_sub_value = ring_sky(im_ds[:, :, j], 50, 15, nw=True)
-            # im_ds[:, :, j] -= sky_sub_value # Not really needed since this is a simulated image
-        
-        # Downscale error image
-        imerr_ds = ferengi_downscale(imerr[:, :, 0], zlo, zhi, scllo, sclhi, nofluxscl=noflux, evo=evo)
-        if nbands > 1:
-            temp_imerr_ds_list = [imerr_ds]
-            for j in range(1, nbands):
-                temp_imerr_ds_list.append(ferengi_downscale(imerr[:, :, j], zlo, zhi, scllo, sclhi, nofluxscl=noflux, evo=evo))
-            imerr_ds = np.stack(temp_imerr_ds_list, axis=2)
-
-        # Convert error from cts to mags
-        for j in range(nbands):
-            # Avoid division by zero
-            imerr_ds[:, :, j] = np.where(im_ds[:, :, j] != 0,
-                                         2.5 / np.log(10) * imerr_ds[:, :, j] / im_ds[:, :, j],
-                                         np.inf) # Set to inf if original flux is zero
-
-        # Convert image from cts to maggies
-        # for j in range(nbands):
-        #     im_ds[:, :, j] = cts2maggies(im_ds[:, :, j], tlo[j], zplo[j])
-
-        # K-correction section (using placeholders)
-        siglim = 2
-        npix = im_ds[:,:,0].size
-        
-        # Find index of input filter closest to output wavelength
-        diff = np.abs(lambda_hi / lambda_lo - 1 - zhi)
-        # zmin_idx = np.argmin(diff)
-
-        # Terrible code, I am very tired right now, will fix if this works well 
-        if lerp_scheme == 0: # Regular, pick one band
-            sorted = np.argsort(diff)
-            zmin_idx = sorted[0]
-        if lerp_scheme == 1: # Pick 2 closest bands with weighting 
-            sorted = np.argsort(diff)
-            zmin_idx = sorted[0]
-            zmin_idx_second = sorted[1]
-            dist_sum = diff[zmin_idx] + diff[zmin_idx_second]
-            norm_dists = (diff[zmin_idx]/dist_sum, diff[zmin_idx_second]/dist_sum)
-        if lerp_scheme == 2: # Pick 3 closest bands with weighting 
-            sorted = np.argsort(diff)
-            zmin_idx = sorted[0]
-            zmin_idx_second = sorted[1]
-            zmin_idx_third = sorted[2]
-            dist_sum = diff[zmin_idx] + diff[zmin_idx_second] + diff[zmin_idx_third]
-            norm_dists = (diff[zmin_idx]/dist_sum, diff[zmin_idx_second]/dist_sum, diff[zmin_idx_third]/dist_sum)
-
-        filt_i = zmin_idx
-
-        '''
-        # Calculate sigma map and identify "good" pixels
-        nsig = np.zeros_like(im_ds)
-        nhi = np.zeros(im_ds[:,:,0].shape, dtype=int)
-        sig_bands = np.zeros(nbands)
-
-        for j in range(nbands):
-            m, s, n = resistant_mean(im_ds[:, :, j], 3)
-            sig_bands[j] = s * np.sqrt(npix - 1 - n)
-            nsig[:, :, j] = np.where(sig_bands[j] != 0, median_filter(im_ds[:, :, j], size=3) / sig_bands[j], 0) # Use median for nsig
-            
-            hi_pixels = np.where(np.abs(nsig[:, :, j]) > siglim)
-            nhi[hi_pixels] += 1
-        '''
-        
-        # Select pixels for K-correction
-        '''
-        good = np.where((nhi >= 3) & (np.abs(nsig[:, :, filt_i]) > siglim))
-        goodsize = np.size(good[0])
-        if goodsize == 0:
-            print('less than 3 filters have high sigma pixels')
-            good = np.where((nhi >= 2) & (np.abs(nsig[:, :, filt_i]) > siglim))
-        if goodsize == 0:
-            print('less than 2 filters have high sigma pixels')
-            good = np.where((nhi >= 1) & (np.abs(nsig[:, :, filt_i]) > siglim))
-        if goodsize == 0:
-            print('NO filter has high sigma pixels')
-            good = np.where((nhi >= 0) & (np.abs(nsig[:, :, filt_i]) > siglim)) # All pixels if no high sigma
-        
-        good1 = np.where((np.abs(nsig[:, :, filt_i]) > 0.25) & (np.abs(nsig[:, :, filt_i]) <= siglim))
-        good1size = np.size(good1[0])
-        if good1size > 0:
-            # Select only 50% of these pixels
-            if good1size > 1: # random_indices expects len > 0
-                good1 = (good1[0][random_indices(np.size(good1[0]), int(np.round(np.size(good1[0]) * 0.5)))],good1[1][random_indices(np.size(good1[1]), int(np.round(np.size(good1[1]) * 0.5)))])
-            else: # If only one pixel, just take it
-                good1 = good1
-        
-        # good = (np.unique(np.concatenate((good[0], good1[0]))), np.unique(np.concatenate((good[1], good1[1]))))
-        good = (np.concatenate((good[0], good1[0])), np.concatenate((good[1], good1[1])))
-        ngood = np.size(good[0])
-
-        if ngood == 0:
-            print("No pixels selected for K-correction.")
-            # Handle the case where no pixels are selected, e.g., proceed without K-correction
-            # or skip to end. For now, we will proceed assuming im_ds is okay.
-            maggies_kcorrected = np.copy(im_ds.flatten()) # Placeholder if no pixels are good
-        else:
-            # Setup arrays for K-correction
-            maggies_for_k = np.zeros((nbands, ngood))
-            err_for_k = np.zeros((nbands, ngood))
-            # for j in range(nbands):
-            #     maggies_for_k[j, :] = im_ds.flatten()[good][j::nbands] # Reshape to (bands, pixels)
-            #     err_for_k[j, :] = imerr_ds.flatten()[good][j::nbands]
-            for j in range(nbands):
-                maggies_for_k[j, :] = im_ds[:, :, j][good]
-                err_for_k[j, :] = imerr_ds[:, :, j][good]
-            # Remove infinite values in error
-            err_for_k[~np.isfinite(err_for_k)] = 99999
-            err_for_k = np.minimum(err_for_k, 99999) # Clip large errors
-
-            # Setup array with minimum errors for SDSS
-            err0 = (err0_mag[np.newaxis, :].T @ np.ones(np.size(maggies_for_k[0, :]))[:, np.newaxis].T).T
-            #err0 = err0_mag[:, np.newaxis] # Ensure err0_mag is (nbands, 1)
-            # The original IDL code's `err0_mag#(fltarr(n_elements(maggies[0, *]))+1)`
-            # is equivalent to broadcasting err0_mag across the second dimension.
-            # err0_expanded = np.tile(err0, (1, ngood))
-
-            # Weights (from IDL example, needs specific implementation from the source)
-            # For simplicity, using a uniform weight if specific logic is not clear or implemented.
-            dz1 = np.abs(lambda_hi - lambda_lo)
-            if hasattr(dz1, '__iter__'):  # check if is iterable before applying weights
-                ord = np.argsort(dz1)
-                weight = np.ones(nbands)
-                if dz1[ord[0]] == 0:
-                    if nbands == 2: weight[ord] = [10, 4]
-                    if nbands == 3: weight[ord] = [10, 4, 4]
-                    if nbands >= 4: weight[ord] = np.concatenate(([10, 4, 4], np.ones(nbands - 3)))
-                else:
-                    if nbands == 2: weight[ord] = np.array([10, 8])
-                    if nbands == 3 or nbands == 4: weight[ord] = np.concatenate(([10, 8], np.zeros(nbands - 2) + 4))
-                    if nbands > 4: weight[ord] = np.concatenate(([10, 8, 4, 4], np.ones(nbands - 4)))
-            weight = (weight[np.newaxis, :].T @ np.ones(np.size(maggies_for_k[0, :]))[:, np.newaxis].T).T
-            #weight = np.ones(nbands)[:, np.newaxis] # Default uniform weights
-            # The complex weighting logic from IDL source (lines 216-218) should be re-implemented
-            # here if accuracy is critical and KCORRECT requires it.
-
-            # Add image errors and minimum errors in quadrature
-            err_for_k = err_for_k.T
-            err_combined = np.sqrt(err0**2 + err_for_k**2) / weight
-
-            # Convert errors to inverse variance for KCORRECT
-            maggies_for_k = maggies_for_k.T
-            ivar = (2.5 / np.log(10) / err_combined / np.array(maggies_for_k))**2
-            ivar[~np.isfinite(ivar)] = np.max(ivar[np.isfinite(ivar)]) if np.any(np.isfinite(ivar)) else 1.0 # Handle inf/nan
-
-            z_tmp_lo = np.full(ngood, zlo)
-            z_tmp_hi = np.full(ngood, zhi)
-
-            # Call KCORRECT 
-            responses_in = ['sdss_g0', 'sdss_r0', 'sdss_i0', 'sdss_z0']  # TODO: Maybe not the best implementation, but works for now
-            if "i" in filter_lo:
-                responses_in = ['sdss_g0', 'sdss_r0', 'sdss_i0', 'sdss_z0'] 
-            else:
-                responses_in = ['sdss_g0', 'sdss_r0', 'sdss_z0']
-
-            maggies_for_k = maggies_for_k.T
-            maggies_for_k = np.moveaxis(maggies_for_k, -1, 0)
-            ivar = np.moveaxis(ivar, -1, 0)
-
-            kc = kcorrect.kcorrect.Kcorrect(responses=responses_in)
-            ivar = ivar.T
-            coeffs = kc.fit_coeffs(redshift=z_tmp_lo, maggies=maggies_for_k, ivar=ivar)           
-            k = kc.kcorrect(redshift=z_tmp_lo, coeffs=coeffs)
-            maggies_reconstructed = kc.reconstruct(redshift=z_tmp_lo, coeffs=coeffs)
-
-            maggies_for_k = np.moveaxis(maggies_for_k, -1, 0) # Go back to ferengi's weird indices
-            maggies_reconstructed = np.moveaxis(maggies_reconstructed, -1, 0)
-            ivar = np.moveaxis(ivar, -1, 0)
-
-            # k_dummy, rmatrix, zvals, wavel, vmatrix, coeffs = kcorrect_placeholder(
-            #     maggies_for_k, ivar, z_tmp_lo, filterlist=filter_lo
-            # )
-
-
-            # Reconstruct magnitudes at high redshift (placeholder)
-            # maggies_reconstructed = k_reconstruct_maggies_placeholder(
-            #     coeffs, z_tmp_hi, maggies_for_k, vmatrix=vmatrix, lambda_wavel=wavel, filterlist=filter_hi
-            # )
-
-            # Store K-corrected maggies back into im_ds
-            # This requires careful re-mapping from the 1D 'good' indices back to the 2D im_ds.
-            # Assuming maggies_reconstructed is (nbands, ngood)
-            maggies_kcorrected = np.copy(im_ds.flatten())
-            for j in range(nbands):
-                # This needs to put the reconstructed maggies back into the correct positions
-                # in the flattened array, respecting the 'good' indices and band order.
-                # The original IDL: im_ds[good] = maggies/(1.+zhi) seems to imply flattening all bands and then K-correcting.
-                # Given the `maggies_for_k` structure, it's likely (bands, pixels), so maggies_reconstructed is similar.
-                
-                # Reshape maggies_reconstructed for easier assignment
-                # reshaped_maggies_rec = np.zeros_like(im_ds.flatten())
-                reshaped_maggies_rec = np.zeros_like(im_ds)
-                s = np.shape(im_ds)
-                for band_idx in range(nbands):
-                    reshaped_maggies_rec[:, :,band_idx][good] = maggies_reconstructed[band_idx, :]
-                
-                # Correct indexing is crucial here. The IDL code's `im_ds[good] = maggies/(1.+zhi)` is ambiguous
-                # when `im_ds` is 3D and `good` is 1D from a flattened 2D index.
-                # Assuming `im_ds.flatten()[good]` means taking specific pixels across all bands that were "good".
-                # A more explicit approach would be:
-                # for band_idx in range(nbands):
-                #     im_ds_flat = im_ds[:, :, band_idx].flatten()
-                #     im_ds_flat[good] = maggies_reconstructed[band_idx, :] / (1. + zhi) # Assuming maggies_reconstructed holds the band-specific output
-                #     im_ds[:, :, band_idx] = im_ds_flat.reshape(im_ds[:, :, band_idx].shape)
-                
-                # For simplicity with current placeholder structure, we will assume `maggies_reconstructed` is effectively
-                # the result for the specific `im_ds.flatten()[good]` segment.
-                # This needs careful re-evaluation based on actual KCORRECT output.
-                # For now, let's just use the reconstructed maggies for the first band for the purpose of the demo
-                # and assume a simplified mapping.
-                
-                # Simplified mapping: If K-corrected value exists for a pixel, use it. Else, keep original.
-                # This requires that `good` maps directly to the flattened `im_ds` array across bands.
-                # The IDL `im_ds[good]` likely means it's still a 3D array indexed in a way that gets the correct (x,y,band) elements.
-                # Given `im_ds` is (x,y,bands), `good` from `nhi` and `nsig` is (x*y) index.
-                # This implies K-correction results are applied pixel-wise, across bands for each pixel.
-                
-                # To emulate `im_ds[good] = maggies/(1.+zhi)` when `im_ds` is 3D, and `good` are flattened indices:
-                # We need to create a mask for `im_ds` for each band.
-
-                reshaped_good = np.unravel_index(good, im_ds[:,:,0].shape)
-
-                # Apply the k-corrected values to all bands at the `good` pixel locations
-                # This is a very strong assumption about `maggies_reconstructed` structure.
-                for band_idx in range(nbands):
-                    im_ds[:, :, band_idx][good] = maggies_reconstructed[band_idx, :] / (1. + zhi)
-                # for band_idx in range(nbands):
-                #     im_ds[:, :, band_idx][good] = maggies_reconstructed[band_idx, :] / (1. + zhi)
-    '''
-    # Background: choose closest in redshift-space (this logic also from original)
-    # Using the original image before K-correction to determine background.
-    # This seems to be a separate path depending on `nok`.
-    if nok: # This block is actually for nok, which means single band
-        bg = im_ds / (1. + zhi) # Already processed in `im_nok`
-    else:
-        # If multi-band, the 'bg' seems to be derived from the downscaled image of the best-fit filter.
-        bg = im_ds[:, :, filt_i] / (1. + zhi) # From the best-fit filter
-        # im_ds = im_ds[:, :, filt_i] / (1. + zhi)
-        if lerp_scheme == 0:
-            im_ds = im_ds[:, :, zmin_idx] 
-        if lerp_scheme == 1:
-            im_ds = im_ds[:, :, zmin_idx]*(1-norm_dists[0]) + im_ds[:, :, zmin_idx_second]*(1-norm_dists[1]) 
-        if lerp_scheme == 2:
-            im_ds = im_ds[:, :, zmin_idx]*(1-norm_dists[0]) + im_ds[:, :, zmin_idx_second]*(1-norm_dists[1]) + im_ds[:, :, zmin_idx_third]*(1-norm_dists[2])
-        # If K-correction was applied, `im_ds` has the K-corrected values already.
-
-    # im_ds = maggies2cts(im_ds, thi, zphi)
-    if not nok: # Only if K-correction was attempted
-        bg = maggies2cts(bg, thi, zphi) # Convert background too
-
-    # im_ds = im[..., np.newaxis]
-
-    # Remove infinite pixels: replace with median (3x3)
-    # This loop applies to all bands if multi-band
-    med_val = median_filter(im_ds, size=3, mode='nearest')
-    idx_inf = np.where(~np.isfinite(im_ds))
-    if idx_inf[0].size > 0:
-        im_ds[idx_inf[0], idx_inf[1]] = med_val[idx_inf[0], idx_inf[1]]
-
-    # Replace 0-value pixels with median (3x3)
-    idx_zero = np.where(im_ds == 0)
-    if idx_zero[0].size > 0:
-        im_ds[idx_zero[0], idx_zero[1]] = med_val[idx_zero[0], idx_zero[1]]
+    im_ds = ferengi_downscale(im[:, :, 0], zlo, zhi, scllo, sclhi, nofluxscl=noflux, evo=evo)
+    temp_im_ds_list = [im_ds]
+    for j in range(1, nbands):
+        temp_im_ds_list.append(ferengi_downscale(im[:, :, j], zlo, zhi, scllo, sclhi, nofluxscl=noflux, evo=evo))
+        im_ds = np.stack(temp_im_ds_list, axis=2)
     
-    # if not nok:
-        # # Check for large outliers after K-correction for multi-band images
-        # # This part of the IDL code is to clean extreme residuals.
-        # m_im_ds, sig_im_ds, nrej_im_ds = resistant_mean(im_ds, 3)
-        # sig_im_ds *= np.sqrt(im_ds.size - 1 - nrej_im_ds)
-        
-        # idx_outliers = np.where(np.abs(im_ds) > 10 * sig_im_ds)
-        
-        # if idx_outliers[0].size >= 2:
-        #     # Flatten for line fit
-        #     fit_coeffs = robust_linefit(np.abs(bg[idx_outliers]), np.abs(im_ds[idx_outliers]))
-            
-        #     delta = np.abs(im_ds[idx_outliers]) - (fit_coeffs[0] + fit_coeffs[1] * np.abs(bg[idx_outliers]))
-            
-        #     m_delta, sig_delta, nrej_delta = resistant_mean(delta, 3)
-        #     sig_delta *= np.sqrt(delta.size - 1 - nrej_delta)
-            
-        #     idx1 = np.where(delta / sig_delta > 50)
-        #     if idx1[0].size > 0:
-        #         # Replace these extreme outliers with median from the original med_val
-        #         # Need to map idx_outliers[idx1] back to the 3D array.
-        #         # med_val_flat = med_val.flatten() # Assuming med_val was calculated per band
-        #         idx_x = idx_outliers[0][idx1[0]]
-        #         idx_y = idx_outliers[1][idx1[0]]
-        #         idxs = (idx_x, idx_y)
-        #         # im_ds[idx_outliers[idx1[0], idx1[0]]] = med_val[idx_outliers[idx1[0], idx1[0]]] # idx is just a tupe of (x,)
-        #         im_ds[idxs] = med_val[idxs] 
-                # im_ds = im_ds.reshape(im_ds.shape)
+    # Find index of input filter closest to output wavelength
+    diff = np.abs(lambda_hi / lambda_lo - 1 - zhi)
 
-    # Subtract sky again after K-correction and cleaning (if not already done)
-    # Not reallty necessary since this is a simulated image
-    # sky_sub_value = ring_sky(im_ds, 50, 15, nw=True) # Idk if this works
-    # im_ds -= sky_sub_value
+    # Terrible code, I am very tired right now, will fix if this works well 
+    if lerp_scheme == 0: # Regular, pick one band
+        sorted = np.argsort(diff)
+        zmin_idx = sorted[0]
+    if lerp_scheme == 1: # Pick 2 closest bands with weighting 
+        sorted = np.argsort(diff)
+        zmin_idx = sorted[0]
+        zmin_idx_second = sorted[1]
+        dist_sum = diff[zmin_idx] + diff[zmin_idx_second]
+        norm_dists = (diff[zmin_idx]/dist_sum, diff[zmin_idx_second]/dist_sum)
+    if lerp_scheme == 2: # Pick 3 closest bands with weighting 
+        sorted = np.argsort(diff)
+        zmin_idx = sorted[0]
+        zmin_idx_second = sorted[1]
+        zmin_idx_third = sorted[2]
+        dist_sum = diff[zmin_idx] + diff[zmin_idx_second] + diff[zmin_idx_third]
+        norm_dists = (diff[zmin_idx]/dist_sum, diff[zmin_idx_second]/dist_sum, diff[zmin_idx_third]/dist_sum)
+
+    filt_i = zmin_idx
+
+    # Background: choose closest in redshift-space (this logic also from original)
+    # If multi-band, the 'bg' seems to be derived from the downscaled image of the best-fit filter.
+    # bg = im_ds[:, :, filt_i] / (1. + zhi) # From the best-fit filter
+    # im_ds = im_ds[:, :, filt_i] / (1. + zhi)
+    if lerp_scheme == 0:
+        im_ds = im_ds[:, :, zmin_idx] 
+    if lerp_scheme == 1:
+        im_ds = im_ds[:, :, zmin_idx]*(1-norm_dists[0]) + im_ds[:, :, zmin_idx_second]*(1-norm_dists[1]) 
+        # im_ds = im_ds[:, :, zmin_idx]*(1-diff[zmin_idx]) + im_ds[:, :, zmin_idx_second]*(1-diff[zmin_idx_second]) 
+    if lerp_scheme == 2:
+        im_ds = im_ds[:, :, zmin_idx]*(1-norm_dists[0]) + im_ds[:, :, zmin_idx_second]*(1-norm_dists[1]) + im_ds[:, :, zmin_idx_third]*(1-norm_dists[2])
 
     if noconv:
         im_ds /= thi
@@ -1260,22 +915,16 @@ def ferengi(sky, im, imerr, psflo, err0_mag, psfhi,
         '''
 
         # Convolve the high redshift image with the transformation PSF and add noise
-        # This part needs to handle multi-band images if nok is False
-        # temp_im_ds_conv = np.zeros_like(im_ds)
-        temp_im_ds_conv = list()
         # im_ds = np.squeeze(im_ds, axis=-1)
         # im_ds = ferengi_convolve_plus_noise(im_ds / thi, psf_t, sky, thi,
         #                                                         border_clip=3, extend=False, nonoise=False) # extend=False means crop borders, though is true in ferengi.pro?
         
         # Maybe I should just assume the PSF is alread at high redshift?
-        im_ds = ferengi_convolve_plus_noise(im_ds, ferengi_odd_n_square(psf_lo), sky[:, :, filt_i], thi,
+        im_ds = ferengi_convolve_plus_noise(im_ds, ferengi_odd_n_square(psf_lo), sky[:, :, filt_i],
                                                                 border_clip=3, extend=False, nonoise=False) # extend=False means crop borders, though is true in ferengi.pro?
-    # im_ds = im_ds* thi # FERENGI outputs in cts/second whereas the input is in cts
-    # Write output FITS files
-    # im_ds = np.squeeze(redshift_galaxy.cts2simunits(np.expand_dims(im_ds, axis=-1), 1.6134381299258355e-12, [thi]), axis=-1) # Actually a mistake to leave this in but it gets me to the right order of magnitude, and is linear so it's fine for now
 
     # im_ds = cts2maggies(im_ds, thi, 22.5) * 10 ** 9 # nmgy 
-    fits.writeto(im_out_file, im_ds, overwrite=True)
+    fits.writeto(im_out_file, im_ds.value, overwrite=True)
     # fits.writeto(psf_out_file, recon, overwrite=True)
     # fits.writeto(psf_out_file, psf_lo, overwrite=True)
 
