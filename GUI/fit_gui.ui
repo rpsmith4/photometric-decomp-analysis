@@ -549,7 +549,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
       </size>
      </property>
      <property name="horizontalScrollBarPolicy">
-      <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+      <enum>Qt::ScrollBarPolicy::ScrollBarAsNeeded</enum>
      </property>
      <property name="sizeAdjustPolicy">
       <enum>QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents</enum>
@@ -563,7 +563,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
         <x>0</x>
         <y>0</y>
         <width>522</width>
-        <height>878</height>
+        <height>857</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_6">
