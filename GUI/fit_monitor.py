@@ -70,6 +70,7 @@ class FitWorker(QtCore.QThread):
             img_file = f"image_{self.band}.fits"
             psf_file = f"psf_patched_{self.band}.fits"
             mask_file = "image_mask.fits"
+            imfitPath = str(Path(self.gui_config["imfit_path"])) + "/"
 
             if os.path.exists(params_file):
 
@@ -80,13 +81,14 @@ class FitWorker(QtCore.QThread):
                     mask_img = fits.open(mask_file)[0].data
                     img = img * (1 - mask_img)
                     fits.writeto("masked.fits", data=img, header=img_dat[0].header, overwrite=True)
-                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"], imfitPath=self.gui_config["imfit_path"], mask=mask_img)
+                    
+                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"], imfitPath=imfitPath, mask=mask_img)
                     try:
                         os.remove("./masked.fits")
                     except Exception:
                         pass
                 else:
-                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"], imfitPath=self.gui_config["imfit_path"])
+                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"], imfitPath=imfitPath)
 
         except Exception as e:
             self.output.emit(f"Warning: failed to make composed image: {e}\n")
