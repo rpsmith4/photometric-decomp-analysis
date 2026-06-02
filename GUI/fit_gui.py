@@ -411,7 +411,7 @@ class ParamSliderWidget(QWidget):
                 minvalkpc = (minvalarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
                 maxvalkpc = (maxvalarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
                 valkpc = (valarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
-                self.converted_label.setText(f"Min: {minvalarcsec.value:.3f} Val: {valarcsec.value:.3f} Max: {maxvalarcsec.value:.3f} (Min: {minvalkpc.value:.3f} Val: {valkpc.value:.3f} Max: {maxvalkpc.value:.3f} kpc)")
+                self.converted_label.setText(f"Min: {minvalarcsec.value:.3f} Val: {valarcsec.value:.3f} Max: {maxvalarcsec.value:.3f} arcsec (Min: {minvalkpc.value:.3f} Val: {valkpc.value:.3f} Max: {maxvalkpc.value:.3f} kpc)")
             else:
                 self.converted_label.setText(f"Min: {minvalarcsec.value:.3f} Val: {valarcsec.value:.3f} Max: {maxvalarcsec.value:.3f} arcsec")
         elif self.paramname in ["I_e", "A"]:
