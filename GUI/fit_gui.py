@@ -256,7 +256,9 @@ class ParamSliderWidget(QWidget):
         super().__init__(parent)
         self.paramname = paramname
         self.ndigits = ndigits
-        self.scale = 10 ** ndigits
+        # Slider will use a fixed integer range and we'll map it
+        # linearly to the actual parameter range [min, max].
+        self._slider_steps = 10000
         self.fixed = fixed
         self.d_A = d_A # Angular size distance (I should probably find a way to avoid just passing it to here but whatever)
 
@@ -275,10 +277,15 @@ class ParamSliderWidget(QWidget):
 
         self.slider = QSlider(QtCore.Qt.Orientation.Horizontal)
         self.slider.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum,QtWidgets.QSizePolicy.Policy.Maximum)
-        self.slider.setRange(int(lowlim * self.scale), int(hilim * self.scale))
         # self.slider.setTickInterval(5)
         self.slider.setSingleStep(1)
-        self.slider.setValue(int(initval * self.scale))
+        # Use fixed slider range and map to [lowlim, hilim]
+        self.slider.setRange(0, self._slider_steps)
+        try:
+            frac = 0.0 if hilim == lowlim else (initval - lowlim) / float(hilim - lowlim)
+        except Exception:
+            frac = 0.0
+        self.slider.setValue(int(round(max(0.0, min(1.0, frac)) * self._slider_steps)))
 
         parameter_adjust_layout.addWidget(self.text)
         parameter_adjust_layout.addWidget(self.slider)
@@ -359,36 +366,59 @@ class ParamSliderWidget(QWidget):
         # self.valspinbox.setEnabled(not is_fixed)
 
     def slider_changed(self, value):
-        float_val = value / self.scale
+        # Map slider integer (0.._slider_steps) linearly to [min, max]
+        minval = self.minspinbox.value()
+        maxval = self.maxspinbox.value()
+        if maxval == minval:
+            float_val = minval
+        else:
+            float_val = minval + (value / float(self._slider_steps)) * (maxval - minval)
         self.valspinbox.blockSignals(True)
         self.valspinbox.setValue(float_val)
         self.valspinbox.blockSignals(False)
         self.update_converted()
 
     def spinbox_changed(self, value):
-        int_val = int(round(value * self.scale))
+        # Map the spinbox value into the slider integer range
+        minval = self.minspinbox.value()
+        maxval = self.maxspinbox.value()
+        if maxval == minval:
+            int_val = 0
+        else:
+            frac = (value - minval) / float(maxval - minval)
+            int_val = int(round(max(0.0, min(1.0, frac)) * self._slider_steps))
         self.slider.blockSignals(True)
         self.slider.setValue(int_val)
         self.slider.blockSignals(False)
         self.update_converted()
 
     def minspinbox_changed(self, new_min):
-        self.slider.setMinimum(int(new_min * self.scale))
+        cur_max = self.maxspinbox.value()
+        if new_min > cur_max:
+            new_min = cur_max
+            self.maxspinbox.setValue(cur_max)
+
         self.valspinbox.setMinimum(new_min)
         self.maxspinbox.setMinimum(new_min)
         if self.valspinbox.value() < new_min:
             self.valspinbox.setValue(new_min)
-        if self.slider.value() < int(new_min * self.scale):
-            self.slider.setValue(int(new_min * self.scale))
+        # Recompute slider position to respect new bounds
+        cur_val = self.valspinbox.value()
+        self.spinbox_changed(cur_val)
 
     def maxspinbox_changed(self, new_max):
-        self.slider.setMaximum(int(new_max * self.scale))
+        cur_min = self.minspinbox.value()
+        if new_max < cur_min:
+            cur_min = new_max 
+            self.minspinbox.setValue(new_max)
+
         self.valspinbox.setMaximum(new_max)
         self.minspinbox.setMaximum(new_max)
         if self.valspinbox.value() > new_max:
             self.valspinbox.setValue(new_max)
-        if self.slider.value() > int(new_max * self.scale):
-            self.slider.setValue(int(new_max * self.scale))
+        # Recompute slider position to respect new bounds
+        cur_val = self.valspinbox.value()
+        self.spinbox_changed(cur_val)
 
     def get_values(self):
         return {
@@ -1124,6 +1154,7 @@ class MainWindow(QMainWindow):
                     self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), label, layout)
         except:
             self.clearLayout(self.ui.configsliders)
+            print(traceback.format_exc())
             pass
 
 
@@ -1516,7 +1547,14 @@ class MainWindow(QMainWindow):
                         params[param] = [values['value'], values['min'], values['max']]
         
         # Rebuild the config description from the updated dict
-        new_model = pyimfit.ModelDescription.dict_to_ModelDescription(model_dict)
+        try:
+            new_model = pyimfit.ModelDescription.dict_to_ModelDescription(model_dict)
+        except Exception as e:
+            QMessageBox.warning(
+                self, "Warning", f"Warning: {e}"
+            )
+            return
+
         config_text = "".join(new_model.getStringDescription())
         # Backup old config
         if os.path.isfile(config_path):
