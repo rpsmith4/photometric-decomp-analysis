@@ -17,5 +17,8 @@
     "ui_scale": 1,
     "show_phot_slits": 0,
     "imfit_path": "",
-    "ds9_path": ""
+    "ds9_path": "",
+  "existing_setting_1": "value1",
+  "existing_setting_2": "value2",
+  "imfit_path": "/home/kayleey/imfit-1.9.0"
 }
