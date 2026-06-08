@@ -70,7 +70,10 @@ class FitWorker(QtCore.QThread):
             img_file = f"image_{self.band}.fits"
             psf_file = f"psf_patched_{self.band}.fits"
             mask_file = "image_mask.fits"
-            imfitPath = str(Path(self.gui_config["imfit_path"])) + "/"
+            if self.gui_config["imfit_path"] != "":
+                imfitPath = str(Path(self.gui_config["imfit_path"])) + "/"
+            else:
+                imfitPath = ""
 
             if os.path.exists(params_file):
 
