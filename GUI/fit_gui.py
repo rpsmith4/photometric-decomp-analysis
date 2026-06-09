@@ -903,7 +903,8 @@ class MainWindow(QMainWindow):
 
         # Loading the JSON file for the galaxy marks (whether fitted, need to return to, or can't fit)
         try:
-            with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json')) as f:
+            # with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json')) as f:
+            with open(os.path.join(p, 'galmarks.json')) as f:
                 self.galmarks = json.load(f)
         except:
             self.galmarks = {}
@@ -1511,7 +1512,8 @@ class MainWindow(QMainWindow):
         galname = self.selected_galaxy_path.name
         # Save mark state
         self.galmarks[galname] = markas
-        with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json'), 'w') as fp:
+        # with open(os.path.join(MAINDIR, LOCAL_DIR, 'galmarks.json'), 'w') as fp:
+        with open(os.path.join(p, 'galmarks.json'), 'w') as fp:
             json.dump(self.galmarks, fp)
         # Refresh the view so marked colors are updated
         try:
