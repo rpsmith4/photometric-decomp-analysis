@@ -1,0 +1,26 @@
+# Best-fit model results for imfit 1.9.0 (OpenMP-enabled)
+# Generated on Fri Jun  5 12:55:54 2026 by the following command:
+#    /home/kayleey/imfit-1.9.0/imfit -c /home/kayleey/photometric-decomp-analysis/kaylee-yarbrough/PR/PGC724959/2_sersic_r.dat image_r.fits --save-params 2_sersic_r_fit_params.txt --max-threads 8 --mask image_mask.fits --psf psf_patched_r.fits --noise image_r_invvar.fits --errors-are-weights
+
+# Results of fit:
+#   Algorithm: Levenberg-Marquardt: status = 1 -- SUCCESS: Convergence in fit-statistic value.
+#   Fit statistic: chi-squared (user-supplied errors)
+#   Best-fit value: 59223.958208
+#   Reduced value: 1.633449
+#   AIC: 59247.966813
+#   BIC: 59349.942832
+
+X0		99.5120 # +/- 0.0021
+Y0		99.5045 # +/- 0.0016
+FUNCTION Sersic   # LABEL Host
+PA		95.6756 # +/- 0.45724	deg (CCW from +y axis)
+ell		0.174861 # +/- 0.0052936
+n		6.78665 # +/- 0.1187
+I_e		0.0379476 # +/- 0.0016573	counts/pixel
+r_e		15.3688 # +/- 0.23565	pixels
+FUNCTION Sersic   # LABEL Polar
+PA		183.857 # +/- 0.11403	deg (CCW from +y axis)
+ell		-1.50943 # +/- 0.017109
+n		0.823382 # +/- 0.016564
+I_e		0.0810673 # +/- 0.0012827	counts/pixel
+r_e		5.62845 # +/- 0.023597	pixels
