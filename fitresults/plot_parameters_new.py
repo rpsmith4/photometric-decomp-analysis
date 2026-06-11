@@ -41,7 +41,7 @@ def quantities_plot(all_functions):
 def main(args):
     global p
     p = Path(args.p).resolve()
-    SGAtable = QTable.read(os.path.join(args.c, "SGA-2020.fits"))
+    SGAtable = QTable.read(os.path.join(args.c))
     # master_table = QTable.read(os.path.join())
     master_table = QTable.read("/home/ryans/Projects/Photometric Decomp/Analysis/master_table.csv")
     galmarks = json.load(open(os.path.join(p, "galmarks.json")))
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     parser.add_argument("--plot_stats", help="Plot overall statistics", action="store_true")
     parser.add_argument("--make_composed", help="Make a composed image of the galaxy (includes image, model, and components)", action="store_true")
     parser.add_argument("--overwrite", help="Overwrite existing files", action="store_true")
-    parser.add_argument("-c", help="Directory to Sienna Galaxy Atlas File (used to get redshift)", default=".")
+    parser.add_argument("-c", help="Path to Sienna Galaxy Atlas File (used to get redshift)", default="SGA-2020.fits")
     parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
     parser.add_argument("--mask", help="Use mask on the original image", action="store_true")
     parser.add_argument("--plot_type", help="Type of plots to make", choices=["compare_structure", "compare_type"], default="compare_structure")
