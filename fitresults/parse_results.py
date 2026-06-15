@@ -16,11 +16,10 @@ def get_all_results(galaxies, bands, fit_type, galmarks):
 
     parameter_names = set()
     rows = []
-
     for galaxy_path, galaxy_type in galaxies:
         galaxy_name =  os.path.basename(galaxy_path)
         if galaxy_name in galmarks.keys():
-            if galmarks[galaxy_name] != "unable":
+            if galmarks[galaxy_name] not in ["unable", "return"]:
                 for band in bands:
                     try:
                         file = os.path.join(galaxy_path, f"{fit_type}_{band}_fit_params.txt")
@@ -38,6 +37,7 @@ def get_all_results(galaxies, bands, fit_type, galmarks):
                                     "Flux Ratio": function["flux_ratio"],
                                     "Flux": function["flux"],
                                     "parameters": function["parameters"],
+                                    "parameters_unc": function["parameters_unc"],
                                     "ChiSq": chi_sq,
                                     "Reduced ChiSq": chi_sq_red,
                                     "Fit Status": status.strip(),
@@ -49,16 +49,18 @@ def get_all_results(galaxies, bands, fit_type, galmarks):
                         print(f"Couldn't read {file}")
                         # print(tb.format_exc())
 
-    names = [name for name in rows[0].keys() if name!="parameters"]
+    names = [name for name in rows[0].keys() if name!="parameters" and name!="parameters_unc"]
     column_data = {name: [] for name in names}
     for parameter_name in sorted(parameter_names):
         column_data[parameter_name] = []
+        column_data[f"{parameter_name}_unc"] = []
 
     for row in rows:
         for name in names:
             column_data[name].append(row[name])
         for parameter_name in sorted(parameter_names):
             column_data[parameter_name].append(row["parameters"].get(parameter_name, np.nan))
+            column_data[f"{parameter_name}_unc"].append(row["parameters_unc"].get("parameter_name", np.nan))
 
     results = QTable(column_data)
     results = results.group_by("Galaxy Name")
@@ -117,6 +119,10 @@ def parse_results(file):
 # Range should be -19 to -23 for abs mag
 def flux2ABmag(flux):
     return 22.5 - 2.5 * np.log10(flux)
+
+def flux2ABmag(flux):
+    zero_point_star_equiv = u.zero_point_flux(3631.1 * u.Jy)
+    return flux.to(u.mag("AB"), zero_point_star_equiv)
 
 def get_flux(model_file, labels):
     result = subprocess.run(["makeimage", f"{model_file}", "--print-fluxes"], capture_output=True)
