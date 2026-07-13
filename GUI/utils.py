@@ -9,6 +9,128 @@ import os
 from pathlib import Path
 import re
 import math
+from PIL import Image
+from astropy.io import fits
+import numpy as np
+import pathlib
+import traceback as tb
+import scipy
+import astropy.units as u
+import sys
+
+BASE_DIR = Path(Path(os.path.dirname(__file__)).parent).resolve()
+sys.path.append(str(BASE_DIR))
+sys.path.append(os.path.join(BASE_DIR, 'decomposer'))
+sys.path.append(os.path.join(BASE_DIR, 'decomposer/manual_fitting'))
+
+from photometric_cut_helpers import pixel_scale_from_header_arcsec_per_pix
+
+class DataSet():
+    def __init__(self, jpg_image_path: pathlib.PosixPath = None, fits_image_path: pathlib.PosixPath = None, fits_invvar_image_path: pathlib.PosixPath = None, fits_psf_path: pathlib.PosixPath = None, mask_path: pathlib.PosixPath = None, config_path: pathlib.PosixPath = None, fits_composed_path: pathlib.PosixPath = None):
+        self.jpg_image_path = jpg_image_path
+        self.jpg_image = np.array([])
+
+        self.fits_image_path = fits_image_path
+        self.fits_image = np.array([])
+        self.pixel_scale = None
+
+        self.fits_invvar_image_path = fits_invvar_image_path
+        self.fits_invvar_image = np.array([])
+
+        self.fits_psf_path = fits_psf_path
+        self.fits_psf = np.array([])
+
+        self.mask_path = mask_path
+        self.fits_mask = np.array([])
+
+        self.config_path = config_path
+        self.config_dict = None
+        self.config_model_desc = None
+        self.config_im = np.array([])
+        
+        self.fits_composed_path = fits_composed_path
+        self.fits_composed = np.array([])
+
+    def load_jpg(self):
+        self.jpg_image = np.asarray(Image.open(self.jpg_image_path))
+        self.jpg_image = np.flipud(self.jpg_image)
+    
+    def load_fits_image(self):
+        fits_file = fits.open(self.fits_image_path)[0]
+        self.fits_image = fits.getdata(self.fits_image_path)
+        self.pixel_scale = pixel_scale_from_header_arcsec_per_pix(fits_file)
+        print(self.pixel_scale)
+    
+    def load_fits_invvar_image(self):
+        self.fits_invvar_image = fits.getdata(self.fits_invvar_image_path)
+    
+    def load_mask(self):
+        self.fits_mask = fits.getdata(self.mask_path)
+    
+    def load_psf(self):
+        self.fits_psf = fits.getdata(self.fits_psf_path)
+    
+    def load_composed(self, apply_mask = True):
+        # idx = 0 -> Regular image with mask applied, 1 -> Model image, 2 -> Residual, 3 -> Percent residual, 4 Onwards -> Components of model
+        self.fits_composed = fits.getdata(self.fits_composed_path)
+        if apply_mask:
+            self.fits_composed[0] = np.where(self.fits_mask > 0, 0, self.fits_composed[0])
+    
+    def load_config(self):
+        self.config_model_desc = pyimfit.parse_config_file(self.config_path)
+        self.config_dict = self.config_model_desc.getModelAsDict()
+
+        # Add function labels to config_dict
+        # Want to ensure that I actually keep the labels since pyimift is incapable of doing so for some reason
+        labels = read_function_labels(self.config_path)
+        function_list = self.config_dict["function_sets"][0]["function_list"]
+        for i, func in enumerate(function_list):
+            if i < len(labels):
+                func['label'] = labels[i]
+            else:
+                func['label'] = None
+    
+    def load_all(self):
+        self.load_jpg()
+        self.load_fits_image()
+        self.load_fits_invvar_image()
+        self.load_mask()
+        self.load_psf()
+        self.load_composed()
+        self.load_config()
+        self.getconfigim()
+
+    def getconfigim(self, maxThreads=4, apply_psf = True):
+        try:
+            if apply_psf:
+                imfitter = pyimfit.Imfit(self.config_model_desc, psf=self.fits_psf, maxThreads=maxThreads)
+            else:
+                imfitter = pyimfit.Imfit(self.config_model_desc, maxThreads=maxThreads)
+            im = imfitter.getModelImage(shape=np.shape(self.fits_image))
+        except:
+            im = np.array([])
+            print(tb.format_exc())
+        self.config_im = im
+    
+    def getconfigresid(self, relresid=False):
+        try:
+            im = self.fits_image
+            imconfig = self.config_im
+            mask = self.fits_mask
+
+            if relresid:
+                resid_im = (im- imconfig)/im
+            else:
+                resid_im = im-imconfig
+            if mask.size != 0:
+                return np.where(mask >0, 0, resid_im)
+            else:
+                return resid_im
+        except:
+            return np.array([])
+
+    def apply_mask(self, im):
+        return np.where(self.fits_mask > 0, 0, im)
 
 def read_function_labels(config_path):
     """
@@ -124,3 +246,38 @@ def parse_results(file):
 
     function_map = {idx: func for idx, func in enumerate(functions)}
     return function_map, chi_sq, chi_sq_red, status, status_message
+
+def profile_from_image(image_data, pa, length, pixel_scale=None, surf_bright=False):
+    try:
+        pa = np.deg2rad(pa + 90) # Need to account for the offset that imfit gives lol
+        # length = int(np.shape(image_data)[0]*np.cos(np.pi/4))
+
+        c = (int(image_data.shape[0]/2)-1, int(image_data.shape[1]/2)-1) # Just assuming the center of the galaxy is the center of the image
+
+        x0 = c[0] + np.cos(pa)*length
+        x1 = c[0] + np.cos(pa+np.pi)*length
+
+        y0 = c[1] + np.sin(pa)*length
+        y1 = c[1] + np.sin(pa+np.pi)*length
+
+        npts = np.shape(image_data)[0]
+        x, y = np.linspace(x0, x1, npts), np.linspace(y0, y1, npts)
+
+        coords = np.array([x,y])
+        prof = scipy.ndimage.map_coordinates(image_data, coords, cval=np.nan)
+        upper = prof[int(x.size/2):]
+        lower = np.flip(prof[:int(x.size/2)])
+        r = np.linspace(0, length/2, np.size(upper))
+        prof_avg = (upper + lower)/2 
+
+
+        prof_avg = prof_avg * u.nmgy / pixel_scale**2 # nmgy /pix -> nmgy/arcsec**2
+
+        if surf_bright:
+            zero_point_star_equiv = u.zero_point_flux(3631.1 * u.Jy)
+            prof_avg = u.Magnitude(prof_avg.to(u.AB, zero_point_star_equiv))
+
+        return {"r": r[prof_avg != np.nan]*pixel_scale, "mu": prof_avg[prof_avg != np.nan].value}
+    except:
+        print(tb.format_exc())
+        return None

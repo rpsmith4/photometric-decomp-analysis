@@ -52,6 +52,15 @@ from param_slider import ParamSliderWidget
 from copy_params import CopyParametersDialog
 from utils import *
 
+from enum import Enum
+
+# For indexing the composed image
+class Composed(Enum):
+    IMAGE = 0
+    MODEL = 1
+    RESID = 2
+    RELRESID = 3
+
 def open_folder(path): 
     path = os.path.abspath(path) 
     if sys.platform.startswith('win'): 
@@ -403,53 +412,6 @@ class MainWindow(QMainWindow):
             print(e)
             return
     
-    def get_composed_data(self, galaxy_path, band, idx, fit_type):
-        # idx = 0 -> Regular image with mask applied, 1 -> Model image, 2 -> Residual, 3 -> Percent residual, 4 Onwards -> Components of model
-        try:
-            if idx == 0:
-                im = fits.getdata(os.path.join(galaxy_path, f"image_{band}.fits"))
-                mask_path = os.path.join(galaxy_path, "image_mask.fits")
-                if os.path.exists(mask_path):
-                    mask = fits.getdata(mask_path)
-                    if mask.shape == im.shape:
-                        im = np.where(mask > 0, 0, im)
-                return im
-            im = fits.getdata(os.path.join(galaxy_path, f"{fit_type}_{band}_composed.fits"))[idx]
-        except:
-            if idx != 0:
-                im = np.array([])
-            else:
-                try:
-                    im = fits.getdata(os.path.join(galaxy_path, f"image_{band}.fits"))
-                except:
-                    return np.array([])
-        return im
-
-    def getconfigim(self, galaxypath, config_path, shape, maxThreads=4):
-        try:
-            model_desc = pyimfit.parse_config_file(config_path)
-            psf = fits.getdata(os.path.join(galaxypath, f"psf_patched_{self.band}.fits"))
-            imfitter = pyimfit.Imfit(model_desc, psf=psf, maxThreads=maxThreads)
-            # imfitter = pyimfit.Imfit(model_desc, maxThreads=maxThreads)
-            im = imfitter.getModelImage(shape=shape)
-        except:
-            im = np.array([])
-
-        return im
-    
-    def getconfigresid(self, im, imconfig, mask=np.array([]), relresid=False):
-        try:
-            if relresid:
-                resid_im = (im - imconfig)/im
-            else:
-                resid_im = im-imconfig
-            if mask.size != 0:
-                return np.where(mask >0, 0, resid_im)
-            else:
-                return resid_im
-        except:
-            return np.array([])
-
     def refresh_conf(self, config_path = None):
         # Store the current config model for later editing
         self.current_config_model = None
@@ -540,28 +502,8 @@ class MainWindow(QMainWindow):
     def refresh_plots(self):
         galaxypath = self.selected_galaxy_path
         config_path = self.get_config_path(self.selected_galaxy_path, self.band, self.fit_type)
-        # pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
-        self.jpg_img = np.asarray(Image.open(os.path.join(galaxypath, "image.jpg")))
-        self.jpg_img = np.flipud(self.jpg_img)
-        self.jpg_img_plot.plot(self.jpg_img, limits=None, cmap=None, stretch=None, plottext="JPG Image", cbar=False)
+        self.jpg_img_plot.plot(self.dataset.jpg_image, limits=None, cmap=None, stretch=None, plottext="JPG Image", cbar=False)
 
-        # self.img.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
-        self.sci_im = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
-        self.sci_fits = fits.open(os.path.join(galaxypath, f"image_{self.band}.fits"))[0]
-        self.pixel_scale = pixel_scale_from_header_arcsec_per_pix(self.sci_fits)
-        self.mask_fits = fits.open(os.path.join(galaxypath, "image_mask.fits"))[0] if os.path.exists(os.path.join(galaxypath, "image_mask.fits")) else None
-        self.invvar_fits = fits.open(os.path.join(galaxypath, f"image_{self.band}_invvar.fits"))[0] if os.path.exists(os.path.join(galaxypath, f"image_{self.band}_invvar.fits")) else None
-        self.psf_fits = fits.open(os.path.join(galaxypath, f"psf_patched_{self.band}.fits"))[0] if os.path.exists(os.path.join(galaxypath, f"psf_patched_{self.band}.fits")) else None
-
-        self.model_im = self.get_composed_data(galaxypath, self.band, idx=1, fit_type=self.fit_type)
-        if self.plotrelresid:
-            self.residual_im = self.get_composed_data(galaxypath, self.band, idx=3, fit_type=self.fit_type)
-        else:
-            self.residual_im = self.get_composed_data(galaxypath, self.band, idx=2, fit_type=self.fit_type)
-        
-        imconfig = self.getconfigim(galaxypath, config_path, np.shape(self.sci_im), maxThreads=self.gui_config["imfit_maxthreads"])
-        self.config_im = imconfig
-        self.config_residual_im = self.getconfigresid(self.sci_im, self.config_im, self.mask_fits.data, self.plotrelresid)
 
         galname = self.selected_galaxy_path.name
         if ellipse_fit_p != None:
@@ -598,6 +540,18 @@ class MainWindow(QMainWindow):
         self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
         self.currentgalaxytext.repaint()
 
+        jpg_image_path = os.path.join(galaxypath, "image.jpg")
+        fits_image_path = os.path.join(galaxypath, f"image_{self.band}.fits") 
+        fits_invvar_image_path = os.path.join(galaxypath, f"image_{self.band}_invvar.fits")
+        fits_psf_path = os.path.join(galaxypath, f"psf_patched_{self.band}.fits")
+
+        mask_path = os.path.join(galaxypath, f"image_mask.fits")
+        config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
+        fits_composed_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_composed.fits")
+
+        self.dataset = DataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fits_composed_path)
+        self.dataset.load_all()
+
         self.refresh_tabledata()
         self.refresh_conf()
         self.refresh_fitparams()
@@ -616,14 +570,14 @@ class MainWindow(QMainWindow):
                     # layout.removeItem(item)
  
     def plot_image(self):
-        self.img.plot(self.sci_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=self.current_ellipse_params, plottext=f"{self.band} Band Image")
+        self.img.plot(self.dataset.fits_image, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=self.current_ellipse_params, plottext=f"{self.band} Band Image")
 
     def plot_model(self):
         if self.is_1d_mode:
             if self.radial_data is not None:
                 self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
                 return
-        self.model.plot(self.model_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
+        self.model.plot(self.dataset.fits_composed[Composed.MODEL.value], limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
 
     def plot_residual(self):
         if self.is_1d_mode:
@@ -644,17 +598,18 @@ class MainWindow(QMainWindow):
         if self.plotrelresid:
             plottext = "(Image - Model)/Image" 
             limits = self.gui_config["plot_relresid_limits"]
+            self.resid.plot(self.dataset.fits_composed[Composed.RELRESID.value], limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
         else:
             plottext = "Image - Model"
             limits = self.gui_config["plot_resid_limits"]
-        self.resid.plot(self.residual_im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
+            self.resid.plot(self.dataset.fits_composed[Composed.RESID.value], limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
 
     def plot_config(self):
         if self.is_1d_mode:
             if self.radial_data is not None:
                 self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
                 return
-        self.configimg.plot(self.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext="2D Config Image")
+        self.configimg.plot(self.dataset.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext="2D Config Image")
 
     def plot_config_residual(self):
         if self.is_1d_mode:
@@ -678,41 +633,7 @@ class MainWindow(QMainWindow):
         else:
             plottext = "Image - Config"
             limits = self.gui_config["plot_resid_limits"]
-        self.configresid.plot(self.config_residual_im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext)
-
-    def profile_from_image(self, image_data, pa, length, surf_bright=False):
-        try:
-            pa = np.deg2rad(pa + 90) # Need to account for the offset that imfit gives lol
-            # length = int(np.shape(image_data)[0]*np.cos(np.pi/4))
-
-            c = (int(image_data.shape[0]/2)-1, int(image_data.shape[1]/2)-1) # Just assuming the center of the galaxy is the center of the image
-
-            x0 = c[0] + np.cos(pa)*length
-            x1 = c[0] + np.cos(pa+np.pi)*length
-
-            y0 = c[1] + np.sin(pa)*length
-            y1 = c[1] + np.sin(pa+np.pi)*length
-
-            npts = 1000
-            x, y = np.linspace(x0, x1, npts), np.linspace(y0, y1, npts)
-
-            coords = np.array([x,y])
-            prof = scipy.ndimage.map_coordinates(image_data, coords, cval=np.nan)
-            upper = prof[int(x.size/2):]
-            lower = np.flip(prof[:int(x.size/2)])
-            r = np.linspace(0, length/2, np.size(upper))
-            prof_avg = (upper + lower)/2 
-
-
-            prof_avg = prof_avg * u.nmgy / self.pixel_scale**2 # nmgy /pix -> nmgy/arcsec**2
-
-            if surf_bright:
-                zero_point_star_equiv = u.zero_point_flux(3631.1 * u.Jy)
-                prof_avg = u.Magnitude(prof_avg.to(u.AB, zero_point_star_equiv))
-
-            return {"r": r[prof_avg != np.nan]*self.pixel_scale, "mu": prof_avg[prof_avg != np.nan].value}
-        except:
-            return None
+        self.configresid.plot(self.dataset.getconfigresid(self.plotrelresid), limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext)
 
     def get_radial_data(self):
         if self.current_ellipse_params is None or self.current_ellipse_params.empty:
@@ -728,34 +649,36 @@ class MainWindow(QMainWindow):
 
         zeropoint = 22.5
 
-        mask = self.mask_fits.data
-        sci_image = np.where(mask == 0, self.sci_fits.data, 0)
-        image_host = self.profile_from_image(sci_image, host_pa, host_len, surf_bright=True)
-        image_polar = self.profile_from_image(sci_image, polar_pa, polar_len, surf_bright=True)
+        mask = self.dataset.fits_mask
+        sci_image = np.where(mask == 0, self.dataset.fits_image, 0)
+        config_im = self.dataset.config_im
 
-        model_host = self.profile_from_image(self.model_im, host_pa, host_len, surf_bright=True)
-        model_polar = self.profile_from_image(self.model_im, polar_pa, polar_len, surf_bright=True)
+        image_host = profile_from_image(sci_image, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True)
+        image_polar = profile_from_image(sci_image, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True)
+
+        model_host = profile_from_image(config_im, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True)
+        model_polar = profile_from_image(config_im, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True)
         
         try:
             if self.plotrelresid:
-                residual_data = np.where(sci_image != 0, (sci_image - self.model_im)/sci_image, 0)
+                residual_data = np.where(sci_image != 0, (sci_image - config_im)/sci_image, 0)
             else:
-                residual_data = sci_image - self.model_im
-            residual_host = self.profile_from_image(residual_data, host_pa, host_len)
-            residual_polar = self.profile_from_image(residual_data, polar_pa, polar_len)
+                residual_data = sci_image - config_im
+            residual_host = profile_from_image(residual_data, host_pa, host_len, self.dataset.pixel_scale)
+            residual_polar = profile_from_image(residual_data, polar_pa, polar_len, self.dataset.pixel_scale) 
         except:
             residual_host = residual_polar = None
 
-        if self.config_im.size != 0:
-            config_host = self.profile_from_image(self.config_im, host_pa, host_len, surf_bright=True) 
-            config_polar = self.profile_from_image(self.config_im, polar_pa, polar_len, surf_bright=True)
+        if config_im.size != 0:
+            config_host = profile_from_image(config_im, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True) 
+            config_polar = profile_from_image(config_im, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True)
 
             if self.plotrelresid:
-                config_residual_data = np.where(sci_image !=0, (sci_image - self.config_im)/sci_image, 0)
+                config_residual_data = np.where(sci_image !=0, (sci_image - config_im)/sci_image, 0)
             else:
-                config_residual_data = sci_image - self.config_im
-            config_residual_host = self.profile_from_image(config_residual_data, host_pa, host_len)
-            config_residual_polar = self.profile_from_image(config_residual_data, polar_pa, polar_len)
+                config_residual_data = sci_image - config_im
+            config_residual_host = profile_from_image(config_residual_data, host_pa, host_len, self.dataset.pixel_scale)
+            config_residual_polar = profile_from_image(config_residual_data, polar_pa, polar_len, self.dataset.pixel_scale)
         else:
             config_host = config_polar = config_residual_host = config_residual_polar = None
 
