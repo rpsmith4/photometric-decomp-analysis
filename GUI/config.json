@@ -17,5 +17,6 @@
     "ui_scale": 1,
     "show_phot_slits": 0,
     "imfit_path": "",
-    "ds9_path": ""
+    "ds9_path": "",
+    "data_type": "DESI"
 }
