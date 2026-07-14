@@ -26,7 +26,7 @@ sys.path.append(os.path.join(BASE_DIR, 'decomposer/manual_fitting'))
 from photometric_cut_helpers import pixel_scale_from_header_arcsec_per_pix
 
 class DataSet():
-    def __init__(self, jpg_image_path: pathlib.PosixPath = None, fits_image_path: pathlib.PosixPath = None, fits_invvar_image_path: pathlib.PosixPath = None, fits_psf_path: pathlib.PosixPath = None, mask_path: pathlib.PosixPath = None, config_path: pathlib.PosixPath = None, fits_composed_path: pathlib.PosixPath = None):
+    def __init__(self, jpg_image_path: pathlib.PosixPath = None, fits_image_path: pathlib.PosixPath = None, fits_invvar_image_path: pathlib.PosixPath = None, fits_psf_path: pathlib.PosixPath = None, mask_path: pathlib.PosixPath = None, config_path: pathlib.PosixPath = None, fit_results_path:pathlib.PosixPath = None, fits_composed_path: pathlib.PosixPath = None):
         self.jpg_image_path = jpg_image_path
         self.jpg_image = np.array([])
 
@@ -48,6 +48,10 @@ class DataSet():
         self.config_model_desc = None
         self.config_im = np.array([])
         
+        self.fit_results_path = fit_results_path
+        self.fit_results_text = None
+        self.fit_results = None
+
         self.fits_composed_path = fits_composed_path
         self.fits_composed = np.array([])
 
@@ -55,11 +59,12 @@ class DataSet():
         self.jpg_image = np.asarray(Image.open(self.jpg_image_path))
         self.jpg_image = np.flipud(self.jpg_image)
     
-    def load_fits_image(self):
+    def load_fits_image(self, apply_mask = True):
         fits_file = fits.open(self.fits_image_path)[0]
         self.fits_image = fits.getdata(self.fits_image_path)
         self.pixel_scale = pixel_scale_from_header_arcsec_per_pix(fits_file)
-        print(self.pixel_scale)
+        if self.apply_mask:
+            self.fits_image = self.apply_mask(self.fits_image)
     
     def load_fits_invvar_image(self):
         self.fits_invvar_image = fits.getdata(self.fits_invvar_image_path)
@@ -72,33 +77,51 @@ class DataSet():
     
     def load_composed(self, apply_mask = True):
         # idx = 0 -> Regular image with mask applied, 1 -> Model image, 2 -> Residual, 3 -> Percent residual, 4 Onwards -> Components of model
-        self.fits_composed = fits.getdata(self.fits_composed_path)
-        if apply_mask:
-            self.fits_composed[0] = np.where(self.fits_mask > 0, 0, self.fits_composed[0])
+        try:
+            self.fits_composed = fits.getdata(self.fits_composed_path)
+            if apply_mask:
+                self.fits_composed[0] = np.where(self.fits_mask > 0, 0, self.fits_composed[0])
+        except:
+            self.fits_composed = None
     
     def load_config(self):
-        self.config_model_desc = pyimfit.parse_config_file(self.config_path)
-        self.config_dict = self.config_model_desc.getModelAsDict()
+        try:
+            self.config_model_desc = pyimfit.parse_config_file(self.config_path)
+            self.config_dict = self.config_model_desc.getModelAsDict()
 
-        # Add function labels to config_dict
-        # Want to ensure that I actually keep the labels since pyimift is incapable of doing so for some reason
-        labels = read_function_labels(self.config_path)
-        function_list = self.config_dict["function_sets"][0]["function_list"]
-        for i, func in enumerate(function_list):
-            if i < len(labels):
-                func['label'] = labels[i]
-            else:
-                func['label'] = None
+            # Add function labels to config_dict
+            # Want to ensure that I actually keep the labels since pyimift is incapable of doing so for some reason
+            labels = read_function_labels(self.config_path)
+            function_list = self.config_dict["function_sets"][0]["function_list"]
+            for i, func in enumerate(function_list):
+                if i < len(labels):
+                    func['label'] = labels[i]
+                else:
+                    func['label'] = None
+            self.getconfigim()
+        except:
+            self.config_model_desc = None
+            self.config_dict = None
+    
+    def load_fit_results(self):
+        try:
+            with open(self.fit_results_path, "r") as f:
+                self.fit_results_text = f.readlines()
+            self.fit_results = parse_results(self.fit_results_path)
+        except:
+            print(tb.format_exc())
+            self.fit_results_text = None
+            self.fit_results = None
     
     def load_all(self):
         self.load_jpg()
+        self.load_mask()
         self.load_fits_image()
         self.load_fits_invvar_image()
-        self.load_mask()
         self.load_psf()
+        self.load_fit_results()
         self.load_composed()
         self.load_config()
-        self.getconfigim()
 
     def getconfigim(self, maxThreads=4, apply_psf = True):
         try:
@@ -131,6 +154,11 @@ class DataSet():
 
     def apply_mask(self, im):
         return np.where(self.fits_mask > 0, 0, im)
+
+class DESIDataSet(DataSet):
+    def __init__(self, jpg_image_path = None, fits_image_path = None, fits_invvar_image_path = None, fits_psf_path = None, mask_path = None, config_path = None, fit_results_path = None, fits_composed_path = None):
+        super().__init__(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
+
 
 def read_function_labels(config_path):
     """

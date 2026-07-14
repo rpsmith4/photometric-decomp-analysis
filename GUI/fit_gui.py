@@ -412,26 +412,10 @@ class MainWindow(QMainWindow):
             print(e)
             return
     
-    def refresh_conf(self, config_path = None):
-        # Store the current config model for later editing
-        self.current_config_model = None
+    def refresh_conf(self):
         try:
-            if config_path == None:
-                config_path = self.get_config_path(self.selected_galaxy_path, self.band, self.fit_type)
-            config_model = pyimfit.parse_config_file(config_path)
-            self.current_config_model = config_model
-            config_dict = config_model.getModelAsDict()
-            # Add function labels to config_dict
-            # Want to ensure that I actually keep the labels since pyimift is incapable of doing so for some reason
-            labels = read_function_labels(config_path)
+            config_dict = self.dataset.config_dict
             function_list = config_dict["function_sets"][0]["function_list"]
-            for i, func in enumerate(function_list):
-                if i < len(labels):
-                    func['label'] = labels[i]
-                else:
-                    func['label'] = None
-            
-            self.current_config_dict = config_dict   
 
             layout: QVBoxLayout = self.ui.configsliders
             # Reset the layout first
@@ -483,25 +467,14 @@ class MainWindow(QMainWindow):
             pass
     
     def refresh_fitparams(self):
-        params_file = None
-        fit_results = None
         try:
-            with open(os.path.join(self.selected_galaxy_path, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
-                params_file = f.readlines()
-            fit_params_path = os.path.join(self.selected_galaxy_path, f"{self.fit_type}_{self.band}_fit_params.txt")
-            if os.path.exists(fit_params_path):
-                try:
-                    fit_results = parse_results(fit_params_path)[0]
-                except Exception:
-                    fit_results = None
-            self.highlight_boundary_params(params_file, fit_results)
+            self.highlight_boundary_params(self.dataset.fit_results_text, self.dataset.fit_results)
         except:
             self.params.setPlainText("Fit Params not found!")
             self.params.repaint()
+            print(tb.format_exc())
     
     def refresh_plots(self):
-        galaxypath = self.selected_galaxy_path
-        config_path = self.get_config_path(self.selected_galaxy_path, self.band, self.fit_type)
         self.jpg_img_plot.plot(self.dataset.jpg_image, limits=None, cmap=None, stretch=None, plottext="JPG Image", cbar=False)
 
 
@@ -548,8 +521,12 @@ class MainWindow(QMainWindow):
         mask_path = os.path.join(galaxypath, f"image_mask.fits")
         config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
         fits_composed_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_composed.fits")
+        fit_results_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt")
 
-        self.dataset = DataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fits_composed_path)
+        if self.gui_config["data_type"] == "DESI":
+            self.dataset = DESIDataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
+        else:
+            self.dataset = DataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
         self.dataset.load_all()
 
         self.refresh_tabledata()
@@ -577,7 +554,11 @@ class MainWindow(QMainWindow):
             if self.radial_data is not None:
                 self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
                 return
-        self.model.plot(self.dataset.fits_composed[Composed.MODEL.value], limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
+        try:
+            im = self.dataset.fits_composed[Composed.MODEL.value]
+        except:
+            im = np.array([])
+        self.model.plot(im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
 
     def plot_residual(self):
         if self.is_1d_mode:
@@ -598,11 +579,19 @@ class MainWindow(QMainWindow):
         if self.plotrelresid:
             plottext = "(Image - Model)/Image" 
             limits = self.gui_config["plot_relresid_limits"]
-            self.resid.plot(self.dataset.fits_composed[Composed.RELRESID.value], limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
+            try:
+                im = self.dataset.fits_composed[Composed.RELRESID.value]
+            except:
+                im = np.array([])
+            self.resid.plot(im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
         else:
             plottext = "Image - Model"
             limits = self.gui_config["plot_resid_limits"]
-            self.resid.plot(self.dataset.fits_composed[Composed.RESID.value], limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
+            try:
+                im = self.dataset.fits_composed[Composed.RESID.value]
+            except:
+                im = np.array([])
+            self.resid.plot(im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
 
     def plot_config(self):
         if self.is_1d_mode:
@@ -700,17 +689,17 @@ class MainWindow(QMainWindow):
 
     def highlight_boundary_params(self, params_file_lines, fit_results):
         if params_file_lines is None:
-            return
+            return 
 
-        if fit_results is None or self.current_config_dict is None:
+        if fit_results is None or self.dataset.config_dict is None:
             self.params.setHtml("<pre>" + html.escape("".join(params_file_lines)) + "</pre>")
             return
 
         try:
-            function_list = self.current_config_dict["function_sets"][0]["function_list"]
+            function_list = self.dataset.config_dict["function_sets"][0]["function_list"]
         except Exception:
             self.params.setHtml("<pre>" + html.escape("".join(params_file_lines)) + "</pre>")
-            return
+            raise
 
         html_lines = []
         func_idx = -1
@@ -722,7 +711,7 @@ class MainWindow(QMainWindow):
                 continue
 
             highlight = False
-            if "+/-" in line and func_idx >= 0 and func_idx in fit_results:
+            if "+/-" in line and func_idx >= 0 and func_idx in fit_results[0]:
                 m = re.match(r"^\s*(\S+)\s+([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)\s*#\s*\+/\-\s*([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)", line)
                 if m:
                     param_name = m.group(1)
@@ -821,12 +810,11 @@ class MainWindow(QMainWindow):
         if self.selected_galaxy_path is None:
             print("No galaxy selected to save config")
             return
-        p = self.selected_galaxy_path
-        fit_type = self.ui.fit_type_combo.currentText()
-        config_path = self.get_config_path(p, self.band, fit_type)
+
+        config_path = self.dataset.config_path
 
         # If we have a config model and param_widgets, update the config model with the new values
-        model_dict = self.current_config_dict
+        model_dict = self.dataset.config_dict
         function_list = model_dict["function_sets"][0]["function_list"]
         # Update parameter values from widgets
         for func_idx, func in enumerate(function_list):
@@ -860,9 +848,11 @@ class MainWindow(QMainWindow):
         if f: f.close()
 
         # Refresh config image and residual
-        self.changegal()
+        self.dataset.load_config()
+        self.refresh_conf()
+        self.refresh_plots()
     
-    def copy_parameters_from_band(self):
+    def copy_parameters_from_band(self): # TODO need to update this to work with the new refactor
         """Open dialog to copy parameters from another band to current band."""
         if self.selected_galaxy_path is None:
             QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
@@ -976,14 +966,14 @@ class MainWindow(QMainWindow):
     
     def regenconf(self):
         ### TODO: Make this a bit more general, ideally shouldn't need to load the data here, but could instead load it in the config generation script itself maybe
+        ### Actually nevermind, the new dataset class kinda helps here
         galpath = self.selected_galaxy_path
-        img_file = glob.glob(os.path.join(galpath, f"image_{self.band}.fits"))[0]
 
-        img = fits.open(img_file)[0]
-        mask = fits.getdata(os.path.join(galpath, "image_mask.fits"))
+        img = fits.open(self.dataset.fits_image_path)[0]
+        mask = self.dataset.fits_mask
             
-        psf = fits.getdata(os.path.join(galpath, f"psf_patched_{self.band}.fits"))
-        invvar = fits.getdata(os.path.join(galpath, f"image_{self.band}_invvar.fits"))
+        psf = self.dataset.fits_psf
+        invvar = self.dataset.fits_invvar_image
         outfile_name = f"{self.fit_type}_{self.band}.dat" 
         outfile = os.path.join(galpath, outfile_name)
         galname = self.selected_galaxy_path.name
@@ -991,7 +981,6 @@ class MainWindow(QMainWindow):
         if ellipse_fit_data_gal.empty:
             QMessageBox.critical(self, "Failed to Generate Config", f"Galaxy {galname} not in Ellipse Fit Data!")
             return
-        model_desc_dict = {} # Not really needed anymore I think
         master_table_data_gal = self.master_table_data[self.master_table_data["NAME"] == galname]
 
 
@@ -1006,7 +995,7 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.No
                 )
                 if answer == QMessageBox.StandardButton.Yes:
-                    generate_config(
+                    self.dataset.config_model_desc = generate_config(
                         galpath,
                         self.band,
                         img,
@@ -1015,7 +1004,6 @@ class MainWindow(QMainWindow):
                         invvar,
                         type="ring",
                         ellipse_fit_data=ellipse_fit_data_gal,
-                        model_desc_dict=model_desc_dict,
                         galaxy_type=master_table_data_gal,
                         plot_slits=self.gui_config["show_phot_slits"],
                         outfile_name=outfile,
@@ -1025,8 +1013,7 @@ class MainWindow(QMainWindow):
                 else:
                     pass
             else:
-                print(self.gui_config["show_phot_slits"])
-                generate_config(
+                self.dataset.config_model_desc = generate_config(
                     galpath,
                     self.band,
                     img,
@@ -1035,7 +1022,6 @@ class MainWindow(QMainWindow):
                     invvar,
                     type="ring",
                     ellipse_fit_data=ellipse_fit_data_gal,
-                    model_desc_dict=model_desc_dict,
                     galaxy_type=master_table_data_gal,
                     plot_slits=self.gui_config["show_phot_slits"],
                     outfile_name=outfile,
