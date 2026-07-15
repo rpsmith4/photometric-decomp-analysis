@@ -48,7 +48,7 @@ from photometric_cut import photometric_cut, fold_cut_to_radial_profile
 from photometric_cut_helpers import pixel_scale_from_header_arcsec_per_pix
 
 from plot_canvas import PlotCanvas
-from param_slider import ParamSliderWidget
+from param_slider import ParamSliderWidget,ConfigAdjustWidget
 from copy_params import CopyParametersDialog
 from utils import *
 
@@ -414,55 +414,18 @@ class MainWindow(QMainWindow):
     
     def refresh_conf(self):
         try:
-            config_dict = self.dataset.config_dict
-            function_list = config_dict["function_sets"][0]["function_list"]
-
             layout: QVBoxLayout = self.ui.configsliders
             # Reset the layout first
             try:
-                self.clearLayout(layout)
+                clearLayout(layout)
             except Exception as e:
                 print(e)
                 pass
-            self.param_widgets = {}
-            for func_idx, func in enumerate(function_list):
-                params = func["parameters"]
-                label = func["label"]
 
-                h = QHBoxLayout()
-                comp_sel = QCheckBox()
-                comp_sel.setChecked(True)
-                comp_sel.setFixedWidth(5)
-                comp_sel.stateChanged.connect(
-                    lambda state, func_idx=func_idx: self.on_component_checkbox_changed(func_idx, state)
-                )
-
-                label_text = QTextBrowser()
-                label_text.setText(label)
-                label_text.setMaximumHeight(30)
-                label_text.setMinimumWidth(50)
-                label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
-                label_text.setAlignment(QtCore.Qt.AlignCenter)
-
-                h.addWidget(comp_sel)
-                h.addWidget(label_text)
-                layout.addLayout(h)
-
-                for param in params.keys():
-                    initval = params[param][0]
-                    fixed = False
-                    if params[param][1] == 'fixed':
-                        lowlim = initval
-                        hilim = initval
-                        fixed = True
-                    else:
-                        lowlim = params[param][1]
-                        hilim = params[param][2]
-
-                    # Use (func_idx, param) as key to distinguish duplicate param names
-                    self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), label, layout)
+            self.config_adjust = ConfigAdjustWidget(parent=layout, dataset=self.dataset)
+            self.config_adjust.draw_config_adjust()
         except:
-            self.clearLayout(self.ui.configsliders)
+            clearLayout(self.ui.configsliders)
             print(traceback.format_exc())
             pass
     
@@ -499,12 +462,12 @@ class MainWindow(QMainWindow):
         galaxy = galaxypath.name
         try:
             master_table_data_gal = self.master_table_data[self.master_table_data["NAME"] == galaxy]
-            self.curr_z = master_table_data_gal["REDSHIFT"].iloc[0]
-            self.curr_d_A = cosmo.angular_diameter_distance(z=self.curr_z)
+            self.dataset.z = master_table_data_gal["REDSHIFT"].iloc[0]
+            self.dataset.d_A = cosmo.angular_diameter_distance(z=self.dataset.z)
         except:
-            self.curr_d_A = self.curr_z = None
-        if self.curr_z != self.curr_z:
-            self.curr_d_A = self.curr_z = None
+            self.dataset.z = self.dataset.d_A = None
+        if self.dataset.z != self.dataset.z:
+            self.dataset.z = self.dataset.d_A = None
 
     def changegal(self):
         # Update UI based on the currently selected leaf galaxy folder
@@ -534,18 +497,6 @@ class MainWindow(QMainWindow):
         self.refresh_fitparams()
         self.refresh_plots()
 
-    def clearLayout(self, layout):
-        if isinstance(layout, QLayout):
-            while layout.count():
-                item = layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None:
-                    widget.deleteLater()
-                    # layout.removeWidget(widget)
-                else:
-                    self.clearLayout(item.layout())
-                    # layout.removeItem(item)
- 
     def plot_image(self):
         self.img.plot(self.dataset.fits_image, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=self.current_ellipse_params, plottext=f"{self.band} Band Image")
 
@@ -573,7 +524,7 @@ class MainWindow(QMainWindow):
                     'Residual Radial Profile',
                     y_label=y_label,
                     is_resid=True,
-                    d_A=self.curr_d_A
+                    d_A=self.dataset.d_A
                 )
                 return
         if self.plotrelresid:
@@ -679,13 +630,6 @@ class MainWindow(QMainWindow):
             'config_residual': {'host': config_residual_host, 'polar': config_residual_polar},
         }
  
-    def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
-        func_idx, paramname = paramkey
-        ndigits = 6
-        widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits, d_A=self.curr_d_A)
-        widget.setMinimumWidth(100)
-        layout.addWidget(widget)
-        self.param_widgets[paramkey] = widget
 
     def highlight_boundary_params(self, params_file_lines, fit_results):
         if params_file_lines is None:
@@ -821,8 +765,8 @@ class MainWindow(QMainWindow):
             params = func["parameters"]
             for param in params.keys():
                 key = (func_idx, param)
-                if key in self.param_widgets:
-                    values = self.param_widgets[key].get_values()
+                if key in self.config_adjust.param_widgets:
+                    values = self.config_adjust.param_widgets[key].get_values()
                     if values['fixed']:
                         # Only value and 'fixed' string
                         params[param] = [values['value'], 'fixed']
@@ -1035,7 +979,6 @@ class MainWindow(QMainWindow):
         
         self.changegal()
     
-    # This currently only allows for manual refitting of the host. For the polar component, just swap out line 1160 'host' with 'polar'. I don't know if you want separate buttons to do that or a toggle, but either way I'm not 100% sure how that would exactly that would need to be included.
     def openonedfitdialog(self):
         if self.selected_galaxy_path is None:
             QMessageBox.warning(self, "No galaxy selected", "Please select a galaxy first.")
@@ -1043,7 +986,7 @@ class MainWindow(QMainWindow):
         
         galpath = self.selected_galaxy_path
         manual_decomp_path = os.path.join(MAINDIR, "decomposer", "manual_fitting", "test_manual_decomposer.py")
-        mask_path = os.path.join(galpath, "image_mask.fits")
+        mask_path = self.dataset.mask_path
         galname = self.selected_galaxy_path.name
         self.component = 'host' if self.ui.hostradio.isChecked() else 'polar'
         try:
@@ -1072,8 +1015,6 @@ class MainWindow(QMainWindow):
     def setresidtype(self, state):
         self.plotrelresid = state 
         self.changegal()
-        
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

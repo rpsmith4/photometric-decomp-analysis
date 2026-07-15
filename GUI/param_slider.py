@@ -9,6 +9,69 @@ from pathlib import Path
 import astropy.units as u
 import math
 
+from utils import clearLayout
+from utils import DataSet
+
+class ConfigAdjustWidget(QWidget):
+    def __init__(self, parent, dataset: DataSet):
+        self.layout = parent
+        self.dataset = dataset
+        self.config_dict = self.dataset.config_dict
+        self.function_list = self.config_dict["function_sets"][0]["function_list"]
+        self.param_widgets = {}
+    
+    def draw_config_adjust(self):
+            self.param_widgets = {}
+            for func_idx, func in enumerate(self.function_list):
+                params = func["parameters"]
+                label = func["label"]
+
+                h = QHBoxLayout()
+                comp_sel = QCheckBox()
+                comp_sel.setChecked(True)
+                comp_sel.setFixedWidth(5)
+                comp_sel.stateChanged.connect(
+                    lambda state, func_idx=func_idx: self.on_component_checkbox_changed(func_idx, state)
+                )
+
+                label_text = QTextBrowser()
+                label_text.setText(label)
+                label_text.setMaximumHeight(30)
+                label_text.setMinimumWidth(50)
+                label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+                label_text.setAlignment(QtCore.Qt.AlignCenter)
+
+                h.addWidget(comp_sel)
+                h.addWidget(label_text)
+                self.layout.addLayout(h)
+
+                for param in params.keys():
+                    initval = params[param][0]
+                    fixed = False
+                    if params[param][1] == 'fixed':
+                        lowlim = initval
+                        hilim = initval
+                        fixed = True
+                    else:
+                        lowlim = params[param][1]
+                        hilim = params[param][2]
+
+                    # Use (func_idx, param) as key to distinguish duplicate param names
+                    self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), label, self.layout)
+
+    def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
+        func_idx, paramname = paramkey
+        ndigits = 6
+        widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits, d_A=self.dataset.d_A)
+        widget.setMinimumWidth(100)
+        layout.addWidget(widget)
+        self.param_widgets[paramkey] = widget
+
+    def on_component_checkbox_changed(self, func_idx, state): # Change the config file to a new one with only the selected parameters, also change the composed image and the mask
+        # Have to somehow get the information from the mainwindow
+        print("Hello")
+        print(state)
+
 class ParamSliderWidget(QWidget):
     def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None, d_A=None):
         super().__init__(parent)
