@@ -13,26 +13,33 @@ from utils import clearLayout
 from utils import DataSet
 
 class ConfigAdjustWidget(QWidget):
-    def __init__(self, parent, dataset: DataSet):
+    def __init__(self, parent, dataset: DataSet, config_callback=None, selected_indices=None):
+        super().__init__()
         self.layout = parent
         self.dataset = dataset
+        self.config_callback = config_callback
         self.config_dict = self.dataset.config_dict
         self.function_list = self.config_dict["function_sets"][0]["function_list"]
         self.param_widgets = {}
+        self.component_checkboxes = {}
+        self.selected_indices = set(selected_indices or range(len(self.function_list)))
+        self.current_config_path = self.dataset.config_path
     
     def draw_config_adjust(self):
             self.param_widgets = {}
+            self.component_checkboxes = {}
             for func_idx, func in enumerate(self.function_list):
                 params = func["parameters"]
                 label = func["label"]
 
                 h = QHBoxLayout()
                 comp_sel = QCheckBox()
-                comp_sel.setChecked(True)
+                comp_sel.setChecked(func_idx in self.selected_indices)
                 comp_sel.setFixedWidth(5)
                 comp_sel.stateChanged.connect(
                     lambda state, func_idx=func_idx: self.on_component_checkbox_changed(func_idx, state)
                 )
+                self.component_checkboxes[func_idx] = comp_sel
 
                 label_text = QTextBrowser()
                 label_text.setText(label)
@@ -67,10 +74,27 @@ class ConfigAdjustWidget(QWidget):
         layout.addWidget(widget)
         self.param_widgets[paramkey] = widget
 
-    def on_component_checkbox_changed(self, func_idx, state): # Change the config file to a new one with only the selected parameters, also change the composed image and the mask
-        # Have to somehow get the information from the mainwindow
-        print("Hello")
-        print(state)
+    def update_enabled_state(self):
+        for func_idx, checkbox in self.component_checkboxes.items():
+            enabled = func_idx in self.selected_indices
+            checkbox.setChecked(enabled)
+            for (row_idx, _), widget in self.param_widgets.items():
+                if row_idx == func_idx:
+                    widget.setEnabled(enabled)
+
+    def on_component_checkbox_changed(self, func_idx, state):
+        enabled = state == 2
+        func_idx = int(func_idx)
+
+        if enabled:
+            self.selected_indices.add(func_idx)
+        else:
+            self.selected_indices.discard(func_idx)
+
+        # self.update_enabled_state()
+
+        if self.config_callback is not None:
+            self.config_callback(sorted(self.selected_indices))
 
 class ParamSliderWidget(QWidget):
     def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None, d_A=None):

@@ -26,7 +26,7 @@ sys.path.append(os.path.join(BASE_DIR, 'decomposer/manual_fitting'))
 from photometric_cut_helpers import pixel_scale_from_header_arcsec_per_pix
 
 class DataSet():
-    def __init__(self, jpg_image_path: pathlib.PosixPath = None, fits_image_path: pathlib.PosixPath = None, fits_invvar_image_path: pathlib.PosixPath = None, fits_psf_path: pathlib.PosixPath = None, mask_path: pathlib.PosixPath = None, config_path: pathlib.PosixPath = None, fit_results_path:pathlib.PosixPath = None, fits_composed_path: pathlib.PosixPath = None):
+    def __init__(self, jpg_image_path: pathlib.PosixPath = None, fits_image_path: pathlib.PosixPath = None, fits_invvar_image_path: pathlib.PosixPath = None, fits_psf_path: pathlib.PosixPath = None, mask_path: pathlib.PosixPath = None, config_path: pathlib.PosixPath = None, fit_results_path:pathlib.PosixPath = None, fits_composed_path: pathlib.PosixPath = None, z: float = None):
         self.jpg_image_path = jpg_image_path
         self.jpg_image = np.array([])
 
@@ -55,25 +55,40 @@ class DataSet():
         self.fits_composed_path = fits_composed_path
         self.fits_composed = np.array([])
 
+        self.z = z
+        self.d_A = None
+
     def load_jpg(self):
         self.jpg_image = np.asarray(Image.open(self.jpg_image_path))
         self.jpg_image = np.flipud(self.jpg_image)
     
     def load_fits_image(self, apply_mask = True):
-        fits_file = fits.open(self.fits_image_path)[0]
-        self.fits_image = fits.getdata(self.fits_image_path)
-        self.pixel_scale = pixel_scale_from_header_arcsec_per_pix(fits_file)
-        if self.apply_mask:
-            self.fits_image = self.apply_mask(self.fits_image)
+        try:
+            fits_file = fits.open(self.fits_image_path)[0]
+            self.fits_image = fits.getdata(self.fits_image_path)
+            self.pixel_scale = pixel_scale_from_header_arcsec_per_pix(fits_file)
+            if self.apply_mask:
+                self.fits_image = self.apply_mask(self.fits_image)
+        except:
+            print(tb.format_exc())
+            pass
     
     def load_fits_invvar_image(self):
-        self.fits_invvar_image = fits.getdata(self.fits_invvar_image_path)
+        try:
+            self.fits_invvar_image = fits.getdata(self.fits_invvar_image_path)
+        except:
+            print(tb.format_exc())
+            pass
     
     def load_mask(self):
         self.fits_mask = fits.getdata(self.mask_path)
     
     def load_psf(self):
-        self.fits_psf = fits.getdata(self.fits_psf_path)
+        try:
+            self.fits_psf = fits.getdata(self.fits_psf_path)
+        except:
+            print(tb.format_exc())
+            pass
     
     def load_composed(self, apply_mask = True):
         # idx = 0 -> Regular image with mask applied, 1 -> Model image, 2 -> Residual, 3 -> Percent residual, 4 Onwards -> Components of model
@@ -309,3 +324,13 @@ def profile_from_image(image_data, pa, length, pixel_scale=None, surf_bright=Fal
     except:
         print(tb.format_exc())
         return None
+
+def clearLayout(layout):
+    if isinstance(layout, QLayout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+            else:
+                clearLayout(item.layout())

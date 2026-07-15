@@ -412,18 +412,28 @@ class MainWindow(QMainWindow):
             print(e)
             return
     
-    def refresh_conf(self):
+    def refresh_conf(self, redraw=True):
         try:
             layout: QVBoxLayout = self.ui.configsliders
             # Reset the layout first
             try:
-                clearLayout(layout)
+                if redraw:
+                    clearLayout(layout)
             except Exception as e:
                 print(e)
                 pass
 
-            self.config_adjust = ConfigAdjustWidget(parent=layout, dataset=self.dataset)
-            self.config_adjust.draw_config_adjust()
+            if redraw:
+                selected_indices = self.current_selected_indices
+                if selected_indices is None:
+                    selected_indices = set(range(len(self.dataset.config_dict["function_sets"][0]["function_list"]))) if self.dataset.config_dict is not None else None
+                self.config_adjust = ConfigAdjustWidget(
+                    parent=layout,
+                    dataset=self.dataset,
+                    config_callback=self.on_component_selection_changed,
+                    selected_indices=selected_indices,
+                )
+                self.config_adjust.draw_config_adjust()
         except:
             clearLayout(self.ui.configsliders)
             print(traceback.format_exc())
@@ -793,7 +803,8 @@ class MainWindow(QMainWindow):
 
         # Refresh config image and residual
         self.dataset.load_config()
-        self.refresh_conf()
+        self.refresh_conf(redraw=False)
+        # self.refresh_conf()
         self.refresh_plots()
     
     def copy_parameters_from_band(self): # TODO need to update this to work with the new refactor
