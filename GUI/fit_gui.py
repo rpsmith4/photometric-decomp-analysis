@@ -518,7 +518,7 @@ class MainWindow(QMainWindow):
     def plot_model(self):
         if self.is_1d_mode:
             if self.radial_data is not None:
-                self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
+                self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.dataset.d_A)
                 return
         try:
             im = self.dataset.fits_composed[Composed.MODEL.value]
@@ -562,7 +562,7 @@ class MainWindow(QMainWindow):
     def plot_config(self):
         if self.is_1d_mode:
             if self.radial_data is not None:
-                self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
+                self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.dataset.d_A)
                 return
         self.configimg.plot(self.dataset.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext="2D Config Image")
 
@@ -579,7 +579,7 @@ class MainWindow(QMainWindow):
                     'Config Residual Radial Profile',
                     y_label=y_label,
                     is_resid=True,
-                    d_A=self.curr_d_A
+                    d_A=self.dataset.d_A
                 )
                 return
         if self.plotrelresid:

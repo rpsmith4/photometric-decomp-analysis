@@ -127,7 +127,7 @@ def main(args, fit_band = 'all'):
                 # print(outfile)
                 if args.fit_type in ["2_sersic", "1_sersic_1_gauss_ring"]:
                     try:
-                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, model_desc_dict, galaxy_type = master_table_data_gal, phot_fit_type=args.component, outfile_name=outfile_name, fit_type=args.fit_type)
+                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, galaxy_type = master_table_data_gal, phot_fit_type=args.component, outfile_name=outfile_name, fit_type=args.fit_type)
                     except Exception as e:
                         print(e)
                         continue
