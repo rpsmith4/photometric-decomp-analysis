@@ -47,6 +47,20 @@ import test_manual_decomposer
 from photometric_cut import photometric_cut, fold_cut_to_radial_profile
 from photometric_cut_helpers import pixel_scale_from_header_arcsec_per_pix
 
+from plot_canvas import PlotCanvas
+from param_slider import ParamSliderWidget,ConfigAdjustWidget
+from copy_params import CopyParametersDialog
+from utils import *
+
+from enum import Enum
+
+# For indexing the composed image
+class Composed(Enum):
+    IMAGE = 0
+    MODEL = 1
+    RESID = 2
+    RELRESID = 3
+
 def open_folder(path): 
     path = os.path.abspath(path) 
     if sys.platform.startswith('win'): 
@@ -65,142 +79,6 @@ MAINDIR = Path(os.path.dirname(__file__).rpartition(LOCAL_DIR)[0])
 sys.path.append(os.path.join(MAINDIR, "decomposer"))
 import imfit_run
 import fit_monitor
-
-class PlotCanvas(FigureCanvas):
-    def __init__(self, parent = None):
-        self.fig = Figure(figsize=(250/50, 250/50), dpi=50)
-        self.ax = self.fig.subplots()
-        self.fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
-        super().__init__(self.fig)
-        self.setParent(parent)
-
-    def plot(self, im, limits, cmap, stretch=LogStretch(), ellipse_params=pd.DataFrame, plottext=None, cbar=True):
-        self.fig.clear()
-        self.ax = self.fig.subplots()
-        self.fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
-        # self.ax.set_axis_off()
-
-        if im.any():
-            if limits != None:
-                norm = ImageNormalize(stretch=stretch, vmin=limits[0], vmax=limits[1])
-                implt = self.ax.imshow(im, origin="lower", norm=norm, cmap=cmap)
-            else:
-                implt = self.ax.imshow(im, origin="lower", cmap=cmap)
-
-            if cbar:
-                # cbbox = inset_axes(self.ax, '15%', '90%', loc = 7)
-                self.cbbox = inset_axes(self.ax, '100%', '10%', loc = "lower center", borderpad=-0.3)
-                self.cbbox.tick_params(
-                    axis = 'both',
-                    left = False,
-                    top = False,
-                    right = False,
-                    bottom = False,
-                    labelleft = False,
-                    labeltop = False,
-                    labelright = False,
-                    labelbottom = False
-                )
-                [self.cbbox.spines[k].set_visible(False) for k in self.cbbox.spines]
-                self.cbbox.set_facecolor([1,1,1,0.7])
-
-                # cbaxes = inset_axes(cbbox, '30%', '95%', loc = 6)
-                cbaxes = inset_axes(self.cbbox, '90%', '30%', loc = "upper center")
-                # cb = self.fig.colorbar(implt, cax=cbaxes, orientation="horizontal")#,shrink=0.7,pad=-0.3)
-                if isinstance(stretch, LogStretch):
-                    cb = self.fig.colorbar(implt, cax=cbaxes, orientation="horizontal", ticks = LogLocator(base=10))
-                else:
-                    cb = self.fig.colorbar(implt, cax=cbaxes, orientation="horizontal")#,shrink=0.7,pad=-0.3)
-
-                cb.ax.minorticks_on()
-                
-                # cb.ax.tick_params(labelsize=15) 
-
-            if plottext != None:
-                self.ax.text(0.05, 0.95, plottext, size=15,
-                        ha="left", va="center",
-                        bbox=dict(boxstyle="square",
-                                ec=(1., 1, 1),
-                                fc=(0,0,0),
-                                ),
-                        transform=self.ax.transAxes,
-                        color="lightgreen"
-                        )
-
-
-            if not ellipse_params.empty:
-                host = ellipse_params[ellipse_params["PolarOrHost"] == "Host"].iloc[0]
-                polar = ellipse_params[ellipse_params["PolarOrHost"] == "Polar"].iloc[0]
-                imshape = im.shape
-                ell_host = matplotlib.patches.Ellipse(
-                    xy=(imshape[0]/2, imshape[1]/2),
-                    height=float(host["semi_minor"]*2),
-                    width=float(host["semi_major"]*2),
-                    angle=host["angle"],
-                    label="Host",
-                    ls="--",
-                    lw=2,
-                    color="red",
-                    fill=False
-                )
-                ell_polar = matplotlib.patches.Ellipse(
-                    xy=(imshape[0]/2, imshape[1]/2),
-                    height=float(polar["semi_minor"]*2),
-                    width=float(polar["semi_major"]*2),
-                    angle=polar["angle"],
-                    label="Polar",
-                    ls="--",
-                    lw=2,
-                    color="blue",
-                    fill=False
-                )
-                self.ax.add_patch(ell_host)
-                self.ax.add_patch(ell_polar)
-                self.ax.legend()
-        else:
-            self.ax.text(0,0.5,"Cannot find FITs image!")
-
-        self.draw()
-
-    def plot_profiles(self, host_data, polar_data, title, overplot=None, y_label='Surface Brightness (mag/arcsec^2)', surfbright=False, is_resid=False, d_A=None):
-        self.fig.clear()
-        self.ax = self.fig.subplots()
-
-        if d_A == None:
-            self.fig.subplots_adjust(left=0.13, right=0.9,bottom=0.1,top=0.90)
-        else:
-            self.fig.subplots_adjust(left=0.13, right=0.9,bottom=0.1,top=0.85)
-        self.ax.cla()
-        self.ax.set_title(title, fontsize=12)
-        try:
-            self.ax.plot(host_data['r'], host_data['mu'], label='Host', color='blue')
-            self.ax.plot(polar_data['r'], polar_data['mu'], label='Polar', color='red')
-            if overplot:
-                self.ax.plot(overplot['host']['r'], overplot['host']['mu'], 'b--', label='Host Image')
-                self.ax.plot(overplot['polar']['r'], overplot['polar']['mu'], 'r--', label='Polar Image')
-            self.ax.legend(fontsize=8)
-            self.ax.set_xlabel('Radius (arcsec)', fontsize=10)
-            self.ax.set_ylabel(y_label, fontsize=10)
-            self.ax.tick_params(labelsize=8)
-            self.ax.grid()
-            self.ax.minorticks_on()
-            if surfbright:
-                self.ax.invert_yaxis()
-
-            if is_resid:
-                self.ax.axhline(y=0, ls="--", color="black")
-
-            if d_A != None:
-                self.secax = self.ax.secondary_xaxis('top', functions=(
-                    lambda x: ((x*u.arcsec * d_A).to(u.kpc, u.dimensionless_angles())).value,
-                    lambda y: ((y*u.kpc / d_A).to(u.arcsec, u.dimensionless_angles())).value
-                    ))
-                self.secax.set_xlabel('Radius (kpc)', fontsize=10)
-        except:
-            self.ax.text(0.2,0.5, "No Radial Data!", fontsize=24)
-        self.draw()
-
-
 
 class DirOnlyChildrenFileSystemModel(QFileSystemModel):
     def __init__(self, mark_colors=None, galmarks=None, parent=None):
@@ -251,510 +129,6 @@ class DirOnlyChildrenFileSystemModel(QFileSystemModel):
 
         return super().data(index, role)
 
-class ParamSliderWidget(QWidget):
-    def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None, d_A=None):
-        super().__init__(parent)
-        self.paramname = paramname
-        self.ndigits = ndigits
-        # Slider will use a fixed integer range and we'll map it
-        # linearly to the actual parameter range [min, max].
-        self._slider_steps = 10000
-        self.fixed = fixed
-        self.d_A = d_A # Angular size distance (I should probably find a way to avoid just passing it to here but whatever)
-
-        parameter_adjust_layout = QHBoxLayout()
-        parameter_adjust_layout.setContentsMargins(0,0,0,0)
-
-        self.text = QTextBrowser()
-        self.text.setText(str(paramname))
-        self.text.setStyleSheet('font-size: 10px')
-        self.text.setMaximumSize(45,25)
-        self.text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum,QtWidgets.QSizePolicy.Policy.Maximum)
-        self.text.setAlignment(QtCore.Qt.AlignCenter)
-
-        self.fixed_checkbox = QCheckBox("Fixed")
-        self.fixed_checkbox.setChecked(fixed)
-
-        self.slider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.slider.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum,QtWidgets.QSizePolicy.Policy.Maximum)
-        # self.slider.setTickInterval(5)
-        self.slider.setSingleStep(1)
-        # Use fixed slider range and map to [lowlim, hilim]
-        self.slider.setRange(0, self._slider_steps)
-        try:
-            frac = 0.0 if hilim == lowlim else (initval - lowlim) / float(hilim - lowlim)
-        except Exception:
-            frac = 0.0
-        self.slider.setValue(int(round(max(0.0, min(1.0, frac)) * self._slider_steps)))
-
-        parameter_adjust_layout.addWidget(self.text)
-        parameter_adjust_layout.addWidget(self.slider)
-        parameter_adjust_layout.setStretchFactor(self.slider, 4)
-        parameter_adjust_layout.addWidget(self.fixed_checkbox)
-
-        spinboxes_layout = QHBoxLayout()
-        from scientific_spinbox import ScientificDoubleSpinBox
-        self.minspinbox = ScientificDoubleSpinBox()
-        # self.minspinbox.setDecimals(ndigits)
-        spinbox_minwidth = 50
-        self.minspinbox.setMaximum(hilim)
-        self.minspinbox.setMinimum(-1e9)
-        self.minspinbox.setValue(lowlim)
-        self.minspinbox.setMaximumWidth(100)
-        self.minspinbox.setMinimumWidth(spinbox_minwidth)
-        self.minspinbox.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Maximum)
-
-        self.valspinbox = ScientificDoubleSpinBox()
-        # self.valspinbox.setDecimals(ndigits)
-        self.valspinbox.setMaximum(hilim)
-        self.valspinbox.setMinimum(lowlim)
-        self.valspinbox.setValue(initval)
-        self.valspinbox.setMaximumWidth(100)
-        self.valspinbox.setMinimumWidth(spinbox_minwidth)
-        self.valspinbox.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Maximum)
-
-        self.maxspinbox = ScientificDoubleSpinBox()
-        # self.maxspinbox.setDecimals(ndigits)
-        self.maxspinbox.setSingleStep(1e-2)
-        self.maxspinbox.setMinimum(lowlim)
-        self.maxspinbox.setMaximum(1e9)
-        self.maxspinbox.setValue(hilim)
-        self.maxspinbox.setMaximumWidth(100)
-        self.maxspinbox.setMinimumWidth(spinbox_minwidth)
-        self.maxspinbox.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Maximum)
-        # self.maxspinbox.setFont("arial: size=20px")
-
-        spinboxes_layout.addWidget(self.minspinbox)
-        spinboxes_layout.addWidget(self.valspinbox)
-        spinboxes_layout.addWidget(self.maxspinbox)
-
-        spinboxes_layout.setStretchFactor(self.minspinbox, 1)
-        spinboxes_layout.setStretchFactor(self.valspinbox, 1)
-        spinboxes_layout.setStretchFactor(self.maxspinbox, 1)
-        parameter_adjust_layout.addLayout(spinboxes_layout)
-        
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        self.converted_label = QLabel()
-        self.converted_label.setStyleSheet('font-size: 10px')
-        self.converted_label.setMaximumHeight(12)
-        layout.addWidget(self.converted_label)
-        layout.addLayout(parameter_adjust_layout)
-        self.setLayout(layout)
-
-        self.set_fixed_state(fixed)
-
-        self.slider.valueChanged.connect(self.slider_changed)
-        self.valspinbox.setKeyboardTracking(False)
-        self.valspinbox.valueChanged.connect(self.spinbox_changed)
-        self.minspinbox.setKeyboardTracking(False)
-        self.minspinbox.valueChanged.connect(self.minspinbox_changed)
-        self.maxspinbox.setKeyboardTracking(False)
-        self.maxspinbox.valueChanged.connect(self.maxspinbox_changed)
-        self.fixed_checkbox.stateChanged.connect(lambda state: self.set_fixed_state(state==2))
-        
-        spinboxes_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
-        parameter_adjust_layout.setStretchFactor(spinboxes_layout, 10)
-        
-        self.update_converted()
-
-    def set_fixed_state(self, is_fixed):
-        self.minspinbox.setEnabled(not is_fixed)
-        self.maxspinbox.setEnabled(not is_fixed)
-        # self.slider.setEnabled(not is_fixed)
-        # self.valspinbox.setEnabled(not is_fixed)
-
-    def slider_changed(self, value):
-        # Map slider integer (0.._slider_steps) linearly to [min, max]
-        minval = self.minspinbox.value()
-        maxval = self.maxspinbox.value()
-        if maxval == minval:
-            float_val = minval
-        else:
-            float_val = minval + (value / float(self._slider_steps)) * (maxval - minval)
-        self.valspinbox.blockSignals(True)
-        self.valspinbox.setValue(float_val)
-        self.valspinbox.blockSignals(False)
-        self.update_converted()
-
-    def spinbox_changed(self, value):
-        # Map the spinbox value into the slider integer range
-        minval = self.minspinbox.value()
-        maxval = self.maxspinbox.value()
-        if maxval == minval:
-            int_val = 0
-        else:
-            frac = (value - minval) / float(maxval - minval)
-            int_val = int(round(max(0.0, min(1.0, frac)) * self._slider_steps))
-        self.slider.blockSignals(True)
-        self.slider.setValue(int_val)
-        self.slider.blockSignals(False)
-        self.update_converted()
-
-    def minspinbox_changed(self, new_min):
-        cur_max = self.maxspinbox.value()
-        if new_min > cur_max:
-            new_min = cur_max
-            self.maxspinbox.setValue(cur_max)
-
-        self.valspinbox.setMinimum(new_min)
-        self.maxspinbox.setMinimum(new_min)
-        if self.valspinbox.value() < new_min:
-            self.valspinbox.setValue(new_min)
-        # Recompute slider position to respect new bounds
-        cur_val = self.valspinbox.value()
-        self.spinbox_changed(cur_val)
-
-    def maxspinbox_changed(self, new_max):
-        cur_min = self.minspinbox.value()
-        if new_max < cur_min:
-            cur_min = new_max 
-            self.minspinbox.setValue(new_max)
-
-        self.valspinbox.setMaximum(new_max)
-        self.minspinbox.setMaximum(new_max)
-        if self.valspinbox.value() > new_max:
-            self.valspinbox.setValue(new_max)
-        # Recompute slider position to respect new bounds
-        cur_val = self.valspinbox.value()
-        self.spinbox_changed(cur_val)
-
-    def get_values(self):
-        return {
-            'value': self.valspinbox.value(),
-            'min': self.minspinbox.value(),
-            'max': self.maxspinbox.value(),
-            'fixed': self.fixed_checkbox.isChecked()
-        }
-
-    def update_converted(self):
-        val = self.valspinbox.value()
-        minval = self.minspinbox.value()
-        maxval = self.maxspinbox.value()
-        if self.paramname in ["r_e", "R_ring", "sigma_r"]:
-            valarcsec = val * 0.262 * u.arcsec
-            minvalarcsec = minval * 0.262 * u.arcsec
-            maxvalarcsec = maxval * 0.262 * u.arcsec
-
-            if self.d_A != None:
-                minvalkpc = (minvalarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
-                maxvalkpc = (maxvalarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
-                valkpc = (valarcsec * self.d_A).to(u.kpc, u.dimensionless_angles())
-                self.converted_label.setText(f"Min: {minvalarcsec.value:.3f} Val: {valarcsec.value:.3f} Max: {maxvalarcsec.value:.3f} arcsec (Min: {minvalkpc.value:.3f} Val: {valkpc.value:.3f} Max: {maxvalkpc.value:.3f} kpc)")
-            else:
-                self.converted_label.setText(f"Min: {minvalarcsec.value:.3f} Val: {valarcsec.value:.3f} Max: {maxvalarcsec.value:.3f} arcsec")
-        elif self.paramname in ["I_e", "A"]:
-            if val > 0 and minval > 0 and maxval > 0:
-                valmag = 22.5 - 2.5 * math.log10(val/0.262**2)
-                minvalmag = 22.5 - 2.5 * math.log10(minval/0.262**2)
-                maxvalmag = 22.5 - 2.5 * math.log10(maxval/0.262**2)
-                self.converted_label.setText(f"Min: {minvalmag:.3f} Val: {valmag:.3f} Max: {maxvalmag:.3f} mag/arcsec^2")
-            else:
-                self.converted_label.setText("N/A")
-        else:
-            self.converted_label.setText("")
-
-def read_function_labels(config_path):
-    """
-    Reads function labels from a config file and returns a list of labels in order.
-    Each FUNCTION line may have a '# LABEL <label>' comment.
-    """
-    labels = []
-    with open(config_path, 'r') as f:
-        for line in f:
-            if line.strip().startswith('FUNCTION'):
-                m = re.search(r'# LABEL\s*(\S+)', line)
-                if m:
-                    labels.append(m.group(1))
-                else:
-                    labels.append(None)
-    return labels
-
-def parse_fit_params_file(fit_params_path, config_path):
-    """
-    Parses an imfit fit_params file and returns a dictionary of parameter values
-    organized by function index and parameter name.
-    """
-    params_dict = {}
-    
-    try:
-        # First, get the config structure to know which parameters exist
-        config = pyimfit.parse_config_file(config_path)
-        config_dict = config.getModelAsDict()
-        function_list = config_dict["function_sets"][0]["function_list"]
-        
-        # Parse the fit_params file
-        with open(fit_params_path, 'r') as f:
-            lines = f.readlines()
-        
-        # Track current function index while parsing
-        func_idx = 0
-        param_idx = 0
-        
-        # Parse each line looking for parameter values
-        for line in lines:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            
-            # Try to parse as a parameter line (typically format: "param_name = value [error]")
-            parts = line.split()
-            if len(parts) >= 2:
-                try:
-                    param_value = float(parts[0])
-                    
-                    # Get parameter name from config
-                    if func_idx < len(function_list):
-                        func_params = function_list[func_idx]["parameters"]
-                        param_names = list(func_params.keys())
-                        
-                        if param_idx < len(param_names):
-                            param_name = param_names[param_idx]
-                            
-                            if func_idx not in params_dict:
-                                params_dict[func_idx] = {}
-                            
-                            # Store the value - we'll use it as a fixed parameter
-                            params_dict[func_idx][param_name] = param_value
-                            param_idx += 1
-                            
-                            # If we've gone through all params in this function, move to next
-                            if param_idx >= len(param_names):
-                                func_idx += 1
-                                param_idx = 0
-                except (ValueError, IndexError) as e:
-                    print(e)
-                    pass
-        
-        return params_dict
-    except Exception as e:
-        print(f"Error parsing fit_params file: {e}")
-        return {}
-
-def parse_results(file):
-    model = pyimfit.parse_config_file(file)
-    band = Path(file).stem.rsplit("_")[-3]
-    with open(file, "r") as f:
-        lines = f.readlines()
-    status = lines[5].split(" ")[7]
-    status_message = " ".join(lines[5].split(" ")[9:])
-    uncs = dict()
-    for k, line in enumerate(lines):
-        if "FUNCTION" in line:
-            func_type = line.split(" ")[1].rstrip()
-            func_label = line.split("LABEL ")[-1].rstrip()
-            func_params = pyimfit.get_function_dict()[func_type]
-            uncs[func_label] = dict()
-            for j, func_param in enumerate(func_params):
-                try:
-                    unc = lines[k + j + 1].split("+/-")[1].split("\t")[0]
-                    uncs[func_label][func_param] = float(unc) # Extremely janky way to get the uncertainties
-                except:
-                    uncs[func_label][func_param] = None
-    chi_sq = float(lines[7].split(" ")[-1])
-    chi_sq_red = float(lines[8].split(" ")[-1])
-    functions = []
-    for k, function in enumerate(model.functionList()):
-        func_dict = function.getFunctionAsDict()
-        for param in func_dict["parameters"]:
-            func_dict["parameters"][param] = func_dict["parameters"][param][0]
-        if k == 0:
-            func_dict["label"] = "Host"
-        if k == 1:
-            func_dict["label"] = "Polar"
-        func_dict["parameters_unc"] = uncs[func_dict["label"]]
-        func_dict["band"] = band
-        functions.append(func_dict)
-
-    function_map = {idx: func for idx, func in enumerate(functions)}
-    return function_map, chi_sq, chi_sq_red, status, status_message
-
-class CopyParametersDialog(QDialog):
-    """Dialog for copying parameters from one band to another."""
-    
-    def __init__(self, galaxy_path, current_band, fit_type, parent=None):
-        super().__init__(parent)
-        self.galaxy_path = galaxy_path
-        self.current_band = current_band
-        self.fit_type = fit_type
-        self.source_band = None
-        self.source_config = None
-        self.source_type = "config"  # Can be "config" or "fit_params"
-        self.fit_params_values = {}  # Store parsed fit parameters
-        self.setWindowTitle("Copy Parameters From Band")
-        # self.setMinimumWidth(400)
-        # self.setMinimumHeight(500)
-        
-        layout = QVBoxLayout()
-        
-        # Band selection
-        band_layout = QHBoxLayout()
-        band_label = QLabel("Copy from band:")
-        self.band_combo = QComboBox()
-        available_bands = ["g", "r", "i", "z"]
-        self.band_combo.addItems(available_bands)
-        self.band_combo.currentTextChanged.connect(self.on_band_changed)
-        band_layout.addWidget(band_label)
-        band_layout.addWidget(self.band_combo)
-        band_layout.addStretch()
-        layout.addLayout(band_layout)
-        
-        # Source type selection
-        source_layout = QHBoxLayout()
-        source_label = QLabel("Source:")
-        self.config_radio = QRadioButton("Config File")
-        self.config_radio.setChecked(True)
-        self.config_radio.toggled.connect(self.on_source_changed)
-        self.fitparams_radio = QRadioButton("Fit Parameters")
-        self.fitparams_radio.toggled.connect(self.on_source_changed)
-        source_layout.addWidget(source_label)
-        source_layout.addWidget(self.config_radio)
-        source_layout.addWidget(self.fitparams_radio)
-        source_layout.addStretch()
-        layout.addLayout(source_layout)
-        
-        # Parameter list with checkboxes
-        param_label = QLabel("Select parameters to copy:")
-        layout.addWidget(param_label)
-        
-        self.param_list = QListWidget()
-        self.param_list.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
-        layout.addWidget(self.param_list)
-        
-        # Buttons
-        button_layout = QHBoxLayout()
-        select_all_btn = QPushButton("Select All")
-        select_all_btn.clicked.connect(self.select_all)
-        clear_all_btn = QPushButton("Clear All")
-        clear_all_btn.clicked.connect(self.clear_all)
-        button_layout.addWidget(select_all_btn)
-        button_layout.addWidget(clear_all_btn)
-        button_layout.addStretch()
-        layout.addLayout(button_layout)
-        
-        # Dialog buttons
-        dialog_button_layout = QHBoxLayout()
-        copy_btn = QPushButton("Copy Selected")
-        cancel_btn = QPushButton("Cancel")
-        copy_btn.clicked.connect(self.accept)
-        cancel_btn.clicked.connect(self.reject)
-        dialog_button_layout.addWidget(copy_btn)
-        dialog_button_layout.addWidget(cancel_btn)
-        dialog_button_layout.addStretch()
-        layout.addLayout(dialog_button_layout)
-        
-        self.setLayout(layout)
-        
-        # Load initial band
-        self.on_band_changed(self.band_combo.currentText())
-    
-    def on_source_changed(self):
-        """Handle source type change."""
-        if self.config_radio.isChecked():
-            self.source_type = "config"
-        else:
-            self.source_type = "fit_params"
-        self.on_band_changed(self.band_combo.currentText())
-    
-    def on_band_changed(self, band):
-        """Load parameters from the selected source band."""
-        self.source_band = band
-        self.param_list.clear()
-        self.fit_params_values = {}
-        
-        config_path = os.path.join(self.galaxy_path, f"{self.fit_type}_{band}.dat")
-        try:
-            self.source_config = pyimfit.parse_config_file(config_path)
-            config_dict = self.source_config.getModelAsDict()
-            function_list = config_dict["function_sets"][0]["function_list"]
-            
-            # Load function labels
-            labels = read_function_labels(config_path)
-            
-            # If fit_params source is selected, try to load fit parameters
-            if self.source_type == "fit_params":
-                fit_params_path = os.path.join(self.galaxy_path, f"{self.fit_type}_{band}_fit_params.txt")
-                if os.path.exists(fit_params_path):
-                    self.fit_params_values = parse_results(fit_params_path)[0]
-                else:
-                    QMessageBox.warning(
-                        self, "Warning", 
-                        f"Fit parameters file not found for band {band}.\nFalling back to config file."
-                    )
-                    self.config_radio.setChecked(True)
-                    self.source_type = "config"
-            
-            # Populate the list
-            for func_idx, func in enumerate(function_list):
-                params = func["parameters"]
-                label = labels[func_idx] if func_idx < len(labels) else None
-                
-                # Add header for function
-                label_text = f"{label}" if label else f"Function {func_idx}"
-                header_item = QListWidgetItem(label_text)
-                header_item.setFlags(header_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
-                header_font = header_item.font()
-                header_font.setBold(True)
-                header_item.setFont(header_font)
-                self.param_list.addItem(header_item)
-                
-                # Add parameters
-                for param_name in params.keys():
-                    # Add source indicator if using fit_params
-                    source_indicator = ""
-                    highlight_item = False
-                    if self.source_type == "fit_params" and func_idx in self.fit_params_values:
-                        fit_entry = self.fit_params_values[func_idx]
-                        if param_name in fit_entry["parameters"]:
-                            param_val = fit_entry["parameters"][param_name]
-                            source_indicator = f" (fit: {param_val:.6g})"
-                            param_unc = fit_entry["parameters_unc"].get(param_name)
-                            if param_unc == 0:
-                                param_bounds = params[param_name]
-                                if param_bounds[1] == 'fixed':
-                                    lowlim = param_bounds[0]
-                                    hilim = param_bounds[0]
-                                else:
-                                    lowlim = param_bounds[1]
-                                    hilim = param_bounds[2]
-                                if math.isclose(param_val, lowlim, rel_tol=1e-9, abs_tol=1e-12) or math.isclose(param_val, hilim, rel_tol=1e-9, abs_tol=1e-12):
-                                    highlight_item = True
-                    
-                    item_text = f"  └─ {param_name}{source_indicator}"
-                    item = QListWidgetItem(item_text)
-                    item.setData(QtCore.Qt.UserRole, (func_idx, param_name))
-                    if highlight_item:
-                        item.setForeground(QtGui.QBrush(QtGui.QColor(255, 0, 0)))
-                    self.param_list.addItem(item)
-        
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Could not load config from band {band}: {str(e)}")
-    
-    def select_all(self):
-        """Select all parameter items (exclude headers)."""
-        self.param_list.selectAll()
-    
-    def clear_all(self):
-        """Deselect all items."""
-        self.param_list.clearSelection()
-    
-    def get_selected_parameters(self):
-        """Return list of selected (func_idx, param_name) tuples."""
-        selected = []
-        for item in self.param_list.selectedItems():
-            data = item.data(QtCore.Qt.UserRole)
-            if data is not None:
-                selected.append(data)
-        return selected
-    
-    def get_source_type(self):
-        """Return the source type (config or fit_params)."""
-        return self.source_type
-    
-    def get_fit_params_values(self):
-        """Return the parsed fit parameters."""
-        return self.fit_params_values
 
 class MainWindow(QMainWindow):
     def __init__(self, p=None, master_table_p = None, ellipse_fit_p=None):
@@ -812,6 +186,7 @@ class MainWindow(QMainWindow):
         self.band = "g"
         self.param_widgets = {}
         self.plotrelresid = True
+        self.current_selected_indices = None
 
         # Setting up the buttons
         self.ui.LMbutton.clicked.connect(lambda: self.set_solver("LM"))
@@ -1038,165 +413,47 @@ class MainWindow(QMainWindow):
             print(e)
             return
     
-    def get_composed_data(self, galaxy_path, band, idx, fit_type):
-        # idx = 0 -> Regular image with mask applied, 1 -> Model image, 2 -> Residual, 3 -> Percent residual, 4 Onwards -> Components of model
+    def refresh_conf(self, redraw=True):
         try:
-            if idx == 0:
-                im = fits.getdata(os.path.join(galaxy_path, f"image_{band}.fits"))
-                mask_path = os.path.join(galaxy_path, "image_mask.fits")
-                if os.path.exists(mask_path):
-                    mask = fits.getdata(mask_path)
-                    if mask.shape == im.shape:
-                        im = np.where(mask > 0, 0, im)
-                return im
-            im = fits.getdata(os.path.join(galaxy_path, f"{fit_type}_{band}_composed.fits"))[idx]
-        except:
-            if idx != 0:
-                im = np.array([])
-            else:
-                try:
-                    im = fits.getdata(os.path.join(galaxy_path, f"image_{band}.fits"))
-                except:
-                    return np.array([])
-        return im
-
-    def getconfigim(self, galaxypath, config_path, shape, maxThreads=4):
-        try:
-            model_desc = pyimfit.parse_config_file(config_path)
-            psf = fits.getdata(os.path.join(galaxypath, f"psf_patched_{self.band}.fits"))
-            imfitter = pyimfit.Imfit(model_desc, psf=psf, maxThreads=maxThreads)
-            # imfitter = pyimfit.Imfit(model_desc, maxThreads=maxThreads)
-            im = imfitter.getModelImage(shape=shape)
-        except:
-            im = np.array([])
-
-        return im
-    
-    def getconfigresid(self, im, imconfig, mask=np.array([]), relresid=False):
-        try:
-            if relresid:
-                resid_im = (im - imconfig)/im
-            else:
-                resid_im = im-imconfig
-            if mask.size != 0:
-                return np.where(mask >0, 0, resid_im)
-            else:
-                return resid_im
-        except:
-            return np.array([])
-
-
-    def changegal(self):
-        # Store the current config model for later editing
-        self.current_config_model = None
-        # Update UI based on the currently selected leaf galaxy folder
-        galaxypath = self.selected_galaxy_path
-        galaxy = galaxypath.name
-        self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
-        self.currentgalaxytext.repaint()
-
-        try:
-            master_table_data_gal = self.master_table_data[self.master_table_data["NAME"] == galaxy]
-            self.curr_z = master_table_data_gal["REDSHIFT"].iloc[0]
-            self.curr_d_A = cosmo.angular_diameter_distance(z=self.curr_z)
-        except:
-            self.curr_d_A = self.curr_z = None
-        if self.curr_z != self.curr_z:
-            self.curr_d_A = self.curr_z = None
-
-        try:
-            config_path = self.get_config_path(galaxypath, self.band, self.fit_type)
-            config_model = pyimfit.parse_config_file(config_path)
-            self.current_config_model = config_model
-            config_dict = config_model.getModelAsDict()
-            # Add function labels to config_dict
-            labels = read_function_labels(config_path)
-            function_list = config_dict["function_sets"][0]["function_list"]
-            for i, func in enumerate(function_list):
-                if i < len(labels):
-                    func['label'] = labels[i]
-                else:
-                    func['label'] = None
-            
-            # Want to ensure that I actually keep the labels since pyimift is incapable of doing so for some reason
-            self.current_config_dict = config_dict   
-
             layout: QVBoxLayout = self.ui.configsliders
             # Reset the layout first
             try:
-                self.clearLayout(layout)
+                if redraw:
+                    clearLayout(layout)
             except Exception as e:
                 print(e)
                 pass
-            for func_idx, func in enumerate(function_list):
-                params = func["parameters"]
-                label = func["label"]
 
-                label_text = QTextBrowser()
-                label_text.setText(label)
-                label_text.setMaximumHeight(30)
-                label_text.setMinimumWidth(50)
-                label_text.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
-                label_text.setAlignment(QtCore.Qt.AlignCenter)
-                layout.addWidget(label_text)
-
-                for param in params.keys():
-                    initval = params[param][0]
-                    fixed = False
-                    if params[param][1] == 'fixed':
-                        lowlim = initval
-                        hilim = initval
-                        fixed = True
-                    else:
-                        lowlim = params[param][1]
-                        hilim = params[param][2]
-
-                    # Use (func_idx, param) as key to distinguish duplicate param names
-                    self.draw_params(initval, lowlim, hilim, fixed, (func_idx, param), label, layout)
+            if redraw:
+                selected_indices = self.current_selected_indices
+                if selected_indices is None:
+                    selected_indices = set(range(len(self.dataset.config_dict["function_sets"][0]["function_list"]))) if self.dataset.config_dict is not None else None
+                self.config_adjust = ConfigAdjustWidget(
+                    parent=layout,
+                    dataset=self.dataset,
+                    config_callback=self.on_component_selection_changed,
+                    selected_indices=selected_indices,
+                )
+                self.config_adjust.draw_config_adjust()
         except:
-            self.clearLayout(self.ui.configsliders)
+            clearLayout(self.ui.configsliders)
             print(traceback.format_exc())
             pass
-
-
-        params_file = None
-        fit_results = None
+    
+    def refresh_fitparams(self):
         try:
-            with open(os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt"), "r") as f:
-                params_file = f.readlines()
-            fit_params_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt")
-            if os.path.exists(fit_params_path):
-                try:
-                    fit_results = parse_results(fit_params_path)[0]
-                except Exception:
-                    fit_results = None
-            self.highlight_boundary_params(params_file, fit_results)
+            self.highlight_boundary_params(self.dataset.fit_results_text, self.dataset.fit_results)
         except:
             self.params.setPlainText("Fit Params not found!")
             self.params.repaint()
+            print(tb.format_exc())
+    def on_component_selection_changed(self, selected_indices):
+        #TODO: implement
+        pass
+    
+    def refresh_plots(self):
+        self.jpg_img_plot.plot(self.dataset.jpg_image, limits=None, cmap=None, stretch=None, plottext="JPG Image", cbar=False)
 
-        # pixmap = QPixmap(os.path.join(galaxypath, "image.jpg"))
-        self.jpg_img = np.asarray(Image.open(os.path.join(galaxypath, "image.jpg")))
-        self.jpg_img = np.flipud(self.jpg_img)
-        self.jpg_img_plot.plot(self.jpg_img, limits=None, cmap=None, stretch=None, plottext="JPG Image", cbar=False)
-
-        # self.img.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
-        self.sci_im = self.get_composed_data(galaxypath, self.band, idx=0, fit_type=self.fit_type)
-        self.sci_fits = fits.open(os.path.join(galaxypath, f"image_{self.band}.fits"))[0]
-        self.pixel_scale = pixel_scale_from_header_arcsec_per_pix(self.sci_fits)
-        self.mask_fits = fits.open(os.path.join(galaxypath, "image_mask.fits"))[0] if os.path.exists(os.path.join(galaxypath, "image_mask.fits")) else None
-        self.invvar_fits = fits.open(os.path.join(galaxypath, f"image_{self.band}_invvar.fits"))[0] if os.path.exists(os.path.join(galaxypath, f"image_{self.band}_invvar.fits")) else None
-        self.psf_fits = fits.open(os.path.join(galaxypath, f"psf_patched_{self.band}.fits"))[0] if os.path.exists(os.path.join(galaxypath, f"psf_patched_{self.band}.fits")) else None
-
-        self.model_im = self.get_composed_data(galaxypath, self.band, idx=1, fit_type=self.fit_type)
-        if self.plotrelresid:
-            self.residual_im = self.get_composed_data(galaxypath, self.band, idx=3, fit_type=self.fit_type)
-        else:
-            self.residual_im = self.get_composed_data(galaxypath, self.band, idx=2, fit_type=self.fit_type)
-        
-        imconfig = self.getconfigim(galaxypath, config_path, np.shape(self.sci_im), maxThreads=self.gui_config["imfit_maxthreads"])
-        self.config_im = imconfig
-        self.config_residual_im = self.getconfigresid(self.sci_im, self.config_im, self.mask_fits.data, self.plotrelresid)
 
         galname = self.selected_galaxy_path.name
         if ellipse_fit_p != None:
@@ -1214,27 +471,60 @@ class MainWindow(QMainWindow):
         self.plot_config()
         self.plot_config_residual()
 
-    def clearLayout(self, layout):
-        if isinstance(layout, QLayout):
-            while layout.count():
-                item = layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None:
-                    widget.deleteLater()
-                    # layout.removeWidget(widget)
-                else:
-                    self.clearLayout(item.layout())
-                    # layout.removeItem(item)
- 
+    def refresh_tabledata(self):
+        galaxypath = self.selected_galaxy_path
+        galaxy = galaxypath.name
+        try:
+            master_table_data_gal = self.master_table_data[self.master_table_data["NAME"] == galaxy]
+            self.dataset.z = master_table_data_gal["REDSHIFT"].iloc[0]
+            self.dataset.d_A = cosmo.angular_diameter_distance(z=self.dataset.z)
+        except:
+            self.dataset.z = self.dataset.d_A = None
+        if self.dataset.z != self.dataset.z:
+            self.dataset.z = self.dataset.d_A = None
+
+    def changegal(self):
+        # Update UI based on the currently selected leaf galaxy folder
+        galaxypath = self.selected_galaxy_path
+        galaxy = galaxypath.name
+        self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
+        self.currentgalaxytext.repaint()
+
+        jpg_image_path = os.path.join(galaxypath, "image.jpg")
+        fits_image_path = os.path.join(galaxypath, f"image_{self.band}.fits") 
+        fits_invvar_image_path = os.path.join(galaxypath, f"image_{self.band}_invvar.fits")
+        fits_psf_path = os.path.join(galaxypath, f"psf_patched_{self.band}.fits")
+
+        mask_path = os.path.join(galaxypath, f"image_mask.fits")
+        config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
+        fits_composed_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_composed.fits")
+        fit_results_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt")
+
+        if self.gui_config["data_type"] == "DESI":
+            self.dataset = DESIDataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
+        else:
+            self.dataset = DataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
+        self.dataset.load_all()
+        # self.current_selected_indices = set(range(len(self.base_config_dict["function_sets"][0]["function_list"]))) if self.base_config_dict is not None else None
+
+        self.refresh_tabledata()
+        self.refresh_conf()
+        self.refresh_fitparams()
+        self.refresh_plots()
+
     def plot_image(self):
-        self.img.plot(self.sci_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=self.current_ellipse_params, plottext=f"{self.band} Band Image")
+        self.img.plot(self.dataset.fits_image, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], ellipse_params=self.current_ellipse_params, plottext=f"{self.band} Band Image")
 
     def plot_model(self):
         if self.is_1d_mode:
             if self.radial_data is not None:
-                self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
+                self.model.plot_profiles(self.radial_data['model']['host'], self.radial_data['model']['polar'], 'Model Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.dataset.d_A)
                 return
-        self.model.plot(self.model_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
+        try:
+            im = self.dataset.fits_composed[Composed.MODEL.value]
+        except:
+            im = np.array([])
+        self.model.plot(im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext=f"2D Model Image")
 
     def plot_residual(self):
         if self.is_1d_mode:
@@ -1249,23 +539,32 @@ class MainWindow(QMainWindow):
                     'Residual Radial Profile',
                     y_label=y_label,
                     is_resid=True,
-                    d_A=self.curr_d_A
+                    d_A=self.dataset.d_A
                 )
                 return
         if self.plotrelresid:
             plottext = "(Image - Model)/Image" 
             limits = self.gui_config["plot_relresid_limits"]
+            try:
+                im = self.dataset.fits_composed[Composed.RELRESID.value]
+            except:
+                im = np.array([])
+            self.resid.plot(im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
         else:
             plottext = "Image - Model"
             limits = self.gui_config["plot_resid_limits"]
-        self.resid.plot(self.residual_im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
+            try:
+                im = self.dataset.fits_composed[Composed.RESID.value]
+            except:
+                im = np.array([])
+            self.resid.plot(im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext) 
 
     def plot_config(self):
         if self.is_1d_mode:
             if self.radial_data is not None:
-                self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.curr_d_A)
+                self.configimg.plot_profiles(self.radial_data['config']['host'], self.radial_data['config']['polar'], 'Config Radial Profile', overplot=self.radial_data['image'], surfbright=True, d_A=self.dataset.d_A)
                 return
-        self.configimg.plot(self.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext="2D Config Image")
+        self.configimg.plot(self.dataset.config_im, limits=self.gui_config["plot_limits"], cmap=self.gui_config["plot_cmap"], plottext="2D Config Image")
 
     def plot_config_residual(self):
         if self.is_1d_mode:
@@ -1280,7 +579,7 @@ class MainWindow(QMainWindow):
                     'Config Residual Radial Profile',
                     y_label=y_label,
                     is_resid=True,
-                    d_A=self.curr_d_A
+                    d_A=self.dataset.d_A
                 )
                 return
         if self.plotrelresid:
@@ -1289,41 +588,7 @@ class MainWindow(QMainWindow):
         else:
             plottext = "Image - Config"
             limits = self.gui_config["plot_resid_limits"]
-        self.configresid.plot(self.config_residual_im, limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext)
-
-    def profile_from_image(self, image_data, pa, length, surf_bright=False):
-        try:
-            pa = np.deg2rad(pa + 90) # Need to account for the offset that imfit gives lol
-            # length = int(np.shape(image_data)[0]*np.cos(np.pi/4))
-
-            c = (int(image_data.shape[0]/2)-1, int(image_data.shape[1]/2)-1) # Just assuming the center of the galaxy is the center of the image
-
-            x0 = c[0] + np.cos(pa)*length
-            x1 = c[0] + np.cos(pa+np.pi)*length
-
-            y0 = c[1] + np.sin(pa)*length
-            y1 = c[1] + np.sin(pa+np.pi)*length
-
-            npts = 1000
-            x, y = np.linspace(x0, x1, npts), np.linspace(y0, y1, npts)
-
-            coords = np.array([x,y])
-            prof = scipy.ndimage.map_coordinates(image_data, coords, cval=np.nan)
-            upper = prof[int(x.size/2):]
-            lower = np.flip(prof[:int(x.size/2)])
-            r = np.linspace(0, length/2, np.size(upper))
-            prof_avg = (upper + lower)/2 
-
-
-            prof_avg = prof_avg * u.nmgy / self.pixel_scale**2 # nmgy /pix -> nmgy/arcsec**2
-
-            if surf_bright:
-                zero_point_star_equiv = u.zero_point_flux(3631.1 * u.Jy)
-                prof_avg = u.Magnitude(prof_avg.to(u.AB, zero_point_star_equiv))
-
-            return {"r": r[prof_avg != np.nan]*self.pixel_scale, "mu": prof_avg[prof_avg != np.nan].value}
-        except:
-            return None
+        self.configresid.plot(self.dataset.getconfigresid(self.plotrelresid), limits=limits, cmap=self.gui_config["plot_resid_cmap"], stretch=LinearStretch(), plottext=plottext)
 
     def get_radial_data(self):
         if self.current_ellipse_params is None or self.current_ellipse_params.empty:
@@ -1339,34 +604,36 @@ class MainWindow(QMainWindow):
 
         zeropoint = 22.5
 
-        mask = self.mask_fits.data
-        sci_image = np.where(mask == 0, self.sci_fits.data, 0)
-        image_host = self.profile_from_image(sci_image, host_pa, host_len, surf_bright=True)
-        image_polar = self.profile_from_image(sci_image, polar_pa, polar_len, surf_bright=True)
+        mask = self.dataset.fits_mask
+        sci_image = np.where(mask == 0, self.dataset.fits_image, 0)
+        config_im = self.dataset.config_im
 
-        model_host = self.profile_from_image(self.model_im, host_pa, host_len, surf_bright=True)
-        model_polar = self.profile_from_image(self.model_im, polar_pa, polar_len, surf_bright=True)
+        image_host = profile_from_image(sci_image, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True)
+        image_polar = profile_from_image(sci_image, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True)
+
+        model_host = profile_from_image(config_im, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True)
+        model_polar = profile_from_image(config_im, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True)
         
         try:
             if self.plotrelresid:
-                residual_data = np.where(sci_image != 0, (sci_image - self.model_im)/sci_image, 0)
+                residual_data = np.where(sci_image != 0, (sci_image - config_im)/sci_image, 0)
             else:
-                residual_data = sci_image - self.model_im
-            residual_host = self.profile_from_image(residual_data, host_pa, host_len)
-            residual_polar = self.profile_from_image(residual_data, polar_pa, polar_len)
+                residual_data = sci_image - config_im
+            residual_host = profile_from_image(residual_data, host_pa, host_len, self.dataset.pixel_scale)
+            residual_polar = profile_from_image(residual_data, polar_pa, polar_len, self.dataset.pixel_scale) 
         except:
             residual_host = residual_polar = None
 
-        if self.config_im.size != 0:
-            config_host = self.profile_from_image(self.config_im, host_pa, host_len, surf_bright=True) 
-            config_polar = self.profile_from_image(self.config_im, polar_pa, polar_len, surf_bright=True)
+        if config_im.size != 0:
+            config_host = profile_from_image(config_im, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True) 
+            config_polar = profile_from_image(config_im, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True)
 
             if self.plotrelresid:
-                config_residual_data = np.where(sci_image !=0, (sci_image - self.config_im)/sci_image, 0)
+                config_residual_data = np.where(sci_image !=0, (sci_image - config_im)/sci_image, 0)
             else:
-                config_residual_data = sci_image - self.config_im
-            config_residual_host = self.profile_from_image(config_residual_data, host_pa, host_len)
-            config_residual_polar = self.profile_from_image(config_residual_data, polar_pa, polar_len)
+                config_residual_data = sci_image - config_im
+            config_residual_host = profile_from_image(config_residual_data, host_pa, host_len, self.dataset.pixel_scale)
+            config_residual_polar = profile_from_image(config_residual_data, polar_pa, polar_len, self.dataset.pixel_scale)
         else:
             config_host = config_polar = config_residual_host = config_residual_polar = None
 
@@ -1378,27 +645,20 @@ class MainWindow(QMainWindow):
             'config_residual': {'host': config_residual_host, 'polar': config_residual_polar},
         }
  
-    def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
-        func_idx, paramname = paramkey
-        ndigits = 6
-        widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits, d_A=self.curr_d_A)
-        widget.setMinimumWidth(100)
-        layout.addWidget(widget)
-        self.param_widgets[paramkey] = widget
 
     def highlight_boundary_params(self, params_file_lines, fit_results):
         if params_file_lines is None:
-            return
+            return 
 
-        if fit_results is None or self.current_config_dict is None:
+        if fit_results is None or self.dataset.config_dict is None:
             self.params.setHtml("<pre>" + html.escape("".join(params_file_lines)) + "</pre>")
             return
 
         try:
-            function_list = self.current_config_dict["function_sets"][0]["function_list"]
+            function_list = self.dataset.config_dict["function_sets"][0]["function_list"]
         except Exception:
             self.params.setHtml("<pre>" + html.escape("".join(params_file_lines)) + "</pre>")
-            return
+            raise
 
         html_lines = []
         func_idx = -1
@@ -1410,7 +670,7 @@ class MainWindow(QMainWindow):
                 continue
 
             highlight = False
-            if "+/-" in line and func_idx >= 0 and func_idx in fit_results:
+            if "+/-" in line and func_idx >= 0 and func_idx in fit_results[0]:
                 m = re.match(r"^\s*(\S+)\s+([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)\s*#\s*\+/\-\s*([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)", line)
                 if m:
                     param_name = m.group(1)
@@ -1488,24 +748,6 @@ class MainWindow(QMainWindow):
         # Just refreshing the configs and stats and whatnot
         self.changegal()
     
-    # def cancel(self):
-    #     # Try to cancel dialog-based fits first
-    #     if len(self.fit_dialogs) > 0:
-    #         dlg = self.fit_dialogs[-1]
-    #         try:
-    #             dlg.cancel()
-    #             dlg.close()
-    #         except Exception:
-    #             pass
-    #         self.fit_dialogs.pop()
-    #         return
-
-    #     if len(self.ps) > 0:
-    #         self.ps[-1].terminate()
-    #         self.ps.pop()
-    #     else:
-    #         print("No running IMFIT processes")
-    
     def markgalaxy(self, markas):
         if getattr(self, "selected_galaxy_path", None) is None:
             return
@@ -1527,20 +769,19 @@ class MainWindow(QMainWindow):
         if self.selected_galaxy_path is None:
             print("No galaxy selected to save config")
             return
-        p = self.selected_galaxy_path
-        fit_type = self.ui.fit_type_combo.currentText()
-        config_path = self.get_config_path(p, self.band, fit_type)
+
+        config_path = self.dataset.config_path
 
         # If we have a config model and param_widgets, update the config model with the new values
-        model_dict = self.current_config_dict
+        model_dict = self.dataset.config_dict
         function_list = model_dict["function_sets"][0]["function_list"]
         # Update parameter values from widgets
         for func_idx, func in enumerate(function_list):
             params = func["parameters"]
             for param in params.keys():
                 key = (func_idx, param)
-                if key in self.param_widgets:
-                    values = self.param_widgets[key].get_values()
+                if key in self.config_adjust.param_widgets:
+                    values = self.config_adjust.param_widgets[key].get_values()
                     if values['fixed']:
                         # Only value and 'fixed' string
                         params[param] = [values['value'], 'fixed']
@@ -1566,9 +807,12 @@ class MainWindow(QMainWindow):
         if f: f.close()
 
         # Refresh config image and residual
-        self.changegal()
+        self.dataset.load_config()
+        self.refresh_conf(redraw=False)
+        # self.refresh_conf()
+        self.refresh_plots()
     
-    def copy_parameters_from_band(self):
+    def copy_parameters_from_band(self): # TODO need to update this to work with the new refactor
         """Open dialog to copy parameters from another band to current band."""
         if self.selected_galaxy_path is None:
             QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
@@ -1682,14 +926,14 @@ class MainWindow(QMainWindow):
     
     def regenconf(self):
         ### TODO: Make this a bit more general, ideally shouldn't need to load the data here, but could instead load it in the config generation script itself maybe
+        ### Actually nevermind, the new dataset class kinda helps here
         galpath = self.selected_galaxy_path
-        img_file = glob.glob(os.path.join(galpath, f"image_{self.band}.fits"))[0]
 
-        img = fits.open(img_file)[0]
-        mask = fits.getdata(os.path.join(galpath, "image_mask.fits"))
+        img = fits.open(self.dataset.fits_image_path)[0]
+        mask = self.dataset.fits_mask
             
-        psf = fits.getdata(os.path.join(galpath, f"psf_patched_{self.band}.fits"))
-        invvar = fits.getdata(os.path.join(galpath, f"image_{self.band}_invvar.fits"))
+        psf = self.dataset.fits_psf
+        invvar = self.dataset.fits_invvar_image
         outfile_name = f"{self.fit_type}_{self.band}.dat" 
         outfile = os.path.join(galpath, outfile_name)
         galname = self.selected_galaxy_path.name
@@ -1697,7 +941,6 @@ class MainWindow(QMainWindow):
         if ellipse_fit_data_gal.empty:
             QMessageBox.critical(self, "Failed to Generate Config", f"Galaxy {galname} not in Ellipse Fit Data!")
             return
-        model_desc_dict = {} # Not really needed anymore I think
         master_table_data_gal = self.master_table_data[self.master_table_data["NAME"] == galname]
 
 
@@ -1712,7 +955,7 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.No
                 )
                 if answer == QMessageBox.StandardButton.Yes:
-                    generate_config(
+                    self.dataset.config_model_desc = generate_config(
                         galpath,
                         self.band,
                         img,
@@ -1721,7 +964,6 @@ class MainWindow(QMainWindow):
                         invvar,
                         type="ring",
                         ellipse_fit_data=ellipse_fit_data_gal,
-                        model_desc_dict=model_desc_dict,
                         galaxy_type=master_table_data_gal,
                         plot_slits=self.gui_config["show_phot_slits"],
                         outfile_name=outfile,
@@ -1731,8 +973,7 @@ class MainWindow(QMainWindow):
                 else:
                     pass
             else:
-                print(self.gui_config["show_phot_slits"])
-                generate_config(
+                self.dataset.config_model_desc = generate_config(
                     galpath,
                     self.band,
                     img,
@@ -1741,7 +982,6 @@ class MainWindow(QMainWindow):
                     invvar,
                     type="ring",
                     ellipse_fit_data=ellipse_fit_data_gal,
-                    model_desc_dict=model_desc_dict,
                     galaxy_type=master_table_data_gal,
                     plot_slits=self.gui_config["show_phot_slits"],
                     outfile_name=outfile,
@@ -1755,7 +995,6 @@ class MainWindow(QMainWindow):
         
         self.changegal()
     
-    # This currently only allows for manual refitting of the host. For the polar component, just swap out line 1160 'host' with 'polar'. I don't know if you want separate buttons to do that or a toggle, but either way I'm not 100% sure how that would exactly that would need to be included.
     def openonedfitdialog(self):
         if self.selected_galaxy_path is None:
             QMessageBox.warning(self, "No galaxy selected", "Please select a galaxy first.")
@@ -1763,7 +1002,7 @@ class MainWindow(QMainWindow):
         
         galpath = self.selected_galaxy_path
         manual_decomp_path = os.path.join(MAINDIR, "decomposer", "manual_fitting", "test_manual_decomposer.py")
-        mask_path = os.path.join(galpath, "image_mask.fits")
+        mask_path = self.dataset.mask_path
         galname = self.selected_galaxy_path.name
         self.component = 'host' if self.ui.hostradio.isChecked() else 'polar'
         try:
@@ -1792,8 +1031,6 @@ class MainWindow(QMainWindow):
     def setresidtype(self, state):
         self.plotrelresid = state 
         self.changegal()
-        
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
