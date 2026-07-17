@@ -186,6 +186,7 @@ class MainWindow(QMainWindow):
         self.band = "g"
         self.param_widgets = {}
         self.plotrelresid = True
+        self.current_selected_indices = None
 
         # Setting up the buttons
         self.ui.LMbutton.clicked.connect(lambda: self.set_solver("LM"))
@@ -446,6 +447,9 @@ class MainWindow(QMainWindow):
             self.params.setPlainText("Fit Params not found!")
             self.params.repaint()
             print(tb.format_exc())
+    def on_component_selection_changed(self, selected_indices):
+        #TODO: implement
+        pass
     
     def refresh_plots(self):
         self.jpg_img_plot.plot(self.dataset.jpg_image, limits=None, cmap=None, stretch=None, plottext="JPG Image", cbar=False)
@@ -501,6 +505,7 @@ class MainWindow(QMainWindow):
         else:
             self.dataset = DataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
         self.dataset.load_all()
+        # self.current_selected_indices = set(range(len(self.base_config_dict["function_sets"][0]["function_list"]))) if self.base_config_dict is not None else None
 
         self.refresh_tabledata()
         self.refresh_conf()
