@@ -19,8 +19,8 @@ import subprocess
 
 import sys
 
-IMAN_DIR = Path(os.path.dirname(__file__))
-sys.path.append(os.path.join(IMAN_DIR, 'iman_new/decomposition/make_model'))
+IMAN_DIR = os.path.join(Path(os.path.dirname(__file__)).parent, "iman_new")
+sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
 import make_model_ima_imfit
 
 # warnings.filterwarnings("ignore")
@@ -551,12 +551,12 @@ def main(args):
         for root, dirs, files in structure:
             if not(files == []):
                 folder_type_dict = {
-                    "Polar Rings": "ring",
-                    "Polar_Tilted Bulges": "bulge",
-                    "Polar_Tilted Halo": "halo"
+                    "PR": "ring",
+                    "PB": "bulge",
+                    "PH": "halo"
                 }
                 galaxy_type = None
-                for folder in ["Polar Rings", "Polar_Tilted Bulges", "Polar_Tilted Halo"]: # Attempt to autodetect type
+                for folder in folder_type_dict.keys(): # Attempt to autodetect type
                     if folder in root:
                         galaxy_type = folder_type_dict[folder]
                 if not(galaxy_type == None):
