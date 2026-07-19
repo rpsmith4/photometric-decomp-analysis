@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import argparse
+import copy
 import shutil
 from multiprocessing import Process
 import json
@@ -187,6 +188,9 @@ class MainWindow(QMainWindow):
         self.param_widgets = {}
         self.plotrelresid = True
         self.current_selected_indices = None
+        self.base_config_dict = None
+        self.config_adjust = None
+        self.dataset = None
 
         # Setting up the buttons
         self.ui.LMbutton.clicked.connect(lambda: self.set_solver("LM"))
@@ -319,9 +323,142 @@ class MainWindow(QMainWindow):
         else:
             return ""
 
-    def get_config_path(self, galaxypath, band, fit_type):
+    def _component_selection_suffix(self, selected_indices=None):
+        if selected_indices is None:
+            selected_indices = self.current_selected_indices
+
+        function_list = None
+        if self.base_config_dict is not None:
+            function_list = self.base_config_dict["function_sets"][0]["function_list"]
+        elif self.dataset is not None and getattr(self.dataset, "config_dict", None) is not None:
+            function_list = self.dataset.config_dict["function_sets"][0]["function_list"]
+
+        if function_list is None:
+            return ""
+
+        if selected_indices is None:
+            selected_indices = list(range(len(function_list)))
+        else:
+            selected_indices = sorted({int(i) for i in selected_indices if 0 <= int(i) < len(function_list)})
+
+        if selected_indices == list(range(len(function_list))):
+            return ""
+
+        parts = []
+        for idx in selected_indices:
+            label = function_list[idx].get("label") if idx < len(function_list) else None
+            if label is None:
+                label = f"f{idx}"
+            safe = re.sub(r"[^A-Za-z0-9]+", "_", str(label)).strip("_").lower()
+            if safe:
+                parts.append(safe)
+        return "_" + "_".join(parts) if parts else ""
+
+    def get_base_config_path(self, galaxypath, band, fit_type):
         suffix = self.get_suffix()
         return os.path.join(galaxypath, f"{fit_type}_{band}{suffix}.dat")
+
+    def get_config_path(self, galaxypath, band, fit_type):
+        suffix = self.get_suffix()
+        component_suffix = self._component_selection_suffix()
+        return os.path.join(galaxypath, f"{fit_type}_{band}{suffix}{component_suffix}.dat")
+
+    def get_mask_path(self, galaxypath, band):
+        component_suffix = self._component_selection_suffix()
+        return os.path.join(galaxypath, f"image_mask{component_suffix}.fits") if component_suffix else os.path.join(galaxypath, "image_mask.fits")
+
+    def get_fit_params_path(self, galaxypath, band, fit_type):
+        suffix = self.get_suffix()
+        component_suffix = self._component_selection_suffix()
+        return os.path.join(galaxypath, f"{fit_type}_{band}{suffix}{component_suffix}_fit_params.txt")
+
+    def get_composed_path(self, galaxypath, band, fit_type):
+        suffix = self.get_suffix()
+        component_suffix = self._component_selection_suffix()
+        return os.path.join(galaxypath, f"{fit_type}_{band}{suffix}{component_suffix}_composed.fits")
+
+    def _load_config_dict(self, config_path):
+        try:
+            model = pyimfit.parse_config_file(config_path)
+            config_dict = model.getModelAsDict()
+            labels = read_function_labels(config_path)
+            function_list = config_dict["function_sets"][0]["function_list"]
+            for i, func in enumerate(function_list):
+                func["label"] = labels[i] if i < len(labels) else None
+            return config_dict
+        except Exception:
+            return None
+
+    def _build_selected_model_dict(self, config_dict, selected_indices=None):
+        if config_dict is None:
+            return None
+
+        if selected_indices is None:
+            selected_indices = list(range(len(config_dict["function_sets"][0]["function_list"])))
+        else:
+            selected_indices = sorted({int(i) for i in selected_indices})
+
+        selected_functions = [
+            copy.deepcopy(func)
+            for i, func in enumerate(config_dict["function_sets"][0]["function_list"])
+            if i in selected_indices
+        ]
+
+        new_dict = copy.deepcopy(config_dict)
+        new_dict["function_sets"][0]["function_list"] = selected_functions
+        return new_dict
+
+    def _apply_widget_values_to_model(self, model_dict):
+        if model_dict is None or self.config_adjust is None:
+            return model_dict
+
+        function_list = model_dict["function_sets"][0]["function_list"]
+        for func_idx, func in enumerate(function_list):
+            params = func["parameters"]
+            for param in params.keys():
+                key = (func_idx, param)
+                if key in self.config_adjust.param_widgets:
+                    values = self.config_adjust.param_widgets[key].get_values()
+                    if values["fixed"]:
+                        params[param] = [values["value"], "fixed"]
+                    else:
+                        params[param] = [values["value"], values["min"], values["max"]]
+        return model_dict
+
+    def _write_component_files(self, config_path, model_dict, selected_indices=None):
+        if self.selected_galaxy_path is None:
+            return
+
+        config_dir = self.selected_galaxy_path
+        if os.path.dirname(config_path):
+            config_dir = Path(config_path).parent
+
+        if model_dict is None:
+            return
+
+        if os.path.isfile(config_path):
+            shutil.copyfile(config_path, config_path + ".bak")
+
+        new_model = pyimfit.ModelDescription.dict_to_ModelDescription(model_dict)
+        with open(config_path, "w") as f:
+            f.write("".join(new_model.getStringDescription()))
+
+        if selected_indices is not None:
+            selected_indices = sorted({int(i) for i in selected_indices})
+            function_list = model_dict["function_sets"][0]["function_list"]
+            # print(len(selected_indices))
+            # print(len(function_list))
+            # if len(selected_indices) < len(function_list):
+            if True:
+                base_mask_path = os.path.join(config_dir, "image_mask.fits")
+                comp_mask_path = self.get_mask_path(str(config_dir), self.band)
+                if os.path.exists(base_mask_path) and comp_mask_path != base_mask_path and not os.path.exists(comp_mask_path):
+                    shutil.copyfile(base_mask_path, comp_mask_path)
+
+                base_composed_path = os.path.join(config_dir, f"{self.fit_type}_{self.band}_composed.fits")
+                comp_composed_path = self.get_composed_path(str(config_dir), self.band, self.fit_type)
+                if os.path.exists(base_composed_path) and comp_composed_path != base_composed_path and not os.path.exists(comp_composed_path):
+                    shutil.copyfile(base_composed_path, comp_composed_path)
 
     def on_fitting_mode_changed(self):
         self.host_manual = self.ui.host_manual_radio.isChecked()
@@ -371,19 +508,19 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Missing Image", f"Could not find image file: {image_file}")
             return
 
-        new_mask_file = os.path.join(galpath, f"image_{self.band}_ds9_mask.fits")
+        # new_mask_file = os.path.join(galpath, f"image_{self.band}_ds9_mask.fits")
         try:
             _, output_mask, mask_data = convert_reg_to_mask(
                 image_file,
                 reg_file,
-                output_mask=new_mask_file,
+                # output_mask=new_mask_file,
                 mask_value=1,
                 verbosity=False
             )
             if output_mask is None:
                 raise RuntimeError("Mask conversion did not produce an output mask file")
 
-            old_mask_path = os.path.join(galpath, "image_mask.fits")
+            old_mask_path = self.dataset.mask_path
             if os.path.exists(old_mask_path):
                 with fits.open(old_mask_path) as hdul:
                     old_mask = hdul[0].data
@@ -396,8 +533,9 @@ class MainWindow(QMainWindow):
                 raise ValueError("Existing mask and DS9 mask have different shapes. Please verify the image and region file.")
 
             combined_mask = np.where((old_mask > 0) | (mask_data > 0), 1, 0).astype(old_mask.dtype)
+            backup_mask_path = f"{old_mask_path}.bak"
             try:
-                fits.writeto(os.path.join(galpath, "image_mask.fits.bak"), old_mask, header=header, overwrite=False) #Keep a backup
+                fits.writeto(backup_mask_path, old_mask, header=header, overwrite=False) #Keep a backup
             except:
                 pass
             fits.writeto(old_mask_path, combined_mask, header=header, overwrite=True)
@@ -405,7 +543,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "DS9 Mask Imported",
-                f"Imported {os.path.basename(reg_file)} and merged it into image_mask.fits. (Backup is available in the file explorer)"
+                f"Imported {os.path.basename(reg_file)} and merged it into {os.path.basename(old_mask_path)}. (Backup is available in the file explorer)"
             )
             self.changegal()
         except Exception as e:
@@ -426,8 +564,14 @@ class MainWindow(QMainWindow):
 
             if redraw:
                 selected_indices = self.current_selected_indices
-                if selected_indices is None:
-                    selected_indices = set(range(len(self.dataset.config_dict["function_sets"][0]["function_list"]))) if self.dataset.config_dict is not None else None
+                if self.base_config_dict is None:
+                    self.base_config_dict = self._load_config_dict(self.get_base_config_path(self.selected_galaxy_path, self.band, self.fit_type))
+                if self.base_config_dict is None and self.dataset.config_dict is not None:
+                    self.base_config_dict = self.dataset.config_dict
+                if self.base_config_dict is not None:
+                    self.dataset.config_dict = self.base_config_dict
+                if selected_indices is None and self.base_config_dict is not None:
+                    selected_indices = list(range(len(self.base_config_dict["function_sets"][0]["function_list"])))
                 self.config_adjust = ConfigAdjustWidget(
                     parent=layout,
                     dataset=self.dataset,
@@ -435,21 +579,65 @@ class MainWindow(QMainWindow):
                     selected_indices=selected_indices,
                 )
                 self.config_adjust.draw_config_adjust()
+                self.config_adjust.selected_indices = set(selected_indices or range(len(self.base_config_dict["function_sets"][0]["function_list"]))) if self.base_config_dict is not None else set()
+                self.config_adjust.update_enabled_state()
+            else:
+                if self.base_config_dict is not None:
+                    self.dataset.config_dict = self.base_config_dict
+                if self.config_adjust is not None:
+                    self.config_adjust.selected_indices = set(self.current_selected_indices or range(len(self.base_config_dict["function_sets"][0]["function_list"]))) if self.base_config_dict is not None else set()
+                    self.config_adjust.update_enabled_state()
         except:
             clearLayout(self.ui.configsliders)
             print(traceback.format_exc())
             pass
     
     def refresh_fitparams(self):
-        try:
-            self.highlight_boundary_params(self.dataset.fit_results_text, self.dataset.fit_results)
-        except:
+        if self.dataset.fit_results_text == None:
             self.params.setPlainText("Fit Params not found!")
             self.params.repaint()
-            print(tb.format_exc())
+        else:
+            try:
+                self.highlight_boundary_params(self.dataset.fit_results_text, self.dataset.fit_results)
+            except:
+                self.params.setPlainText("Fit Params not found!")
+                self.params.repaint()
+                print(tb.format_exc())
     def on_component_selection_changed(self, selected_indices):
-        #TODO: implement
-        pass
+        if self.selected_galaxy_path is None:
+            return
+
+        self.current_selected_indices = sorted(selected_indices) if selected_indices is not None else None
+        if self.base_config_dict is None:
+            self.base_config_dict = self._load_config_dict(self.get_base_config_path(self.selected_galaxy_path, self.band, self.fit_type))
+        if self.base_config_dict is None:
+            self.base_config_dict = copy.deepcopy(self.dataset.config_dict)
+        if self.base_config_dict is None:
+            return
+
+        self._apply_widget_values_to_model(self.base_config_dict)
+        model_to_write = self._build_selected_model_dict(self.base_config_dict, self.current_selected_indices)
+
+        config_path = self.get_config_path(self.selected_galaxy_path, self.band, self.fit_type)
+        self._write_component_files(config_path, model_to_write, self.current_selected_indices)
+
+        if self.current_selected_indices is not None:
+            selected_count = len(self.current_selected_indices)
+            full_count = len(self.base_config_dict["function_sets"][0]["function_list"])
+            if selected_count == full_count and self.current_selected_indices == list(range(full_count)):
+                self.current_selected_indices = None
+
+        self.dataset.config_path = config_path
+        self.dataset.fits_composed_path = self.get_composed_path(self.selected_galaxy_path, self.band, self.fit_type)
+        self.dataset.mask_path = self.get_mask_path(self.selected_galaxy_path, self.band)
+        self.dataset.fit_results_path = self.get_fit_params_path(self.selected_galaxy_path, self.band, self.fit_type)
+        self.dataset.load_config()
+        self.dataset.load_mask()
+        self.dataset.load_fit_results()
+        self.dataset.load_composed()
+        self.refresh_conf(redraw=False)
+        self.refresh_plots()
+        self.refresh_fitparams()
     
     def refresh_plots(self):
         self.jpg_img_plot.plot(self.dataset.jpg_image, limits=None, cmap=None, stretch=None, plottext="JPG Image", cbar=False)
@@ -483,10 +671,16 @@ class MainWindow(QMainWindow):
         if self.dataset.z != self.dataset.z:
             self.dataset.z = self.dataset.d_A = None
 
+    def refitdone(self):
+        self.dataset.load_all()
+        self.refresh_fitparams()
+        self.refresh_plots()
+
     def changegal(self):
         # Update UI based on the currently selected leaf galaxy folder
         galaxypath = self.selected_galaxy_path
         galaxy = galaxypath.name
+        self.current_selected_indices = None
         self.currentgalaxytext.setText(f"Current Galaxy: {galaxy}")
         self.currentgalaxytext.repaint()
 
@@ -495,16 +689,19 @@ class MainWindow(QMainWindow):
         fits_invvar_image_path = os.path.join(galaxypath, f"image_{self.band}_invvar.fits")
         fits_psf_path = os.path.join(galaxypath, f"psf_patched_{self.band}.fits")
 
-        mask_path = os.path.join(galaxypath, f"image_mask.fits")
-        config_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}.dat")
-        fits_composed_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_composed.fits")
-        fit_results_path = os.path.join(galaxypath, f"{self.fit_type}_{self.band}_fit_params.txt")
+        mask_path = self.get_mask_path(galaxypath, self.band)
+        config_path = self.get_config_path(galaxypath, self.band, self.fit_type)
+        fits_composed_path = self.get_composed_path(galaxypath, self.band, self.fit_type)
+        fit_results_path = self.get_fit_params_path(galaxypath, self.band, self.fit_type)
 
         if self.gui_config["data_type"] == "DESI":
             self.dataset = DESIDataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
         else:
             self.dataset = DataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
         self.dataset.load_all()
+        self.base_config_dict = self._load_config_dict(self.get_base_config_path(galaxypath, self.band, self.fit_type))
+        if self.base_config_dict is None:
+            self.base_config_dict = copy.deepcopy(self.dataset.config_dict)
         # self.current_selected_indices = set(range(len(self.base_config_dict["function_sets"][0]["function_list"]))) if self.base_config_dict is not None else None
 
         self.refresh_tabledata()
@@ -741,12 +938,24 @@ class MainWindow(QMainWindow):
             return
         path = self.selected_galaxy_path
         config_path = self.get_config_path(path, self.band, self.fit_type)
-        dlg = fit_monitor.FitMonitorDialog(path, self.band, self.solvertype, max_threads=self.gui_config["imfit_maxthreads"], fit_type=self.fit_type, config_file=config_path, gui_config=self.gui_config, parent=self)
+        dlg = fit_monitor.FitMonitorDialog(
+            path,
+            self.band,
+            self.solvertype,
+            max_threads=self.gui_config["imfit_maxthreads"],
+            fit_type=self.fit_type,
+            config_file=config_path,
+            gui_config=self.gui_config,
+            fit_params_path=self.get_fit_params_path(path, self.band, self.fit_type),
+            composed_image_path = self.get_composed_path(path, self.band, self.fit_type),
+            parent=self,
+        )
         dlg.show()
         self.fit_dialogs.append(dlg)
 
         # Just refreshing the configs and stats and whatnot
-        self.changegal()
+        self.refresh_fitparams()
+        self.refresh_plots()
     
     def markgalaxy(self, markas):
         if getattr(self, "selected_galaxy_path", None) is None:
@@ -770,46 +979,23 @@ class MainWindow(QMainWindow):
             print("No galaxy selected to save config")
             return
 
-        config_path = self.dataset.config_path
+        config_path = self.get_config_path(self.selected_galaxy_path, self.band, self.fit_type)
+        if self.base_config_dict is None:
+            self.base_config_dict = self._load_config_dict(self.get_base_config_path(self.selected_galaxy_path, self.band, self.fit_type))
+        if self.base_config_dict is None:
+            self.base_config_dict = copy.deepcopy(self.dataset.config_dict)
 
-        # If we have a config model and param_widgets, update the config model with the new values
-        model_dict = self.dataset.config_dict
-        function_list = model_dict["function_sets"][0]["function_list"]
-        # Update parameter values from widgets
-        for func_idx, func in enumerate(function_list):
-            params = func["parameters"]
-            for param in params.keys():
-                key = (func_idx, param)
-                if key in self.config_adjust.param_widgets:
-                    values = self.config_adjust.param_widgets[key].get_values()
-                    if values['fixed']:
-                        # Only value and 'fixed' string
-                        params[param] = [values['value'], 'fixed']
-                    else:
-                        # Value, min, max
-                        params[param] = [values['value'], values['min'], values['max']]
-        
-        # Rebuild the config description from the updated dict
-        try:
-            new_model = pyimfit.ModelDescription.dict_to_ModelDescription(model_dict)
-        except Exception as e:
-            QMessageBox.warning(
-                self, "Warning", f"Warning: {e}"
-            )
-            return
+        self._apply_widget_values_to_model(self.base_config_dict)
+        model_to_write = self._build_selected_model_dict(self.base_config_dict, self.current_selected_indices)
+        self._write_component_files(config_path, model_to_write, self.current_selected_indices)
 
-        config_text = "".join(new_model.getStringDescription())
-        # Backup old config
-        if os.path.isfile(config_path):
-            shutil.copyfile(src=config_path, dst=config_path + ".bak")
-        with open(config_path, "w") as f:
-            f.write(config_text)
-        if f: f.close()
-
-        # Refresh config image and residual
+        self.dataset.config_path = config_path
+        self.dataset.mask_path = self.get_mask_path(self.selected_galaxy_path, self.band)
+        self.dataset.fits_composed_path = self.get_composed_path(self.selected_galaxy_path, self.band, self.fit_type)
         self.dataset.load_config()
+        self.dataset.load_mask()
+        self.dataset.load_composed()
         self.refresh_conf(redraw=False)
-        # self.refresh_conf()
         self.refresh_plots()
     
     def copy_parameters_from_band(self): # TODO need to update this to work with the new refactor

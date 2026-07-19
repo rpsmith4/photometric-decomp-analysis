@@ -260,10 +260,12 @@ def parse_results(file):
     status = lines[5].split(" ")[7]
     status_message = " ".join(lines[5].split(" ")[9:])
     uncs = dict()
+    labels = []
     for k, line in enumerate(lines):
         if "FUNCTION" in line:
             func_type = line.split(" ")[1].rstrip()
             func_label = line.split("LABEL ")[-1].rstrip()
+            labels.append(func_label)
             func_params = pyimfit.get_function_dict()[func_type]
             uncs[func_label] = dict()
             for j, func_param in enumerate(func_params):
@@ -279,13 +281,14 @@ def parse_results(file):
         func_dict = function.getFunctionAsDict()
         for param in func_dict["parameters"]:
             func_dict["parameters"][param] = func_dict["parameters"][param][0]
-        if k == 0:
-            func_dict["label"] = "Host"
-        if k == 1:
-            func_dict["label"] = "Polar"
-        func_dict["parameters_unc"] = uncs[func_dict["label"]]
-        func_dict["band"] = band
-        functions.append(func_dict)
+
+        func_dict["label"] = labels[k]
+        try:
+            func_dict["parameters_unc"] = uncs[func_dict["label"]]
+            func_dict["band"] = band
+            functions.append(func_dict)
+        except:
+            pass
 
     function_map = {idx: func for idx, func in enumerate(functions)}
     return function_map, chi_sq, chi_sq_red, status, status_message

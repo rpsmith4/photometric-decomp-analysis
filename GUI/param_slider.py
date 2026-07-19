@@ -91,7 +91,7 @@ class ConfigAdjustWidget(QWidget):
         else:
             self.selected_indices.discard(func_idx)
 
-        # self.update_enabled_state()
+        self.update_enabled_state()
 
         if self.config_callback is not None:
             self.config_callback(sorted(self.selected_indices))

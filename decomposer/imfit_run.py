@@ -18,16 +18,17 @@ sys.path.append(os.path.join(IMAN_DIR, 'decomposition/make_model'))
 import make_model_ima_imfit
 
 
-def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, fit_type="2_sersic", config_file=None, mask_file=None, gui_config = None, stdout_callback=None):
+def run_imfit(band, mask=True, psf=True, invvar=True, alg="LM", max_threads=4, fit_type="2_sersic", config_file=None, mask_file=None, gui_config = None, stdout_callback=None, params_file=None):
     # Assumes already in directory
     #imfit -c config.dat image_g.fits --mask image_mask.fits --psf psf_patched_g.fits --noise image_g_invvar.fits --save-model g_model.fits --save-residual g_residual.fits --max-threads 4 --errors-are-weights
     # command = ["imfit", "-c", f"config_{band}.dat", f"image_{band}.fits", "--save-model", f"{band}_model.fits", "--save-residual", f"{band}_residual.fits", "--save-params", f"{band}_fit_params.txt", "--max-threads", f"{args.max_threads}"]
     config_file = config_file or f"{fit_type}_{band}.dat"
+    params_file = params_file or f"{fit_type}_{band}_fit_params.txt"
     imfit_cmd = "imfit"
     if gui_config:
         if 'imfit_path' in gui_config and gui_config['imfit_path']:
             imfit_cmd = os.path.join(gui_config['imfit_path'], 'imfit')
-    command = [imfit_cmd, "-c", config_file, f"image_{band}.fits", "--save-params", f"{fit_type}_{band}_fit_params.txt", "--max-threads", f"{max_threads}"]
+    command = [imfit_cmd, "-c", config_file, f"image_{band}.fits", "--save-params", params_file, "--max-threads", f"{max_threads}"]
     if mask:
         command.extend(["--mask", mask_file or "image_mask.fits"])
     if psf:

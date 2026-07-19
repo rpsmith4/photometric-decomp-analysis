@@ -24,7 +24,7 @@ class FitWorker(QtCore.QThread):
     output = QtCore.Signal(str)
     finished = QtCore.Signal(int)
 
-    def __init__(self, path, band, solver, max_threads, fit_type, mask=True, psf=True, invvar=True, config_file=None, gui_config=None, parent=None):
+    def __init__(self, path, band, solver, max_threads, fit_type, mask=True, psf=True, invvar=True, config_file=None, gui_config=None, fit_params_path=None, composed_image_path=None, parent=None):
         super().__init__(parent)
         self.path = str(Path(path).resolve())
         self.band = band
@@ -36,6 +36,8 @@ class FitWorker(QtCore.QThread):
         self.invvar = invvar
         self.config_file = config_file
         self.gui_config = gui_config
+        self.fit_params_path = fit_params_path
+        self.composed_image_path = composed_image_path
 
     def run(self):
         # Change to target directory and run imfit, streaming stdout
@@ -54,7 +56,8 @@ class FitWorker(QtCore.QThread):
         try:
             imfit_run.run_imfit(self.band, mask=self.mask, psf=self.psf, invvar=self.invvar,
                                 alg=self.solver, max_threads=self.max_threads, fit_type=self.fit_type,
-                                config_file=self.config_file, gui_config=self.gui_config, stdout_callback=cb)
+                                config_file=self.config_file, gui_config=self.gui_config,
+                                stdout_callback=cb, params_file=self.fit_params_path)
         except Exception as e:
             self.output.emit(f"Error running imfit: {e}\n")
             try:
@@ -66,7 +69,8 @@ class FitWorker(QtCore.QThread):
 
         # After imfit finishes, attempt to make composed image (similar to imfit_run.main behavior)
         try:
-            params_file = f"{self.fit_type}_{self.band}_fit_params.txt"
+            params_file = os.path.basename(self.fit_params_path) or f"{self.fit_type}_{self.band}_fit_params.txt"
+            composed_file = os.path.basename(self.composed_image_path) or f"{self.fit_type}_{self.band}_composed.fits"
             img_file = f"image_{self.band}.fits"
             psf_file = f"psf_patched_{self.band}.fits"
             mask_file = "image_mask.fits"
@@ -85,13 +89,13 @@ class FitWorker(QtCore.QThread):
                     img = img * (1 - mask_img)
                     fits.writeto("masked.fits", data=img, header=img_dat[0].header, overwrite=True)
                     
-                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"], imfitPath=imfitPath, mask=mask_img)
+                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=composed_file, comp_names=["Host", "Polar"], imfitPath=imfitPath, mask=mask_img)
                     try:
                         os.remove("./masked.fits")
                     except Exception:
                         pass
                 else:
-                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=f"{self.fit_type}_{self.band}_composed.fits", comp_names=["Host", "Polar"], imfitPath=imfitPath)
+                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=composed_file, comp_names=["Host", "Polar"], imfitPath=imfitPath)
 
         except Exception as e:
             self.output.emit(f"Warning: failed to make composed image: {e}\n")
@@ -105,7 +109,7 @@ class FitWorker(QtCore.QThread):
 
 
 class FitMonitorDialog:
-    def __init__(self, path, band, solver, max_threads=8, fit_type="2_sersic", config_file=None, gui_config=None, parent=None):
+    def __init__(self, path, band, solver, max_threads=8, fit_type="2_sersic", config_file=None, gui_config=None, fit_params_path=None, composed_image_path=None, parent=None):
         self.parent = parent
         ui_file = QFile(os.path.join(MAINDIR, LOCAL_DIR, 'fit_monitor.ui'))
         loader = QUiLoader()
@@ -117,6 +121,8 @@ class FitMonitorDialog:
         self.max_threads = max_threads
         self.fit_type = fit_type
         self.config_file = config_file
+        self.fit_params_path = fit_params_path
+        self.composed_image_path = composed_image_path
         self._stdout_buffer = ""
         self._current_func_idx = -1
         self._config_bounds = self._load_config_bounds(config_file)
@@ -127,7 +133,7 @@ class FitMonitorDialog:
         self.ui.closeButton.clicked.connect(self.close)
 
         # Worker thread
-        self.worker = FitWorker(path, band, solver, max_threads, fit_type, config_file=config_file, gui_config=gui_config)
+        self.worker = FitWorker(path, band, solver, max_threads, fit_type, config_file=config_file, gui_config=gui_config, fit_params_path=fit_params_path, composed_image_path=composed_image_path)
         self.worker.output.connect(self._append_output)
         self.worker.finished.connect(self._finished)
 
@@ -207,15 +213,8 @@ class FitMonitorDialog:
         # If parent is the main window, trigger a refresh of the currently selected galaxy
         try:
             parent = self.parent
-            if parent is not None and hasattr(parent, 'changegal'):
-                try:
-                    parent.changegal(index=parent.curr_gal_index)
-                except Exception:
-                    # best-effort: if the parent's index attribute is named differently, try calling without args
-                    try:
-                        parent.changegal()
-                    except Exception:
-                        pass
+            if parent is not None and hasattr(parent, 'refitdone'):
+                parent.refitdone()
         except Exception:
             pass
 
