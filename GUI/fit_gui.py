@@ -604,6 +604,9 @@ class MainWindow(QMainWindow):
                 self.params.repaint()
                 print(tb.format_exc())
     def on_component_selection_changed(self, selected_indices):
+        if len(selected_indices) == 0:
+            QMessageBox.warning(self, "No Component Selected", "Please select at least one component for fitting.")
+            return
         if self.selected_galaxy_path is None:
             return
 
