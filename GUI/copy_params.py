@@ -19,6 +19,9 @@ class CopyParametersDialog(QDialog):
         self.fit_type = fit_type
         self.source_band = None
         self.source_config = None
+        self.source_config_path = None
+        self.source_fit_params_path = None
+        self.source_config_name = None
         self.source_type = "config"  # Can be "config" or "fit_params"
         self.fit_params_values = {}  # Store parsed fit parameters
         self.setWindowTitle("Copy Parameters From Band")
@@ -39,6 +42,16 @@ class CopyParametersDialog(QDialog):
         band_layout.addStretch()
         layout.addLayout(band_layout)
         
+        # Source config file selection
+        source_file_layout = QHBoxLayout()
+        source_file_label = QLabel("Source config file:")
+        self.config_file_combo = QComboBox()
+        self.config_file_combo.currentTextChanged.connect(self.on_source_file_changed)
+        source_file_layout.addWidget(source_file_label)
+        source_file_layout.addWidget(self.config_file_combo)
+        source_file_layout.addStretch()
+        layout.addLayout(source_file_layout)
+
         # Source type selection
         source_layout = QHBoxLayout()
         source_label = QLabel("Source:")
@@ -88,6 +101,37 @@ class CopyParametersDialog(QDialog):
         # Load initial band
         self.on_band_changed(self.band_combo.currentText())
     
+    def _get_available_config_files(self, band):
+        """Return config files for the selected band, including component-specific ones."""
+        if not os.path.isdir(self.galaxy_path):
+            return []
+
+        prefix = f"{self.fit_type}_{band}"
+        candidates = []
+        for entry in sorted(os.listdir(self.galaxy_path)):
+            if not entry.endswith(".dat"):
+                continue
+            if entry.startswith(prefix):
+                candidates.append(entry)
+
+        return candidates or [f"{prefix}.dat"]
+
+    def _populate_config_file_selector(self, band):
+        """Populate the source config file combo for the selected band."""
+        self.config_file_combo.blockSignals(True)
+        self.config_file_combo.clear()
+        available_files = self._get_available_config_files(band)
+        self.config_file_combo.addItems(available_files)
+
+        default_name = f"{self.fit_type}_{band}.dat"
+        if default_name in available_files:
+            index = available_files.index(default_name)
+        else:
+            index = 0
+        self.config_file_combo.setCurrentIndex(index)
+        self.config_file_combo.blockSignals(False)
+        self.on_source_file_changed()
+
     def on_source_changed(self):
         """Handle source type change."""
         if self.config_radio.isChecked():
@@ -95,35 +139,49 @@ class CopyParametersDialog(QDialog):
         else:
             self.source_type = "fit_params"
         self.on_band_changed(self.band_combo.currentText())
-    
-    def on_band_changed(self, band):
-        """Load parameters from the selected source band."""
-        self.source_band = band
+
+    def on_source_file_changed(self):
+        """Update the selected config and fit-params paths when the source file changes."""
+        selected_name = self.config_file_combo.currentText()
+        if not selected_name:
+            return
+
+        self.source_config_name = selected_name
+        self.source_config_path = os.path.join(self.galaxy_path, selected_name)
+        self.source_fit_params_path = os.path.join(
+            self.galaxy_path,
+            os.path.splitext(selected_name)[0] + "_fit_params.txt"
+        )
+        self._load_selected_source_config()
+
+    def _load_selected_source_config(self):
+        """Load the selected source config and populate the parameter list."""
         self.param_list.clear()
         self.fit_params_values = {}
-        
-        config_path = os.path.join(self.galaxy_path, f"{self.fit_type}_{band}.dat")
+
+        if not self.source_config_path:
+            return
+
         try:
-            self.source_config = pyimfit.parse_config_file(config_path)
+            self.source_config = pyimfit.parse_config_file(self.source_config_path)
             config_dict = self.source_config.getModelAsDict()
             function_list = config_dict["function_sets"][0]["function_list"]
-            
+
             # Load function labels
-            labels = read_function_labels(config_path)
-            
+            labels = read_function_labels(self.source_config_path)
+
             # If fit_params source is selected, try to load fit parameters
             if self.source_type == "fit_params":
-                fit_params_path = os.path.join(self.galaxy_path, f"{self.fit_type}_{band}_fit_params.txt")
-                if os.path.exists(fit_params_path):
-                    self.fit_params_values = parse_results(fit_params_path)[0]
+                if os.path.exists(self.source_fit_params_path):
+                    self.fit_params_values = parse_results(self.source_fit_params_path)[0]
                 else:
                     QMessageBox.warning(
-                        self, "Warning", 
-                        f"Fit parameters file not found for band {band}.\nFalling back to config file."
+                        self, "Warning",
+                        f"Fit parameters file not found for {self.source_config_name}.\nFalling back to config file."
                     )
                     self.config_radio.setChecked(True)
                     self.source_type = "config"
-            
+
             # Populate the list
             for func_idx, func in enumerate(function_list):
                 params = func["parameters"]
@@ -168,7 +226,12 @@ class CopyParametersDialog(QDialog):
                     self.param_list.addItem(item)
         
         except Exception as e:
-            QMessageBox.warning(self, "Error", f"Could not load config from band {band}: {str(e)}")
+            QMessageBox.warning(self, "Error", f"Could not load config from {self.source_config_name or band}: {str(e)}")
+
+    def on_band_changed(self, band):
+        """Load parameters from the selected source band."""
+        self.source_band = band
+        self._populate_config_file_selector(band)
     
     def select_all(self):
         """Select all parameter items (exclude headers)."""
@@ -194,3 +257,11 @@ class CopyParametersDialog(QDialog):
     def get_fit_params_values(self):
         """Return the parsed fit parameters."""
         return self.fit_params_values
+
+    def get_source_config_path(self):
+        """Return the selected source config file path."""
+        return self.source_config_path
+
+    def get_source_fit_params_path(self):
+        """Return the selected source fit-params file path."""
+        return self.source_fit_params_path

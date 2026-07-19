@@ -1027,10 +1027,12 @@ class MainWindow(QMainWindow):
             
             try:
                 # Get source config
-                source_config_path = os.path.join(
-                    self.selected_galaxy_path,
-                    f"{self.fit_type}_{source_band}.dat"
-                )
+                source_config_path = dlg.get_source_config_path()
+                if source_config_path is None:
+                    source_config_path = os.path.join(
+                        self.selected_galaxy_path,
+                        f"{self.fit_type}_{source_band}.dat"
+                    )
                 source_config = pyimfit.parse_config_file(source_config_path)
                 source_dict = source_config.getModelAsDict()
                 source_functions = source_dict["function_sets"][0]["function_list"]
@@ -1045,10 +1047,7 @@ class MainWindow(QMainWindow):
                         func['label'] = None
 
                 # Get current config
-                current_config_path = os.path.join(
-                    self.selected_galaxy_path,
-                    f"{self.fit_type}_{self.band}.dat"
-                )
+                current_config_path = self.get_config_path(self.selected_galaxy_path, self.band, self.fit_type)
                 current_config = pyimfit.parse_config_file(current_config_path)
                 current_dict = current_config.getModelAsDict()
                 current_functions = current_dict["function_sets"][0]["function_list"]
@@ -1059,14 +1058,26 @@ class MainWindow(QMainWindow):
                         func['label'] = current_functions_labels[i]
                     else:
                         func['label'] = None
-                
-                if current_functions_labels != source_functions_labels:
-                    raise ValueError(f"Bad function labels!\nSource has labels: {source_functions_labels}\nCurrent has labels: {current_functions_labels}")
+
+                def resolve_target_function_index(source_idx):
+                    source_label = source_functions[source_idx].get("label") if source_idx < len(source_functions) else None
+                    if source_label is not None:
+                        for target_idx, target_func in enumerate(current_functions):
+                            if target_func.get("label") == source_label:
+                                return target_idx
+                    if source_idx < len(current_functions):
+                        return source_idx
+                    return None
             
                 # Copy selected parameters
                 copied_count = 0
                 for func_idx, param_name in selected_params:
                     try:
+                        target_func_idx = resolve_target_function_index(func_idx)
+                        if target_func_idx is None:
+                            print(f"Skipping {param_name} from function {func_idx}: no matching target function found")
+                            continue
+
                         if source_type == "fit_params":
                             # Copy from fit parameters - use value as fixed parameter
                             param_value = fit_params_values[func_idx]["parameters"][param_name]
@@ -1074,17 +1085,17 @@ class MainWindow(QMainWindow):
                             # Ngl I don't know how I feel about determining the bounds like this, but it works for now (subject to change)
                             # Now actually changed to just using the config bounds
                             # if param_unc != 0:
-                            #     current_functions[func_idx]["parameters"][param_name] = [param_value, param_value-param_unc, param_value+param_unc]
+                            #     current_functions[target_func_idx]["parameters"][param_name] = [param_value, param_value-param_unc, param_value+param_unc]
                             # else:
-                            #     current_functions[func_idx]["parameters"][param_name] = [param_value, 'fixed']
-                            current_functions[func_idx]["parameters"][param_name] = [param_value,  source_functions[func_idx]["parameters"][param_name][1],  source_functions[func_idx]["parameters"][param_name][2]]
+                            #     current_functions[target_func_idx]["parameters"][param_name] = [param_value, 'fixed']
+                            current_functions[target_func_idx]["parameters"][param_name] = [param_value,  source_functions[func_idx]["parameters"][param_name][1],  source_functions[func_idx]["parameters"][param_name][2]]
                             copied_count += 1
                         else:
                             # Copy from config file
                             source_param = source_functions[func_idx]["parameters"][param_name]
                             if source_param is not None:
                                 # Copy the parameter value and constraints
-                                current_functions[func_idx]["parameters"][param_name] = source_param.copy()
+                                current_functions[target_func_idx]["parameters"][param_name] = source_param.copy()
                                 copied_count += 1
                     except Exception as e:
                         print(f"Warning: Could not copy {param_name} from function {func_idx}: {e}")
@@ -1105,7 +1116,12 @@ class MainWindow(QMainWindow):
                     f.write(config_text)
                 
                 source_text = "config file" if source_type == "config" else "fit parameters"
-                QMessageBox.information(self, "Success", f"Copied {copied_count} parameter(s) from {source_text} of band {source_band}.")
+                source_name = os.path.basename(source_config_path)
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    f"Copied {copied_count} parameter(s) from {source_text} in {source_name} ({source_band})."
+                )
                 
                 # Refresh the UI with new parameters
                 self.changegal()
