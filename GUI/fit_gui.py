@@ -545,7 +545,9 @@ class MainWindow(QMainWindow):
                 "DS9 Mask Imported",
                 f"Imported {os.path.basename(reg_file)} and merged it into {os.path.basename(old_mask_path)}. (Backup is available in the file explorer)"
             )
-            self.changegal()
+            self.dataset.load_mask()
+            self.dataset.load_fits_image(apply_mask=True)
+            self.refresh_plots()
         except Exception as e:
             QMessageBox.critical(self, "Mask Import Failed", f"Failed to import DS9 mask:\n{e}")
             print(e)
