@@ -634,10 +634,11 @@ class MainWindow(QMainWindow):
         self.dataset.fits_composed_path = self.get_composed_path(self.selected_galaxy_path, self.band, self.fit_type)
         self.dataset.mask_path = self.get_mask_path(self.selected_galaxy_path, self.band)
         self.dataset.fit_results_path = self.get_fit_params_path(self.selected_galaxy_path, self.band, self.fit_type)
-        self.dataset.load_config()
-        self.dataset.load_mask()
-        self.dataset.load_fit_results()
-        self.dataset.load_composed()
+        # self.dataset.load_config()
+        # self.dataset.load_mask()
+        # self.dataset.load_fit_results()
+        # self.dataset.load_composed()
+        self.dataset.load_all()
         self.refresh_conf(redraw=False)
         self.refresh_plots()
         self.refresh_fitparams()
@@ -941,16 +942,26 @@ class MainWindow(QMainWindow):
             return
         path = self.selected_galaxy_path
         config_path = self.get_config_path(path, self.band, self.fit_type)
+        # dlg = fit_monitor.FitMonitorDialog(
+        #     path,
+        #     self.band,
+        #     self.solvertype,
+        #     max_threads=self.gui_config["imfit_maxthreads"],
+        #     fit_type=self.fit_type,
+        #     config_file=config_path,
+        #     gui_config=self.gui_config,
+        #     fit_params_path=self.get_fit_params_path(path, self.band, self.fit_type),
+        #     composed_image_path = self.get_composed_path(path, self.band, self.fit_type),
+        #     parent=self,
+        # )
         dlg = fit_monitor.FitMonitorDialog(
             path,
             self.band,
             self.solvertype,
+            dataset=self.dataset,
             max_threads=self.gui_config["imfit_maxthreads"],
             fit_type=self.fit_type,
-            config_file=config_path,
             gui_config=self.gui_config,
-            fit_params_path=self.get_fit_params_path(path, self.band, self.fit_type),
-            composed_image_path = self.get_composed_path(path, self.band, self.fit_type),
             parent=self,
         )
         dlg.show()
