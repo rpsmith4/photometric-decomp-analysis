@@ -222,7 +222,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
         </size>
        </property>
        <property name="text">
-        <string>Copy From Band (C-p)</string>
+        <string>Copy From Other (C-p)</string>
        </property>
       </widget>
      </item>
@@ -562,8 +562,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>522</width>
-        <height>857</height>
+        <width>528</width>
+        <height>860</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_6">
@@ -824,8 +824,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>367</width>
-        <height>878</height>
+        <width>373</width>
+        <height>874</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_2">
