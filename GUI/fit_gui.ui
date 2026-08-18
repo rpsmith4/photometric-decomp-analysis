@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1256</width>
-    <height>894</height>
+    <height>931</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -236,6 +236,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
        </property>
        <property name="text">
         <string>Refit (C-r)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="fixfromfitbutton">
+       <property name="text">
+        <string>Fi(x) from Fit</string>
        </property>
       </widget>
      </item>
@@ -483,7 +490,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
         </size>
        </property>
        <property name="text">
-        <string>Open in (F)ile Explorer</string>
+        <string>Open in File Explorer</string>
        </property>
       </widget>
      </item>
@@ -562,8 +569,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>528</width>
-        <height>860</height>
+        <width>522</width>
+        <height>894</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_6">
@@ -824,8 +831,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>373</width>
-        <height>874</height>
+        <width>367</width>
+        <height>915</height>
        </rect>
       </property>
       <layout class="QGridLayout" name="gridLayout_2">

@@ -5,6 +5,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QFile
 from PySide6.QtUiTools import *
 import os
+import copy
 from pathlib import Path
 import astropy.units as u
 import math
@@ -13,12 +14,32 @@ from utils import clearLayout
 from utils import DataSet
 
 class ConfigAdjustWidget(QWidget):
-    def __init__(self, parent, dataset: DataSet, config_callback=None, selected_indices=None):
+    def __init__(self, parent, dataset: DataSet, base_config_dict=None, config_callback=None, selected_indices=None):
         super().__init__()
         self.layout = parent
         self.dataset = dataset
         self.config_callback = config_callback
-        self.config_dict = self.dataset.config_dict
+        self.config_dict = copy.deepcopy(
+            base_config_dict if base_config_dict is not None else self.dataset.config_dict
+        )
+        if base_config_dict is not None and self.dataset.config_dict is not None:
+            dataset_functions = self.dataset.config_dict["function_sets"][0]["function_list"]
+            dataset_by_label = {
+                function.get("label"): function
+                for function in dataset_functions
+                if function.get("label") is not None
+            }
+            for function_index, function in enumerate(self.config_dict["function_sets"][0]["function_list"]):
+                dataset_function = dataset_by_label.get(function.get("label"))
+                if dataset_function is None and len(dataset_functions) == len(self.config_dict["function_sets"][0]["function_list"]):
+                    dataset_function = dataset_functions[function_index]
+                if dataset_function is None:
+                    continue
+                for parameter_name in function["parameters"]:
+                    if parameter_name in dataset_function["parameters"]:
+                        function["parameters"][parameter_name] = copy.deepcopy(
+                            dataset_function["parameters"][parameter_name]
+                        )
         self.function_list = self.config_dict["function_sets"][0]["function_list"]
         self.param_widgets = {}
         self.component_checkboxes = {}

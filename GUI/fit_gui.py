@@ -227,6 +227,9 @@ class MainWindow(QMainWindow):
         self.ui.copyparamsbutton.clicked.connect(self.copy_parameters_from_band)
         self.ui.copyparamsbutton.setShortcut(QKeySequence("CTRL+P"))
 
+        self.ui.fixfromfitbutton.clicked.connect(self.fixPAandEllfromfit)
+        self.ui.fixfromfitbutton.setShortcut(QKeySequence("x"))
+
         # Also connect the generate config button
         self.ui.newconfbutton.clicked.connect(self.regenconf)
         self.ui.newconfbutton.setShortcut(QKeySequence("CTRL+G"))
@@ -446,8 +449,6 @@ class MainWindow(QMainWindow):
         if selected_indices is not None:
             selected_indices = sorted({int(i) for i in selected_indices})
             function_list = model_dict["function_sets"][0]["function_list"]
-            # print(len(selected_indices))
-            # print(len(function_list))
             # if len(selected_indices) < len(function_list):
             if True:
                 base_mask_path = os.path.join(config_dir, "image_mask.fits")
@@ -569,14 +570,13 @@ class MainWindow(QMainWindow):
                 if self.base_config_dict is None:
                     self.base_config_dict = self._load_config_dict(self.get_base_config_path(self.selected_galaxy_path, self.band, self.fit_type))
                 if self.base_config_dict is None and self.dataset.config_dict is not None:
-                    self.base_config_dict = self.dataset.config_dict
-                if self.base_config_dict is not None:
-                    self.dataset.config_dict = self.base_config_dict
+                    self.base_config_dict = copy.deepcopy(self.dataset.config_dict)
                 if selected_indices is None and self.base_config_dict is not None:
                     selected_indices = list(range(len(self.base_config_dict["function_sets"][0]["function_list"])))
                 self.config_adjust = ConfigAdjustWidget(
                     parent=layout,
                     dataset=self.dataset,
+                    base_config_dict=self.base_config_dict,
                     config_callback=self.on_component_selection_changed,
                     selected_indices=selected_indices,
                 )
@@ -584,8 +584,6 @@ class MainWindow(QMainWindow):
                 self.config_adjust.selected_indices = set(selected_indices or range(len(self.base_config_dict["function_sets"][0]["function_list"]))) if self.base_config_dict is not None else set()
                 self.config_adjust.update_enabled_state()
             else:
-                if self.base_config_dict is not None:
-                    self.dataset.config_dict = self.base_config_dict
                 if self.config_adjust is not None:
                     self.config_adjust.selected_indices = set(self.current_selected_indices or range(len(self.base_config_dict["function_sets"][0]["function_list"]))) if self.base_config_dict is not None else set()
                     self.config_adjust.update_enabled_state()
@@ -873,7 +871,7 @@ class MainWindow(QMainWindow):
                 continue
 
             highlight = False
-            if "+/-" in line and func_idx >= 0 and func_idx in fit_results[0]:
+            if "+/-" in line:
                 m = re.match(r"^\s*(\S+)\s+([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)\s*#\s*\+/\-\s*([+-]?[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)", line)
                 if m:
                     param_name = m.group(1)
@@ -970,8 +968,8 @@ class MainWindow(QMainWindow):
         self.fit_dialogs.append(dlg)
 
         # Just refreshing the configs and stats and whatnot
-        self.refresh_fitparams()
-        self.refresh_plots()
+        # self.refresh_fitparams()
+        # self.refresh_plots()
     
     def markgalaxy(self, markas):
         if getattr(self, "selected_galaxy_path", None) is None:
@@ -1249,6 +1247,56 @@ class MainWindow(QMainWindow):
     def setresidtype(self, state):
         self.plotrelresid = state 
         self.changegal()
+
+    def fixPAandEllfromfit(self):
+        if self.selected_galaxy_path is None or self.dataset is None:
+            QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
+            return
+
+        if not self.dataset.fit_results or self.base_config_dict is None:
+            QMessageBox.warning(self, "Fit Parameters Not Found", "No best-fit parameters were found for this band.")
+            return
+
+        fit_functions = self.dataset.fit_results[0]
+        config_functions = self.dataset.config_dict["function_sets"][0]["function_list"]
+        config_by_label = {
+            function.get("label"): function
+            for function in config_functions
+            if function.get("label") is not None
+        }
+        updated = 0
+
+        for func_idx, fit_function in enumerate(fit_functions):
+            # # ensure same label
+            # config_function = config_by_label.get(fit_function.get("label"))
+            config_function = config_functions[func_idx]
+
+            for parameter_name in ("PA", "ell"):
+                fitted_value = fit_function["parameters"][parameter_name]
+                config_function["parameters"][parameter_name][0] = fitted_value
+                config_function["parameters"][parameter_name][1] = "fixed"
+                try:
+                    config_function["parameters"][parameter_name].pop(2)
+                except:
+                    pass
+
+                # config_function[""]
+                updated += 1
+
+        if updated == 0:
+            QMessageBox.warning(self, "Parameters Not Found", "The fit does not contain PA or ell parameters.")
+            return
+
+        # self._apply_widget_values_to_model(self.base_config_dict)
+        # model_to_write = self._build_selected_model_dict(self.base_config_dict, self.current_selected_indices)
+        # config_path = self.get_config_path(self.selected_galaxy_path, self.band, self.fit_type)
+        self.dataset.config_dict["function_sets"][0]["function_list"] = config_functions
+        print(self.dataset.config_dict)
+        self._write_component_files(self.dataset.config_path, self.dataset.config_dict, self.current_selected_indices)
+        # print(self.dataset.config_model_desc)
+        self.dataset.load_config()
+        self.refresh_conf()
+        self.refresh_plots()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

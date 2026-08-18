@@ -290,7 +290,7 @@ def parse_results(file):
         except:
             pass
 
-    function_map = {idx: func for idx, func in enumerate(functions)}
+    function_map = [func for idx, func in enumerate(functions)]
     return function_map, chi_sq, chi_sq_red, status, status_message
 
 def profile_from_image(image_data, pa, length, pixel_scale=None, surf_bright=False):
