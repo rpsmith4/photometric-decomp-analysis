@@ -1287,13 +1287,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Parameters Not Found", "The fit does not contain PA or ell parameters.")
             return
 
-        # self._apply_widget_values_to_model(self.base_config_dict)
-        # model_to_write = self._build_selected_model_dict(self.base_config_dict, self.current_selected_indices)
-        # config_path = self.get_config_path(self.selected_galaxy_path, self.band, self.fit_type)
         self.dataset.config_dict["function_sets"][0]["function_list"] = config_functions
-        print(self.dataset.config_dict)
         self._write_component_files(self.dataset.config_path, self.dataset.config_dict, self.current_selected_indices)
-        # print(self.dataset.config_model_desc)
         self.dataset.load_config()
         self.refresh_conf()
         self.refresh_plots()
