@@ -563,11 +563,11 @@ class MainWindow(QMainWindow):
     
     def refresh_conf(self, redraw=True):
         try:
-            layout: QVBoxLayout = self.ui.configsliders
+            configsliders: QVBoxLayout = self.ui.configsliders
             # Reset the layout first
             try:
                 if redraw:
-                    clearLayout(layout)
+                    clearLayout(configsliders)
             except Exception as e:
                 print(e)
                 pass
@@ -581,7 +581,7 @@ class MainWindow(QMainWindow):
                 if selected_indices is None and self.base_config_dict is not None:
                     selected_indices = list(range(len(self.base_config_dict["function_sets"][0]["function_list"])))
                 self.config_adjust = ConfigAdjustWidget(
-                    parent=layout,
+                    parent=configsliders,
                     dataset=self.dataset,
                     base_config_dict=self.base_config_dict,
                     config_callback=self.on_component_selection_changed,
