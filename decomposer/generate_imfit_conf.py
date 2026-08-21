@@ -13,29 +13,31 @@ warnings.filterwarnings("ignore")
 # from plot_parameters import parse_results
 import pyimfit
 import pandas as pd
+import importlib
 
 def _get_generator(fit_type: str):
     if fit_type == "2_sersic":
         from sersic_init_conf import gather_parameters
         return gather_parameters
     if fit_type == "1_sersic_1_gauss_ring":
-        from gauss_ring_init_conf import gather_parameters
-        return gather_parameters
+        import gauss_ring_init_conf
+        importlib.reload(gauss_ring_init_conf)
+        from gauss_ring_init_conf import generate_init_guess 
+        return generate_init_guess
     raise ValueError(f"Unsupported fit_type: {fit_type}")
 
 
 def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, galaxy_type: pd.DataFrame = None, phot_fit_type: str = "automatic", outfile_name: str | None = None, plot_slits: bool =False, fit_type: str = "2_sersic") -> pyimfit.ModelDescription:
-    # print(fit_type)
     genparams = _get_generator(fit_type)
     res = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type, plot_slits=plot_slits, phot_params=phot_fit_type, data_loc=outfile)
-    # Adjusted to allow for generation of both manual and automatic files and to be stored separately
+
     model_str = res[0].getStringDescription()
-    save_path = Path(outfile).joinpath(outfile_name) 
-    with open(save_path, "w") as f:
-        f.write("".join(model_str))
-    # Uncomment to open up all of the generated files quickly to see how it did.
-    # import subprocess
-    # subprocess.Popen(["open", "-a", "TextEdit", outfile])
+    if outfile_name:
+        save_path = Path(outfile).joinpath(outfile_name) 
+        with open(save_path, "w") as f:
+            f.write("".join(model_str))
+
+    return res
 
 def main(args, fit_band = 'all'):
     if not(args.p == None):

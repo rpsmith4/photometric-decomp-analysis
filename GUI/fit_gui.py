@@ -1162,7 +1162,7 @@ class MainWindow(QMainWindow):
 
         files = os.listdir(galpath)
         try:
-            if f"{self.fit_type}_{self.band}.dat" in files:
+            if os.path.basename(self.dataset.config_path) in files:
                 answer = QMessageBox.question(
                     self,
                     'Overwrite Warning',
