@@ -54,11 +54,7 @@ def radial_slc(pa, img, c=None, mask=None, samples=1000):
     upper = prof[:n_radius]
     lower = prof[n_radius:]
     prof = np.nanmean(np.vstack((upper, lower)), axis=0)
-    fig,ax = plt.subplots(2,1)
-    ax[0].imshow(img)
-    ax[0].plot(x,y)
-    ax[1].plot(radius, prof)
-    plt.show()
+
     return radius, prof
 
 
@@ -67,22 +63,34 @@ def _fit_sersic_profile(radius, intensity):
     if np.count_nonzero(valid) < 8:
         raise ValueError("Host radial profile has too few positive samples for a Sersic fit")
 
-    radius = np.asarray(radius[valid], dtype=float)
-    intensity = np.asarray(intensity[valid], dtype=float)
-    peak = float(np.nanmax(intensity))
-    half_max = peak / 2.0
-    re_initial = float(radius[np.argmin(np.abs(intensity - half_max))])
-    re_initial = max(re_initial, 1.0)
+    radius = radius[valid]
+    intensity = intensity[valid]
+    peak = np.nanmax(intensity)
+    Ie_initial = peak / 2.0
+    re_initial = radius[np.argmin(np.abs(intensity - Ie_initial))]
     model = models.Sersic1D(
-        amplitude=max(peak / 2.0, 1e-6),
+        amplitude=Ie_initial,
         r_eff=re_initial,
-        n=2.0,
-        bounds={"amplitude": (1e-8, None), "r_eff": (0.5, None), "n": (0.3, 8.0)},
+        n=0.5, # Randomly guess this is a guassian profile 
+        bounds={"amplitude": (1e-8, None), "r_eff": (0.0, None), "n": (0.0, 15.0)},
     )
     fitted = fitting.TRFLSQFitter()(model, radius, intensity)
+    print(fitted)
     if not np.all(np.isfinite([fitted.amplitude.value, fitted.r_eff.value, fitted.n.value])):
         raise ValueError("Host radial profile Sersic fit returned non-finite parameters")
     return fitted
+
+
+def _plot_sersic_fit(radius, intensity, fitted):
+    fit_radius = np.linspace(float(radius.min()), float(radius.max()), 500)
+    plt.figure()
+    plt.plot(radius, intensity, ".", ms=3, label="Profile")
+    plt.plot(fit_radius, fitted(fit_radius), "-", label="1D Sersic fit")
+    plt.xlabel("Radius (pixels)")
+    plt.ylabel("Intensity")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 
 
@@ -121,25 +129,27 @@ def generate_init_guess(fltr: str,
 
     img_shape = sci_fits.data.shape
     img = sci_fits.data
-    mask = None if mask_fits is None else mask_fits > 0
+    print(mask_fits)
     try:
         host_radius, host_profile = radial_slc(
-            host_pa_imfit - 90, img, c=(cx, cy), mask=mask
+            host_pa_imfit - 90, img, c=(cx, cy), mask=mask_fits
         )
         host_fit = _fit_sersic_profile(host_radius, host_profile)
+        if True:
+            _plot_sersic_fit(host_radius, host_profile, host_fit)
     except Exception as exc:
         print(tb.format_exc())
-        raise
-        # raise ValueError("Unable to fit the host radial profile with a Sersic model") from exc
+        raise ValueError("Unable to fit the host radial profile with a Sersic model") from exc
 
-    host_re_pix = float(np.clip(host_fit.r_eff.value, 1.0, min(img_shape)))
-    host_Ie_pix = max(float(host_fit.amplitude.value), 1e-6)
-    host_n = float(np.clip(host_fit.n.value, 0.5, 6.0))
+    host_re_pix = np.clip(host_fit.r_eff.value, 0, min(img_shape))
+    host_Ie_pix = max(host_fit.amplitude.value, 0)
+    host_n = np.clip(host_fit.n.value, 0, 15.0)
 
     polar_A = max(1e-4, host_Ie_pix * 0.15)
     polar_R = max(10.0, host_re_pix * 2.0)
     polar_sigma_r = max(5.0, host_re_pix * 0.5)
 
+    # prepare for extreme magic number disaster
     model = pyimfit.SimpleModelDescription()
     model.x0.setValue(cx, [cx - 15.0, cx + 15.0])
     model.y0.setValue(cy, [cy - 15.0, cy + 15.0])
@@ -148,7 +158,7 @@ def generate_init_guess(fltr: str,
     host.PA.setValue(host_pa_imfit, [max(0.0, host_pa_imfit - 10.0), min(180.0, host_pa_imfit + 10.0)])
     host.ell.setValue(host_ell, [max(0.0, host_ell - 0.10), min(0.95, host_ell + 0.10)])
     host.n.setValue(host_n, [0.5, 6.0])
-    host.I_e.setValue(host_Ie_pix, [max(1e-6, host_Ie_pix * 0.02), max(host_Ie_pix * 0.5, host_Ie_pix)])
+    host.I_e.setValue(host_Ie_pix, [max(1e-6, host_Ie_pix * 0.02),host_Ie_pix * 1.5])
     host.r_e.setValue(host_re_pix, [max(1.0, host_re_pix * 0.3), max(host_re_pix * 2.0, host_re_pix + 1.0)])
 
     polar = pyimfit.make_imfit_function("GaussianRing", label="Polar")

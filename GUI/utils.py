@@ -170,6 +170,11 @@ class DataSet():
     def apply_mask(self, im):
         return np.where(self.fits_mask > 0, 0, im)
 
+    @property
+    def func_labels(self):
+        return read_function_labels(self.config_path)
+
+
 class DESIDataSet(DataSet):
     def __init__(self, jpg_image_path = None, fits_image_path = None, fits_invvar_image_path = None, fits_psf_path = None, mask_path = None, config_path = None, fit_results_path = None, fits_composed_path = None):
         super().__init__(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)

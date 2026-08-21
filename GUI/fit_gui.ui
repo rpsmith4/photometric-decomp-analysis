@@ -117,16 +117,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <property name="toolTip">
         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Fit type&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
        </property>
-       <item>
-        <property name="text">
-         <string>2_sersic</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>1_sersic_1_gauss_ring</string>
-        </property>
-       </item>
       </widget>
      </item>
      <item>

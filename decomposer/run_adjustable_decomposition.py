@@ -781,8 +781,8 @@ def main():
     """
     import glob
     import table_info
-    from sersic_init_conf import gather_parameters
-    from sersic_init_conf import get_galaxy_files
+    from generators.two_sersic import gather_parameters
+    from generators.two_sersic import get_galaxy_files
 
     table_info.set_directory()
 

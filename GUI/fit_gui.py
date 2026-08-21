@@ -240,6 +240,13 @@ class MainWindow(QMainWindow):
         self.ui.polarradio.toggled.connect(lambda checked: setattr(self, 'component', 'polar') if checked else None)
         self.component = 'host'
 
+        fit_type_combo: QComboBox = self.ui.fit_type_combo
+        generators_path = os.path.join(BASE_DIR, 'decomposer', 'generators')
+
+        for generator in glob.glob(os.path.join(generators_path, "*.py")):
+            generator = generator.split('.')[0]
+            fit_type_combo.addItem(os.path.basename(generator))
+        
         self.fit_type = self.ui.fit_type_combo.currentText()
         self.ui.fit_type_combo.currentIndexChanged.connect(self.change_fit_type)
 

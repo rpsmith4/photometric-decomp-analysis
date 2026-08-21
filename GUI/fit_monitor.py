@@ -17,6 +17,7 @@ import imfit_run
 import pyimfit
 from utils import DataSet
 from threading import Thread
+import traceback as tb
 
 IMAN_DIR = Path(os.path.dirname(__file__))
 sys.path.append(os.path.join(IMAN_DIR, 'iman_new/decomposition/make_model'))
@@ -87,11 +88,11 @@ class FitWorker(QtCore.QThread):
 
         # After imfit finishes, attempt to make composed image (similar to imfit_run.main behavior)
         try:
-            params_file = os.path.basename(self.dataset.fit_results_path) or f"{self.fit_type}_{self.band}_fit_params.txt"
-            composed_file = os.path.basename(self.dataset.fits_composed_path) or f"{self.fit_type}_{self.band}_composed.fits"
-            img_file = os.path.basename(self.dataset.fits_image_path) or f"image_{self.band}.fits"
-            psf_file = os.path.basename(self.dataset.fits_psf_path) or f"psf_patched_{self.band}.fits"
-            mask_file = os.path.basename(self.dataset.mask_path) or f"image_mask.fits"
+            params_file = os.path.basename(self.dataset.fit_results_path) 
+            composed_file = os.path.basename(self.dataset.fits_composed_path)
+            img_file = os.path.basename(self.dataset.fits_image_path) 
+            psf_file = os.path.basename(self.dataset.fits_psf_path) 
+            mask_file = os.path.basename(self.dataset.mask_path) 
             if self.gui_config["imfit_path"] != "":
                 imfitPath = str(Path(self.gui_config["imfit_path"])) + "/"
             else:
@@ -107,16 +108,17 @@ class FitWorker(QtCore.QThread):
                     img = img * (1 - mask_img)
                     fits.writeto("masked.fits", data=img, header=img_dat[0].header, overwrite=True)
                     
-                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=composed_file, comp_names=["Host", "Polar"], imfitPath=imfitPath, mask=mask_img)
+                    make_model_ima_imfit.main("masked.fits", params_file, psf_file, composed_model_file=composed_file, comp_names=self.dataset.func_labels, imfitPath=imfitPath, mask=mask_img)
                     try:
                         os.remove("./masked.fits")
                     except Exception:
                         pass
                 else:
-                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=composed_file, comp_names=["Host", "Polar"], imfitPath=imfitPath)
+                    make_model_ima_imfit.main(img_file, params_file, psf_file, composed_model_file=composed_file, comp_names=self.dataset.func_labels, imfitPath=imfitPath)
 
         except Exception as e:
             self.output.emit(f"Warning: failed to make composed image: {e}\n")
+            print(tb.format_exc())
 
         try:
             os.chdir(cwd)
