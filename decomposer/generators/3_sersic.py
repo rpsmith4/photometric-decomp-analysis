@@ -380,6 +380,12 @@ def generate_init_guess(fltr: str, sci_fits: np.array, mask_fits: np.array = Non
     host.I_e.setValue(host_Ie_pix, [host_ie_lo, host_ie_hi])
     host.r_e.setValue(host_Re_pix, [host_re_lo, host_re_hi])
 
+    core = pyimfit.make_imfit_function("Sersic", label="core")
+    core.PA.setValue(polar_pa_imfit, [polar_pa_lo, polar_pa_hi])
+    core.ell.setValue(polar_ell, [polar_ell_lo, polar_ell_hi])
+    core.n.setValue(polar_n, [polar_n_lo, polar_n_hi])
+    core.I_e.setValue(polar_Ie_pix, [polar_ie_lo, polar_ie_hi])
+    core.r_e.setValue(polar_Re_pix, [polar_re_lo, polar_re_hi])
 
     polar = pyimfit.make_imfit_function("Sersic", label="Polar")
     polar.PA.setValue(polar_pa_imfit, [polar_pa_lo, polar_pa_hi])
@@ -387,8 +393,10 @@ def generate_init_guess(fltr: str, sci_fits: np.array, mask_fits: np.array = Non
     polar.n.setValue(polar_n, [polar_n_lo, polar_n_hi])
     polar.I_e.setValue(polar_Ie_pix, [polar_ie_lo, polar_ie_hi])
     polar.r_e.setValue(polar_Re_pix, [polar_re_lo, polar_re_hi])
+
     
     model.addFunction(host)
+    model.addFunction(core)
     model.addFunction(polar)
 
     # print(model)
