@@ -152,6 +152,7 @@ def read_reg_file(file_p):
                 ell_params["annulus_outer"] = params_dict
 
     return ell_params
+
 def generate_init_guess_fallback(fltr: str,
                       sci_fits: np.array,
                       mask_fits: np.array = None,
@@ -230,8 +231,6 @@ def generate_init_guess_fallback(fltr: str,
 
     return model
 
-
-
 def generate_init_guess_main(fltr: str,
                       sci_fits: np.array,
                       mask_fits: np.array = None,
@@ -256,16 +255,18 @@ def generate_init_guess_main(fltr: str,
     cx = sci_fits.shape[1] / 2.0
     cy = sci_fits.shape[0] / 2.0
 
-    host_row = ellipse_fit_data[ellipse_fit_data["PolarOrHost"] == "Host"]
-    polar_row = ellipse_fit_data[ellipse_fit_data["PolarOrHost"] == "Polar"]
+    # host_row = ellipse_fit_data[ellipse_fit_data["PolarOrHost"] == "Host"]
+    # polar_row = ellipse_fit_data[ellipse_fit_data["PolarOrHost"] == "Polar"]
 
-    if host_row.empty or polar_row.empty:
-        raise ValueError("ellipse_fit_data must contain both Host and Polar entries")
+    # if host_row.empty or polar_row.empty:
+    #     raise ValueError("ellipse_fit_data must contain both Host and Polar entries")
 
-    host_pa_imfit = pa_to_imfit(host_row["angle"].iloc[0])
+    # host_pa_imfit = pa_to_imfit(host_row["angle"].iloc[0])
+    host_pa_imfit = pa_to_imfit(ell_params["host"]["PA"])
     polar_pa_imfit = pa_to_imfit(ell_params["annulus_inner"]["PA"])
-    host_ell = _safe_ellipticity(ellipse_fit_data, "Host", fallback=0.25)
+    # host_ell = _safe_ellipticity(ellipse_fit_data, "Host", fallback=0.25)
     polar_ell = ell_params["annulus_inner"]["ell"]
+    host_ell = ell_params["host"]["ell"]
 
     img = sci_fits.data
     try:
