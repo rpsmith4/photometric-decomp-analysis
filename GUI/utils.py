@@ -189,9 +189,9 @@ def read_function_labels(config_path):
     with open(config_path, 'r') as f:
         for line in f:
             if line.strip().startswith('FUNCTION'):
-                m = re.search(r'# LABEL\s*(\S+)', line)
+                m = re.search(r'# LABEL\s*(.*)', line)
                 if m:
-                    labels.append(m.group(1))
+                    labels.append(m.group(1).strip())
                 else:
                     labels.append(None)
     return labels
