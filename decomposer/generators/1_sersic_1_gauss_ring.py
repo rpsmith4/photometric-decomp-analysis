@@ -295,7 +295,7 @@ def generate_init_guess_main(fltr: str,
     polar_A = _surface_brightness_to_nmgy_per_pixel(ell_params["annulus_inner"]["isophote"], zeropoint, pixel_scale)
     polar_R = (ell_params["annulus_inner"]["rmaj"] + ell_params["annulus_outer"]["rmin"])/2
     # polar_sigma_r = 1/(np.sqrt(2*np.pi)*polar_A)
-    polar_sigma_r = 2*(ell_params["annulus_inner"]["rmaj"] - ell_params["annulus_outer"]["rmin"])
+    polar_sigma_r = 2*(ell_params["annulus_outer"]["rmaj"] - ell_params["annulus_inner"]["rmaj"])
 
     # prepare for extreme magic number disaster
     pa_tol = 5.0
