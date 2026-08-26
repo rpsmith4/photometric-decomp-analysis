@@ -16,17 +16,9 @@ import pandas as pd
 import importlib
 
 def _get_generator(fit_type: str):
-    # if fit_type == "two_sersic":
-    #     from generators.two_sersic import gather_parameters
-    #     return gather_parameters
-    # if fit_type == "one_sersic_one_gauss_ring":
-    #     import generators.one_sersic_one_gauss_ring as gauss_ring_init_conf
-    #     importlib.reload(gauss_ring_init_conf)
-    #     from generators.one_sersic_one_gauss_ring import generate_init_guess 
-    #     return generate_init_guess
     module = importlib.import_module("generators."+fit_type)
+    importlib.reload(module)
     return module.generate_init_guess
-    # raise ValueError(f"Unsupported fit_type: {fit_type}")
 
 
 def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, galaxy_type: pd.DataFrame = None, phot_fit_type: str = "automatic", outfile_name: str | None = None, plot_slits: bool =False, fit_type: str = "2_sersic") -> pyimfit.ModelDescription:
