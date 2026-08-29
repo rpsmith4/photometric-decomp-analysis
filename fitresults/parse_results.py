@@ -20,13 +20,15 @@ def get_all_results(galaxies, bands, fit_type, galmarks):
         galaxy_name =  os.path.basename(galaxy_path)
         if galaxy_name in galmarks.keys():
             if galmarks[galaxy_name] not in ["unable", "return"]:
+                galaxy_parameter_names = set()
+                galaxy_rows = []
                 for band in bands:
                     try:
                         file = os.path.join(galaxy_path, f"{fit_type}_{band}_fit_params.txt")
                         functions, chi_sq, chi_sq_red, status, status_message = parse_results(file)
                         for function in functions:
-                            parameter_names.update(list(function["parameters"].keys()))
-                            rows.append(
+                            galaxy_parameter_names.update(list(function["parameters"].keys()))
+                            galaxy_rows.append(
                                 {
                                     "Galaxy Name": galaxy_name,
                                     "Galaxy Type": galaxy_type,
@@ -48,6 +50,12 @@ def get_all_results(galaxies, bands, fit_type, galmarks):
                     except Exception:
                         print(f"Couldn't read {file}")
                         # print(tb.format_exc())
+                        galaxy_rows = []
+                        galaxy_parameter_names = set()
+                        break
+
+                parameter_names.update(galaxy_parameter_names)
+                rows.extend(galaxy_rows)
 
     names = [name for name in rows[0].keys() if name!="parameters" and name!="parameters_unc"]
     column_data = {name: [] for name in names}
