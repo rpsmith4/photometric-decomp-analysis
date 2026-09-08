@@ -246,6 +246,7 @@ class ParamSliderWidget(QWidget):
         if is_fixed == self.fixed:
             self.minspinbox.setEnabled(not is_fixed)
             self.maxspinbox.setEnabled(not is_fixed)
+            self._set_fixed_value_wheel_step(is_fixed)
             return
 
         if is_fixed:
@@ -260,8 +261,19 @@ class ParamSliderWidget(QWidget):
         self.fixed = is_fixed
         self.minspinbox.setEnabled(not is_fixed)
         self.maxspinbox.setEnabled(not is_fixed)
+        self._set_fixed_value_wheel_step(is_fixed)
         # self.slider.setEnabled(not is_fixed)
         # self.valspinbox.setEnabled(not is_fixed)
+
+    def _set_fixed_value_wheel_step(self, is_fixed):
+        if is_fixed:
+            self.valspinbox.setMinimum(-1e9)
+            self.valspinbox.setMaximum(1e9)
+            self.valspinbox.setWheelStepReference(self.valspinbox, 0.01)
+        else:
+            self.valspinbox.setMinimum(self.minspinbox.value())
+            self.valspinbox.setMaximum(self.maxspinbox.value())
+            self.valspinbox.setWheelStepFraction(0.01)
 
     def _set_bounds(self, lowlim, hilim):
         self.minspinbox.blockSignals(True)
