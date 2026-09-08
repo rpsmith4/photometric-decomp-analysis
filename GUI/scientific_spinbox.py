@@ -32,8 +32,17 @@ class ScientificDoubleSpinBox(QDoubleSpinBox):
         super().__init__(*args, **kwargs)
         self.setMinimum(-np.inf)
         self.setMaximum(np.inf)
+        self.wheel_step_fraction = None
+        self.wheel_step_reference = None
         self.validator = FloatValidator()
         self.setDecimals(1000)
+
+    def setWheelStepFraction(self, fraction):
+        self.wheel_step_fraction = fraction
+
+    def setWheelStepReference(self, spinbox, fraction):
+        self.wheel_step_reference = spinbox
+        self.wheel_step_fraction = fraction
 
     def validate(self, text, position):
         return self.validator.validate(text, position)
@@ -54,6 +63,22 @@ class ScientificDoubleSpinBox(QDoubleSpinBox):
         decimal += steps
         new_string = "{:g}".format(decimal) + (groups[3] if groups[3] else "")
         self.lineEdit().setText(new_string)
+
+    def wheelEvent(self, event):
+        if self.wheel_step_fraction is None:
+            super().wheelEvent(event)
+            return
+
+        steps = event.angleDelta().y() / 120
+        if self.wheel_step_reference is None:
+            step_size = (self.maximum() - self.minimum()) * self.wheel_step_fraction
+        else:
+            step_size = abs(self.wheel_step_reference.value()) * self.wheel_step_fraction
+            if step_size == 0:
+                step_size = self.singleStep()
+        if steps and np.isfinite(step_size):
+            self.setValue(self.value() + steps * step_size)
+        event.accept()
 
 
 def format_float(value):

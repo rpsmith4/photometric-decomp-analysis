@@ -13,6 +13,15 @@ import math
 from utils import clearLayout
 from utils import DataSet
 
+class FractionalWheelSlider(QSlider):
+    def wheelEvent(self, event):
+        steps = event.angleDelta().y() / 120
+        wheel_step = max(1, int(round((self.maximum() - self.minimum()) * 0.01)))
+        if steps:
+            self.setValue(self.value() + int(round(steps * wheel_step)))
+        event.accept()
+
+
 class ConfigAdjustWidget(QWidget):
     def __init__(self, parent, dataset: DataSet, base_config_dict=None, config_callback=None, selected_indices=None):
         super().__init__()
@@ -141,12 +150,13 @@ class ParamSliderWidget(QWidget):
         self.fixed_checkbox = QCheckBox("Fixed")
         self.fixed_checkbox.setChecked(fixed)
 
-        self.slider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.slider = FractionalWheelSlider(QtCore.Qt.Orientation.Horizontal)
         self.slider.setSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum,QtWidgets.QSizePolicy.Policy.Maximum)
         # self.slider.setTickInterval(5)
-        self.slider.setSingleStep(1)
         # Use fixed slider range and map to [lowlim, hilim]
         self.slider.setRange(0, self._slider_steps)
+
+        self.slider.setSingleStep(1)
         try:
             frac = 0.0 if hilim == lowlim else (initval - lowlim) / float(hilim - lowlim)
         except Exception:
@@ -175,6 +185,7 @@ class ParamSliderWidget(QWidget):
         self.valspinbox.setMaximum(hilim)
         self.valspinbox.setMinimum(lowlim)
         self.valspinbox.setValue(initval)
+        self.valspinbox.setWheelStepFraction(0.01)
         self.valspinbox.setMaximumWidth(100)
         self.valspinbox.setMinimumWidth(spinbox_minwidth)
         self.valspinbox.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Maximum)
@@ -189,6 +200,10 @@ class ParamSliderWidget(QWidget):
         self.maxspinbox.setMinimumWidth(spinbox_minwidth)
         self.maxspinbox.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Maximum)
         # self.maxspinbox.setFont("arial: size=20px")
+
+        # Vary by some fractional amount of the value spinbox when using the mouse wheel
+        self.minspinbox.setWheelStepReference(self.valspinbox, 0.01)
+        self.maxspinbox.setWheelStepReference(self.valspinbox, 0.01)
 
         spinboxes_layout.addWidget(self.minspinbox)
         spinboxes_layout.addWidget(self.valspinbox)
