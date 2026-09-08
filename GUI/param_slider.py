@@ -136,6 +136,7 @@ class ParamSliderWidget(QWidget):
         self._slider_steps = 10000
         self.fixed = fixed
         self.d_A = d_A # Angular size distance (I should probably find a way to avoid just passing it to here but whatever)
+        self._cached_bounds = (lowlim, hilim)
 
         parameter_adjust_layout = QHBoxLayout()
         parameter_adjust_layout.setContentsMargins(0,0,0,0)
@@ -241,10 +242,42 @@ class ParamSliderWidget(QWidget):
         self.update_converted()
 
     def set_fixed_state(self, is_fixed):
+        is_fixed = bool(is_fixed)
+        if is_fixed == self.fixed:
+            self.minspinbox.setEnabled(not is_fixed)
+            self.maxspinbox.setEnabled(not is_fixed)
+            return
+
+        if is_fixed:
+            self._cached_bounds = (self.minspinbox.value(), self.maxspinbox.value())
+            value = self.valspinbox.value()
+            self._set_bounds(value, value)
+        else:
+            cached_min, cached_max = self._cached_bounds
+            value = self.valspinbox.value()
+            self._set_bounds(min(cached_min, value), max(cached_max, value))
+
+        self.fixed = is_fixed
         self.minspinbox.setEnabled(not is_fixed)
         self.maxspinbox.setEnabled(not is_fixed)
         # self.slider.setEnabled(not is_fixed)
         # self.valspinbox.setEnabled(not is_fixed)
+
+    def _set_bounds(self, lowlim, hilim):
+        self.minspinbox.blockSignals(True)
+        self.maxspinbox.blockSignals(True)
+        self.valspinbox.blockSignals(True)
+        self.minspinbox.setValue(lowlim)
+        self.maxspinbox.setValue(hilim)
+        self.valspinbox.setMinimum(lowlim)
+        self.valspinbox.setMaximum(hilim)
+        self.minspinbox.setMaximum(hilim)
+        self.maxspinbox.setMinimum(lowlim)
+        self.valspinbox.setValue(min(max(self.valspinbox.value(), lowlim), hilim))
+        self.minspinbox.blockSignals(False)
+        self.maxspinbox.blockSignals(False)
+        self.valspinbox.blockSignals(False)
+        self.spinbox_changed(self.valspinbox.value())
 
     def slider_changed(self, value):
         # Map slider integer (0.._slider_steps) linearly to [min, max]
@@ -286,6 +319,8 @@ class ParamSliderWidget(QWidget):
         # Recompute slider position to respect new bounds
         cur_val = self.valspinbox.value()
         self.spinbox_changed(cur_val)
+        if not self.fixed:
+            self._cached_bounds = (self.minspinbox.value(), self.maxspinbox.value())
 
     def maxspinbox_changed(self, new_max):
         cur_min = self.minspinbox.value()
@@ -300,6 +335,8 @@ class ParamSliderWidget(QWidget):
         # Recompute slider position to respect new bounds
         cur_val = self.valspinbox.value()
         self.spinbox_changed(cur_val)
+        if not self.fixed:
+            self._cached_bounds = (self.minspinbox.value(), self.maxspinbox.value())
 
     def get_values(self):
         return {
