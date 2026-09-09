@@ -5,14 +5,15 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QFile
 from PySide6.QtUiTools import *
 import os
+import math
 import pyimfit
 
 from utils import *
 
 class CopyParametersDialog(QDialog):
-    """Dialog for copying parameters from one band to another."""
+    """Dialog for copying parameters between config files in one galaxy directory."""
     
-    def __init__(self, galaxy_path, current_band, fit_type, parent=None):
+    def __init__(self, galaxy_path, current_band, fit_type, target_config_path=None, parent=None):
         super().__init__(parent)
         self.galaxy_path = galaxy_path
         self.current_band = current_band
@@ -24,7 +25,12 @@ class CopyParametersDialog(QDialog):
         self.source_config_name = None
         self.source_type = "config"  # Can be "config" or "fit_params"
         self.fit_params_values = {}  # Store parsed fit parameters
-        self.setWindowTitle("Copy Parameters From Band")
+        self.copy_mappings = []
+        self.target_function_parameters = {}
+        self.target_config_path = target_config_path or os.path.join(
+            self.galaxy_path, f"{self.fit_type}_{self.current_band}.dat"
+        )
+        self.setWindowTitle("Copy Parameters")
         # self.setMinimumWidth(400)
         # self.setMinimumHeight(500)
         
@@ -66,13 +72,38 @@ class CopyParametersDialog(QDialog):
         source_layout.addStretch()
         layout.addLayout(source_layout)
         
-        # Parameter list with checkboxes
-        param_label = QLabel("Select parameters to copy:")
-        layout.addWidget(param_label)
-        
+        # Select source parameters and destination functions independently.
+        selection_layout = QHBoxLayout()
+
+        source_layout = QVBoxLayout()
+        source_layout.addWidget(QLabel("Source parameters:"))
         self.param_list = QListWidget()
         self.param_list.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
-        layout.addWidget(self.param_list)
+        source_layout.addWidget(self.param_list)
+        selection_layout.addLayout(source_layout)
+
+        target_layout = QVBoxLayout()
+        target_layout.addWidget(QLabel("Target functions:"))
+        self.target_list = QListWidget()
+        self.target_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        target_layout.addWidget(self.target_list)
+        selection_layout.addLayout(target_layout)
+        layout.addLayout(selection_layout)
+
+        mapping_button_layout = QHBoxLayout()
+        add_mapping_btn = QPushButton("Add Selection")
+        add_mapping_btn.clicked.connect(self.add_mapping)
+        remove_mapping_btn = QPushButton("Remove Mapping")
+        remove_mapping_btn.clicked.connect(self.remove_mapping)
+        mapping_button_layout.addWidget(add_mapping_btn)
+        mapping_button_layout.addWidget(remove_mapping_btn)
+        mapping_button_layout.addStretch()
+        layout.addLayout(mapping_button_layout)
+
+        layout.addWidget(QLabel("Pending mappings:"))
+        self.mapping_list = QListWidget()
+        self.mapping_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        layout.addWidget(self.mapping_list)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -102,19 +133,16 @@ class CopyParametersDialog(QDialog):
         self.on_band_changed(self.band_combo.currentText())
     
     def _get_available_config_files(self, band):
-        """Return config files for the selected band, including component-specific ones."""
+        """Return every config file available in the selected galaxy directory."""
         if not os.path.isdir(self.galaxy_path):
             return []
 
-        prefix = f"{self.fit_type}_{band}"
         candidates = []
         for entry in sorted(os.listdir(self.galaxy_path)):
-            if not entry.endswith(".dat"):
-                continue
-            if entry.startswith(prefix):
+            if entry.endswith(".dat"):
                 candidates.append(entry)
 
-        return candidates or [f"{prefix}.dat"]
+        return candidates
 
     def _populate_config_file_selector(self, band):
         """Populate the source config file combo for the selected band."""
@@ -123,7 +151,7 @@ class CopyParametersDialog(QDialog):
         available_files = self._get_available_config_files(band)
         self.config_file_combo.addItems(available_files)
 
-        default_name = f"{self.fit_type}_{band}.dat"
+        default_name = os.path.basename(self.target_config_path)
         if default_name in available_files:
             index = available_files.index(default_name)
         else:
@@ -157,6 +185,10 @@ class CopyParametersDialog(QDialog):
     def _load_selected_source_config(self):
         """Load the selected source config and populate the parameter list."""
         self.param_list.clear()
+        self.target_list.clear()
+        self.mapping_list.clear()
+        self.copy_mappings.clear()
+        self.target_function_parameters.clear()
         self.fit_params_values = {}
 
         if not self.source_config_path:
@@ -166,6 +198,20 @@ class CopyParametersDialog(QDialog):
             self.source_config = pyimfit.parse_config_file(self.source_config_path)
             config_dict = self.source_config.getModelAsDict()
             function_list = config_dict["function_sets"][0]["function_list"]
+
+            if os.path.exists(self.target_config_path):
+                target_config = pyimfit.parse_config_file(self.target_config_path)
+                target_dict = target_config.getModelAsDict()
+                target_labels = read_function_labels(self.target_config_path)
+                for target_idx, target_func in enumerate(target_dict["function_sets"][0]["function_list"]):
+                    label = target_labels[target_idx] if target_idx < len(target_labels) else None
+                    parameter_names = list(target_func["parameters"])
+                    self.target_function_parameters[target_idx] = set(parameter_names)
+                    item = QListWidgetItem(
+                        f"{label or f'Function {target_idx}'}: {', '.join(parameter_names)}"
+                    )
+                    item.setData(QtCore.Qt.UserRole, target_idx)
+                    self.target_list.addItem(item)
 
             # Load function labels
             labels = read_function_labels(self.source_config_path)
@@ -226,10 +272,10 @@ class CopyParametersDialog(QDialog):
                     self.param_list.addItem(item)
         
         except Exception as e:
-            QMessageBox.warning(self, "Error", f"Could not load config from {self.source_config_name or band}: {str(e)}")
+            QMessageBox.warning(self, "Error", f"Could not load config from {self.source_config_name}: {str(e)}")
 
     def on_band_changed(self, band):
-        """Load parameters from the selected source band."""
+        """Reload the source file list."""
         self.source_band = band
         self._populate_config_file_selector(band)
     
@@ -240,6 +286,51 @@ class CopyParametersDialog(QDialog):
     def clear_all(self):
         """Deselect all items."""
         self.param_list.clearSelection()
+
+    def add_mapping(self):
+        """Add the selected source parameters and target function to the pending list."""
+        selected_parameters = self.get_selected_parameters()
+        selected_targets = self.get_selected_target_functions()
+        if not selected_parameters or not selected_targets:
+            QMessageBox.information(
+                self,
+                "Incomplete Selection",
+                "Select source parameters and one target function first."
+            )
+            return
+
+        target_idx = selected_targets[0]
+        target_item = self.target_list.selectedItems()[0]
+        compatible_parameters = [
+            (func_idx, param_name)
+            for func_idx, param_name in selected_parameters
+            if param_name in self.target_function_parameters.get(target_idx, set())
+        ]
+        if not compatible_parameters:
+            QMessageBox.information(
+                self,
+                "No Matching Parameters",
+                "The selected target function has none of those parameter names."
+            )
+            return
+
+        parameter_names = ", ".join(param_name for _, param_name in compatible_parameters)
+        mapping = (target_idx, compatible_parameters)
+        self.copy_mappings.append(mapping)
+
+        item = QListWidgetItem(f"{target_item.text()} <- {parameter_names}")
+        item.setData(QtCore.Qt.UserRole, mapping)
+        self.mapping_list.addItem(item)
+        self.param_list.clearSelection()
+        self.target_list.clearSelection()
+
+    def remove_mapping(self):
+        """Remove the selected pending mapping."""
+        row = self.mapping_list.currentRow()
+        if row < 0:
+            return
+        self.mapping_list.takeItem(row)
+        del self.copy_mappings[row]
     
     def get_selected_parameters(self):
         """Return list of selected (func_idx, param_name) tuples."""
@@ -249,6 +340,18 @@ class CopyParametersDialog(QDialog):
             if data is not None:
                 selected.append(data)
         return selected
+
+    def get_selected_target_functions(self):
+        """Return target function indices selected by the user."""
+        return [
+            item.data(QtCore.Qt.UserRole)
+            for item in self.target_list.selectedItems()
+            if item.data(QtCore.Qt.UserRole) is not None
+        ]
+
+    def get_copy_mappings(self):
+        """Return pending (target function, source parameter list) mappings."""
+        return list(self.copy_mappings)
     
     def get_source_type(self):
         """Return the source type (config or fit_params)."""

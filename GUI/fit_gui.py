@@ -1019,8 +1019,8 @@ class MainWindow(QMainWindow):
         self.refresh_conf(redraw=False)
         self.refresh_plots()
     
-    def copy_parameters_from_band(self): # TODO need to update this to work with the new refactor
-        """Open dialog to copy parameters from another band to current band."""
+    def copy_parameters_from_band(self):
+        """Open a dialog to copy same-named parameters into selected functions."""
         if self.selected_galaxy_path is None:
             QMessageBox.warning(self, "No Galaxy Selected", "Please select a galaxy first.")
             return
@@ -1030,17 +1030,18 @@ class MainWindow(QMainWindow):
             self.selected_galaxy_path,
             self.band,
             self.fit_type,
+            target_config_path=self.get_config_path(self.selected_galaxy_path, self.band, self.fit_type),
             parent=self
         )
         
         if dlg.exec() == QDialog.DialogCode.Accepted:
             source_band = dlg.source_band
-            selected_params = dlg.get_selected_parameters()
+            copy_mappings = dlg.get_copy_mappings()
             source_type = dlg.get_source_type()
             fit_params_values = dlg.get_fit_params_values()
             
-            if not selected_params:
-                QMessageBox.information(self, "No Parameters", "No parameters selected to copy.")
+            if not copy_mappings:
+                QMessageBox.information(self, "No Mappings", "Add at least one source-to-target mapping.")
                 return
             
             try:
@@ -1077,46 +1078,33 @@ class MainWindow(QMainWindow):
                     else:
                         func['label'] = None
 
-                def resolve_target_function_index(source_idx):
-                    source_label = source_functions[source_idx].get("label") if source_idx < len(source_functions) else None
-                    if source_label is not None:
-                        for target_idx, target_func in enumerate(current_functions):
-                            if target_func.get("label") == source_label:
-                                return target_idx
-                    if source_idx < len(current_functions):
-                        return source_idx
-                    return None
-            
                 # Copy selected parameters
                 copied_count = 0
-                for func_idx, param_name in selected_params:
-                    try:
-                        target_func_idx = resolve_target_function_index(func_idx)
-                        if target_func_idx is None:
-                            print(f"Skipping {param_name} from function {func_idx}: no matching target function found")
+                for target_func_idx, selected_params in copy_mappings:
+                    for func_idx, param_name in selected_params:
+                        if func_idx >= len(source_functions):
                             continue
-
-                        if source_type == "fit_params":
-                            # Copy from fit parameters - use value as fixed parameter
-                            param_value = fit_params_values[func_idx]["parameters"][param_name]
-                            # param_unc = fit_params_values[func_idx]["parameters_unc"][param_name]
-                            # Ngl I don't know how I feel about determining the bounds like this, but it works for now (subject to change)
-                            # Now actually changed to just using the config bounds
-                            # if param_unc != 0:
-                            #     current_functions[target_func_idx]["parameters"][param_name] = [param_value, param_value-param_unc, param_value+param_unc]
-                            # else:
-                            #     current_functions[target_func_idx]["parameters"][param_name] = [param_value, 'fixed']
-                            current_functions[target_func_idx]["parameters"][param_name] = [param_value,  source_functions[func_idx]["parameters"][param_name][1],  source_functions[func_idx]["parameters"][param_name][2]]
+                        source_param = source_functions[func_idx]["parameters"].get(param_name)
+                        if target_func_idx >= len(current_functions):
+                            continue
+                        target_params = current_functions[target_func_idx]["parameters"]
+                        if param_name not in target_params:
+                            continue
+                        try:
+                            if source_type == "fit_params":
+                                param_value = fit_params_values[func_idx]["parameters"][param_name]
+                                target_bounds = target_params[param_name]
+                                if target_bounds[1] == "fixed":
+                                    target_params[param_name] = [param_value, "fixed"]
+                                else:
+                                    target_params[param_name] = [param_value, target_bounds[1], target_bounds[2]]
+                            elif source_param is not None:
+                                target_params[param_name] = source_param.copy()
+                            else:
+                                continue
                             copied_count += 1
-                        else:
-                            # Copy from config file
-                            source_param = source_functions[func_idx]["parameters"][param_name]
-                            if source_param is not None:
-                                # Copy the parameter value and constraints
-                                current_functions[target_func_idx]["parameters"][param_name] = source_param.copy()
-                                copied_count += 1
-                    except Exception as e:
-                        print(f"Warning: Could not copy {param_name} from function {func_idx}: {e}")
+                        except Exception as e:
+                            print(f"Warning: Could not copy {param_name} to function {target_func_idx}: {e}")
                 
                 if copied_count == 0:
                     QMessageBox.warning(self, "Copy Failed", "No parameters could be copied. Function count mismatch?")
@@ -1138,7 +1126,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(
                     self,
                     "Success",
-                    f"Copied {copied_count} parameter(s) from {source_text} in {source_name} ({source_band})."
+                    f"Copied {copied_count} parameter(s) from {source_text} in {source_name}."
                 )
                 
                 # Refresh the UI with new parameters
