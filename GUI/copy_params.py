@@ -27,6 +27,7 @@ class CopyParametersDialog(QDialog):
         self.fit_params_values = {}  # Store parsed fit parameters
         self.copy_mappings = []
         self.target_function_parameters = {}
+        self.source_function_labels = {}
         self.target_config_path = target_config_path or os.path.join(
             self.galaxy_path, f"{self.fit_type}_{self.current_band}.dat"
         )
@@ -197,6 +198,7 @@ class CopyParametersDialog(QDialog):
             self.mapping_list.clear()
             self.copy_mappings.clear()
             self.target_function_parameters.clear()
+            self.source_function_labels.clear()
         self.fit_params_values = {}
 
         if not self.source_config_path:
@@ -245,6 +247,7 @@ class CopyParametersDialog(QDialog):
                 
                 # Add header for function
                 label_text = f"{label}" if label else f"Function {func_idx}"
+                self.source_function_labels[func_idx] = label_text
                 header_item = QListWidgetItem(label_text)
                 header_item.setFlags(header_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
                 header_font = header_item.font()
@@ -335,6 +338,17 @@ class CopyParametersDialog(QDialog):
                 return item.text()
         return f"Function {target_idx}"
 
+    def _mapping_parameter_text(self, selected_parameters):
+        """Group copied parameter names by their source function label."""
+        grouped_parameters = {}
+        for func_idx, param_name in selected_parameters:
+            source_label = self.source_function_labels.get(func_idx, f"Function {func_idx}")
+            grouped_parameters.setdefault(source_label, []).append(param_name)
+        return "; ".join(
+            f"{source_label}: {', '.join(parameter_names)}"
+            for source_label, parameter_names in grouped_parameters.items()
+        )
+
     def add_mapping(self):
         """Add the selected source parameters and target function to the pending list."""
         selected_parameters = self.get_selected_parameters()
@@ -377,7 +391,7 @@ class CopyParametersDialog(QDialog):
                 + ", ".join(unsupported_parameters)
             )
 
-        parameter_names = ", ".join(param_name for _, param_name in compatible_parameters)
+        parameter_names = self._mapping_parameter_text(compatible_parameters)
         mapping = (target_idx, compatible_parameters, self.source_type)
         self.copy_mappings.append(mapping)
 
