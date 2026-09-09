@@ -81,6 +81,7 @@ class CopyParametersDialog(QDialog):
         self.param_list = QListWidget()
         self.param_list.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.param_list.itemSelectionChanged.connect(self._update_compatibility_indicator)
+        self.param_list.itemDoubleClicked.connect(self.select_function_parameters)
         source_layout.addWidget(self.param_list)
         selection_layout.addLayout(source_layout)
 
@@ -113,11 +114,8 @@ class CopyParametersDialog(QDialog):
         
         # Buttons
         button_layout = QHBoxLayout()
-        select_all_btn = QPushButton("Select All")
-        select_all_btn.clicked.connect(self.select_all)
         clear_all_btn = QPushButton("Clear All")
         clear_all_btn.clicked.connect(self.clear_all)
-        button_layout.addWidget(select_all_btn)
         button_layout.addWidget(clear_all_btn)
         button_layout.addStretch()
         layout.addLayout(button_layout)
@@ -249,7 +247,6 @@ class CopyParametersDialog(QDialog):
                 label_text = f"{label}" if label else f"Function {func_idx}"
                 self.source_function_labels[func_idx] = label_text
                 header_item = QListWidgetItem(label_text)
-                header_item.setFlags(header_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
                 header_font = header_item.font()
                 header_font.setBold(True)
                 header_item.setFont(header_font)
@@ -292,9 +289,18 @@ class CopyParametersDialog(QDialog):
         self.source_band = band
         self._populate_config_file_selector(band)
     
-    def select_all(self):
-        """Select all parameter items (exclude headers)."""
-        self.param_list.selectAll()
+    def select_function_parameters(self, item):
+        """Select every parameter belonging to a double-clicked source function."""
+        if item.data(QtCore.Qt.UserRole) is not None:
+            return
+
+        function_row = self.param_list.row(item)
+        self.param_list.clearSelection()
+        for row in range(function_row + 1, self.param_list.count()):
+            parameter_item = self.param_list.item(row)
+            if parameter_item.data(QtCore.Qt.UserRole) is None:
+                break
+            parameter_item.setSelected(True)
     
     def clear_all(self):
         """Deselect all items."""
