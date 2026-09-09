@@ -79,6 +79,7 @@ class CopyParametersDialog(QDialog):
         source_layout.addWidget(QLabel("Source parameters:"))
         self.param_list = QListWidget()
         self.param_list.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self.param_list.itemSelectionChanged.connect(self._update_compatibility_indicator)
         source_layout.addWidget(self.param_list)
         selection_layout.addLayout(source_layout)
 
@@ -86,6 +87,7 @@ class CopyParametersDialog(QDialog):
         target_layout.addWidget(QLabel("Target functions:"))
         self.target_list = QListWidget()
         self.target_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.target_list.itemSelectionChanged.connect(self._update_compatibility_indicator)
         target_layout.addWidget(self.target_list)
         selection_layout.addLayout(target_layout)
         layout.addLayout(selection_layout)
@@ -99,6 +101,9 @@ class CopyParametersDialog(QDialog):
         mapping_button_layout.addWidget(remove_mapping_btn)
         mapping_button_layout.addStretch()
         layout.addLayout(mapping_button_layout)
+
+        self.compatibility_label = QLabel("Select source parameters and a target function.")
+        layout.addWidget(self.compatibility_label)
 
         layout.addWidget(QLabel("Pending mappings:"))
         self.mapping_list = QListWidget()
@@ -292,6 +297,31 @@ class CopyParametersDialog(QDialog):
         """Deselect all items."""
         self.param_list.clearSelection()
 
+    def _update_compatibility_indicator(self):
+        """Show whether the current source selection is supported by the target."""
+        selected_parameters = self.get_selected_parameters()
+        selected_targets = self.get_selected_target_functions()
+        if not selected_parameters or not selected_targets:
+            self.compatibility_label.setText("Select source parameters and a target function.")
+            self.compatibility_label.setStyleSheet("")
+            return
+
+        target_idx = selected_targets[0]
+        target_parameters = self.target_function_parameters.get(target_idx, set())
+        unsupported = sorted({
+            param_name
+            for _, param_name in selected_parameters
+            if param_name not in target_parameters
+        })
+        if unsupported:
+            self.compatibility_label.setText(
+                "Warning: target does not support: " + ", ".join(unsupported)
+            )
+            self.compatibility_label.setStyleSheet("color: #b00020; font-weight: bold;")
+        else:
+            self.compatibility_label.setText("All selected parameters are supported by the target.")
+            self.compatibility_label.setStyleSheet("color: #176b2c;")
+
     def _source_type_label(self, source_type=None):
         """Return the source type label shown for pending mappings."""
         source_type = self.source_type if source_type is None else source_type
@@ -319,18 +349,33 @@ class CopyParametersDialog(QDialog):
 
         target_idx = selected_targets[0]
         target_item = self.target_list.selectedItems()[0]
+        target_parameters = self.target_function_parameters.get(target_idx, set())
+        unsupported_parameters = sorted({
+            param_name
+            for _, param_name in selected_parameters
+            if param_name not in target_parameters
+        })
         compatible_parameters = [
             (func_idx, param_name)
             for func_idx, param_name in selected_parameters
-            if param_name in self.target_function_parameters.get(target_idx, set())
+            if param_name in target_parameters
         ]
         if not compatible_parameters:
-            QMessageBox.information(
+            QMessageBox.warning(
                 self,
-                "No Matching Parameters",
-                "The selected target function has none of those parameter names."
+                "Unsupported Parameters",
+                "The selected target function does not support: "
+                + ", ".join(unsupported_parameters)
             )
             return
+
+        if unsupported_parameters:
+            QMessageBox.warning(
+                self,
+                "Unsupported Parameters Skipped",
+                "These parameters will not be copied to the selected target function: "
+                + ", ".join(unsupported_parameters)
+            )
 
         parameter_names = ", ".join(param_name for _, param_name in compatible_parameters)
         mapping = (target_idx, compatible_parameters, self.source_type)
