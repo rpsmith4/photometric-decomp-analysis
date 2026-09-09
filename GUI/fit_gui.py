@@ -1280,6 +1280,12 @@ class MainWindow(QMainWindow):
 
             for parameter_name in ("PA", "ell"):
                 fitted_value = fit_function["parameters"][parameter_name]
+                widget = None
+                if self.config_adjust is not None:
+                    widget = self.config_adjust.param_widgets.get((func_idx, parameter_name))
+                if widget is not None:
+                    widget.valspinbox.setValue(fitted_value)
+                    widget.fixed_checkbox.setChecked(True)
                 config_function["parameters"][parameter_name][0] = fitted_value
                 config_function["parameters"][parameter_name][1] = "fixed"
                 try:
@@ -1297,7 +1303,7 @@ class MainWindow(QMainWindow):
         self.dataset.config_dict["function_sets"][0]["function_list"] = config_functions
         self._write_component_files(self.dataset.config_path, self.dataset.config_dict, self.current_selected_indices)
         self.dataset.load_config()
-        self.refresh_conf()
+        self.refresh_conf(redraw=False)
         self.refresh_plots()
 
 if __name__ == "__main__":
