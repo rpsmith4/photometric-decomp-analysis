@@ -162,11 +162,13 @@ class CopyParametersDialog(QDialog):
 
     def on_source_changed(self):
         """Handle source type change."""
+        if not self.config_radio.isChecked() and not self.fitparams_radio.isChecked():
+            return
         if self.config_radio.isChecked():
             self.source_type = "config"
         else:
             self.source_type = "fit_params"
-        self.on_band_changed(self.band_combo.currentText())
+        self._load_selected_source_config(preserve_mappings=True)
 
     def on_source_file_changed(self):
         """Update the selected config and fit-params paths when the source file changes."""
@@ -182,13 +184,14 @@ class CopyParametersDialog(QDialog):
         )
         self._load_selected_source_config()
 
-    def _load_selected_source_config(self):
+    def _load_selected_source_config(self, preserve_mappings=False):
         """Load the selected source config and populate the parameter list."""
         self.param_list.clear()
-        self.target_list.clear()
-        self.mapping_list.clear()
-        self.copy_mappings.clear()
-        self.target_function_parameters.clear()
+        if not preserve_mappings:
+            self.target_list.clear()
+            self.mapping_list.clear()
+            self.copy_mappings.clear()
+            self.target_function_parameters.clear()
         self.fit_params_values = {}
 
         if not self.source_config_path:
@@ -199,7 +202,7 @@ class CopyParametersDialog(QDialog):
             config_dict = self.source_config.getModelAsDict()
             function_list = config_dict["function_sets"][0]["function_list"]
 
-            if os.path.exists(self.target_config_path):
+            if not preserve_mappings and os.path.exists(self.target_config_path):
                 target_config = pyimfit.parse_config_file(self.target_config_path)
                 target_dict = target_config.getModelAsDict()
                 target_labels = read_function_labels(self.target_config_path)
@@ -216,17 +219,19 @@ class CopyParametersDialog(QDialog):
             # Load function labels
             labels = read_function_labels(self.source_config_path)
 
-            # If fit_params source is selected, try to load fit parameters
-            if self.source_type == "fit_params":
-                if os.path.exists(self.source_fit_params_path):
-                    self.fit_params_values = parse_results(self.source_fit_params_path)[0]
-                else:
-                    QMessageBox.warning(
-                        self, "Warning",
-                        f"Fit parameters file not found for {self.source_config_name}.\nFalling back to config file."
-                    )
-                    self.config_radio.setChecked(True)
-                    self.source_type = "config"
+            # Load fit parameters so mappings can mix both source types.
+            fit_params_available = os.path.exists(self.source_fit_params_path)
+            if fit_params_available:
+                self.fit_params_values = parse_results(self.source_fit_params_path)[0]
+            elif self.source_type == "fit_params":
+                QMessageBox.warning(
+                    self, "Warning",
+                    f"Fit parameters file not found for {self.source_config_name}.\nFalling back to config file."
+                )
+                self.config_radio.blockSignals(True)
+                self.config_radio.setChecked(True)
+                self.config_radio.blockSignals(False)
+                self.source_type = "config"
 
             # Populate the list
             for func_idx, func in enumerate(function_list):
@@ -287,6 +292,19 @@ class CopyParametersDialog(QDialog):
         """Deselect all items."""
         self.param_list.clearSelection()
 
+    def _source_type_label(self, source_type=None):
+        """Return the source type label shown for pending mappings."""
+        source_type = self.source_type if source_type is None else source_type
+        return "Fit Parameters" if source_type == "fit_params" else "Config File"
+
+    def _target_item_text(self, target_idx):
+        """Return the visible target-function label for a mapping."""
+        for row in range(self.target_list.count()):
+            item = self.target_list.item(row)
+            if item.data(QtCore.Qt.UserRole) == target_idx:
+                return item.text()
+        return f"Function {target_idx}"
+
     def add_mapping(self):
         """Add the selected source parameters and target function to the pending list."""
         selected_parameters = self.get_selected_parameters()
@@ -315,10 +333,12 @@ class CopyParametersDialog(QDialog):
             return
 
         parameter_names = ", ".join(param_name for _, param_name in compatible_parameters)
-        mapping = (target_idx, compatible_parameters)
+        mapping = (target_idx, compatible_parameters, self.source_type)
         self.copy_mappings.append(mapping)
 
-        item = QListWidgetItem(f"{target_item.text()} <- {parameter_names}")
+        item = QListWidgetItem(
+            f"[{self._source_type_label()}] {self._target_item_text(target_idx)} <- {parameter_names}"
+        )
         item.setData(QtCore.Qt.UserRole, mapping)
         self.mapping_list.addItem(item)
         self.param_list.clearSelection()

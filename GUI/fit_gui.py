@@ -1037,7 +1037,6 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             source_band = dlg.source_band
             copy_mappings = dlg.get_copy_mappings()
-            source_type = dlg.get_source_type()
             fit_params_values = dlg.get_fit_params_values()
             
             if not copy_mappings:
@@ -1080,7 +1079,9 @@ class MainWindow(QMainWindow):
 
                 # Copy selected parameters
                 copied_count = 0
-                for target_func_idx, selected_params in copy_mappings:
+                source_types_used = set()
+                for target_func_idx, selected_params, mapping_source_type in copy_mappings:
+                    source_types_used.add(mapping_source_type)
                     for func_idx, param_name in selected_params:
                         if func_idx >= len(source_functions):
                             continue
@@ -1091,7 +1092,7 @@ class MainWindow(QMainWindow):
                         if param_name not in target_params:
                             continue
                         try:
-                            if source_type == "fit_params":
+                            if mapping_source_type == "fit_params":
                                 param_value = fit_params_values[func_idx]["parameters"][param_name]
                                 target_bounds = target_params[param_name]
                                 if target_bounds[1] == "fixed":
@@ -1121,7 +1122,10 @@ class MainWindow(QMainWindow):
                 with open(current_config_path, "w") as f:
                     f.write(config_text)
                 
-                source_text = "config file" if source_type == "config" else "fit parameters"
+                if len(source_types_used) == 1:
+                    source_text = "config file" if "config" in source_types_used else "fit parameters"
+                else:
+                    source_text = "config files and fit parameters"
                 source_name = os.path.basename(source_config_path)
                 QMessageBox.information(
                     self,
