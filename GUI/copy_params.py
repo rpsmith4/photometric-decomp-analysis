@@ -39,7 +39,7 @@ class CopyParametersDialog(QDialog):
         
         # Band selection
         band_layout = QHBoxLayout()
-        band_label = QLabel("Copy from band:")
+        band_label = QLabel("Source band:")
         self.band_combo = QComboBox()
         available_bands = ["g", "r", "i", "z"]
         self.band_combo.addItems(available_bands)
@@ -48,20 +48,10 @@ class CopyParametersDialog(QDialog):
         band_layout.addWidget(self.band_combo)
         band_layout.addStretch()
         layout.addLayout(band_layout)
-        
-        # Source config file selection
-        source_file_layout = QHBoxLayout()
-        source_file_label = QLabel("Source config file:")
-        self.config_file_combo = QComboBox()
-        self.config_file_combo.currentTextChanged.connect(self.on_source_file_changed)
-        source_file_layout.addWidget(source_file_label)
-        source_file_layout.addWidget(self.config_file_combo)
-        source_file_layout.addStretch()
-        layout.addLayout(source_file_layout)
 
         # Source type selection
         source_layout = QHBoxLayout()
-        source_label = QLabel("Source:")
+        source_label = QLabel("Source Type:")
         self.config_radio = QRadioButton("Config File")
         self.config_radio.setChecked(True)
         self.config_radio.toggled.connect(self.on_source_changed)
@@ -72,6 +62,16 @@ class CopyParametersDialog(QDialog):
         source_layout.addWidget(self.fitparams_radio)
         source_layout.addStretch()
         layout.addLayout(source_layout)
+        
+        # Source config file selection
+        source_file_layout = QHBoxLayout()
+        source_file_label = QLabel("Source file:")
+        self.config_file_combo = QComboBox()
+        self.config_file_combo.currentTextChanged.connect(self.on_source_file_changed)
+        source_file_layout.addWidget(source_file_label)
+        source_file_layout.addWidget(self.config_file_combo)
+        source_file_layout.addStretch()
+        layout.addLayout(source_file_layout)
         
         # Select source parameters and destination functions independently.
         selection_layout = QHBoxLayout()
@@ -137,18 +137,20 @@ class CopyParametersDialog(QDialog):
         self.on_band_changed(self.band_combo.currentText())
     
     def _get_available_config_files(self, band):
-        """Return every config file available in the selected galaxy directory."""
+        """Return source files available for the selected band and source type."""
         if not os.path.isdir(self.galaxy_path):
             return []
 
         candidates = []
         for entry in sorted(os.listdir(self.galaxy_path)):
-            if entry.endswith(".dat"):
+            if self.source_type == "fit_params" and entry.endswith("_fit_params.txt"):
+                candidates.append(entry)
+            elif self.source_type == "config" and entry.endswith(".dat"):
                 candidates.append(entry)
 
         return candidates
 
-    def _populate_config_file_selector(self, band):
+    def _populate_config_file_selector(self, band, preserve_mappings=False):
         """Populate the source config file combo for the selected band."""
         self.config_file_combo.blockSignals(True)
         self.config_file_combo.clear()
@@ -156,13 +158,15 @@ class CopyParametersDialog(QDialog):
         self.config_file_combo.addItems(available_files)
 
         default_name = os.path.basename(self.target_config_path)
+        if self.source_type == "fit_params":
+            default_name = f"{os.path.splitext(default_name)[0]}_fit_params.txt"
         if default_name in available_files:
             index = available_files.index(default_name)
         else:
             index = 0
         self.config_file_combo.setCurrentIndex(index)
         self.config_file_combo.blockSignals(False)
-        self.on_source_file_changed()
+        self.on_source_file_changed(preserve_mappings=preserve_mappings)
 
     def on_source_changed(self):
         """Handle source type change."""
@@ -172,21 +176,26 @@ class CopyParametersDialog(QDialog):
             self.source_type = "config"
         else:
             self.source_type = "fit_params"
-        self._load_selected_source_config(preserve_mappings=True)
+        self._populate_config_file_selector(self.source_band, preserve_mappings=True)
 
-    def on_source_file_changed(self):
+    def on_source_file_changed(self, preserve_mappings=False):
         """Update the selected config and fit-params paths when the source file changes."""
         selected_name = self.config_file_combo.currentText()
         if not selected_name:
             return
 
         self.source_config_name = selected_name
-        self.source_config_path = os.path.join(self.galaxy_path, selected_name)
-        self.source_fit_params_path = os.path.join(
-            self.galaxy_path,
-            os.path.splitext(selected_name)[0] + "_fit_params.txt"
-        )
-        self._load_selected_source_config()
+        if self.source_type == "fit_params":
+            self.source_fit_params_path = os.path.join(self.galaxy_path, selected_name)
+            config_name = selected_name[:-len("_fit_params.txt")] + ".dat"
+            self.source_config_path = os.path.join(self.galaxy_path, config_name)
+        else:
+            self.source_config_path = os.path.join(self.galaxy_path, selected_name)
+            self.source_fit_params_path = os.path.join(
+                self.galaxy_path,
+                os.path.splitext(selected_name)[0] + "_fit_params.txt"
+            )
+        self._load_selected_source_config(preserve_mappings=preserve_mappings)
 
     def _load_selected_source_config(self, preserve_mappings=False):
         """Load the selected source config and populate the parameter list."""
