@@ -1170,7 +1170,7 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.No
                 )
                 if answer == QMessageBox.StandardButton.Yes:
-                    self.dataset.config_model_desc = generate_config(
+                    self.dataset.config_model_desc,state = generate_config(
                         galpath,
                         self.band,
                         img,
@@ -1184,11 +1184,17 @@ class MainWindow(QMainWindow):
                         outfile_name=outfile,
                         fit_type=self.fit_type,
                     )
+                    if state[0]!=0:
+                        QMessageBox.warning(
+                            self,
+                            "Fallback Configuration Used",
+                            f"The normal initial-guess generation failed. A fallback configuration was generated.\n {state[1]}",
+                        )
                     QMessageBox.information(self, "Config Generation Information", "Config successfully written")
                 else:
                     pass
             else:
-                self.dataset.config_model_desc = generate_config(
+                self.dataset.config_model_desc,state = generate_config(
                     galpath,
                     self.band,
                     img,
@@ -1202,10 +1208,16 @@ class MainWindow(QMainWindow):
                     outfile_name=outfile,
                     fit_type=self.fit_type,
                 )
+                if state[0]!=0:
+                    QMessageBox.warning(
+                        self,
+                        "Fallback Configuration Used",
+                        f"The normal initial-guess generation failed. A fallback configuration was generated.\n {state[1]}",
+                    )
                 QMessageBox.information(self, "Config Generation Information", "Config successfully written")
         except Exception as e:
             QMessageBox.critical(self, "Config Generation Information", f"Config generation failed:\n{e}")
-            print(e)
+            print(tb.format_exc())
 
         
         self.changegal()
