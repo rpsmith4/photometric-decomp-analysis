@@ -11,6 +11,7 @@ import astropy.units as u
 from astropy.stats import sigma_clipped_stats
 import os
 import re
+import traceback as tb
 
 def clamp(x, lo, hi):
     return max(lo, min(hi, x))
@@ -231,6 +232,9 @@ def generate_init_guess_fallback(fltr: str,
 
     return model
 
+def ell(a,b):
+    return (a - b) / a
+
 def generate_init_guess_main(fltr: str,
                       sci_fits: np.array,
                       mask_fits: np.array = None,
@@ -248,25 +252,25 @@ def generate_init_guess_main(fltr: str,
 
     galname = os.path.basename(data_loc)
     reg_file = os.path.join(data_loc, f"{galname}_regions.reg")
-    ell_params = read_reg_file(reg_file)
+    # ell_params = read_reg_file(reg_file)
     
     if ellipse_fit_data is None:
         raise ValueError("Ellipse fit data is required for gaussian ring config generation")
     cx = sci_fits.shape[1] / 2.0
     cy = sci_fits.shape[0] / 2.0
 
-    # host_row = ellipse_fit_data[ellipse_fit_data["PolarOrHost"] == "Host"]
-    # polar_row = ellipse_fit_data[ellipse_fit_data["PolarOrHost"] == "Polar"]
+    SG_type = ellipse_fit_data[ellipse_fit_data["EllipseFitType"]=="SG"]
+    host = SG_type[SG_type["PolarOrHost"] == "Host"]
+    annulus_inner = SG_type[SG_type["PolarOrHost"] == "Annulus_inner"]
+    annulus_outer = SG_type[SG_type["PolarOrHost"] == "Annulus_outer"]
 
     # if host_row.empty or polar_row.empty:
     #     raise ValueError("ellipse_fit_data must contain both Host and Polar entries")
 
-    # host_pa_imfit = pa_to_imfit(host_row["angle"].iloc[0])
-    host_pa_imfit = pa_to_imfit(ell_params["host"]["PA"])
-    polar_pa_imfit = pa_to_imfit(ell_params["annulus_inner"]["PA"])
-    # host_ell = _safe_ellipticity(ellipse_fit_data, "Host", fallback=0.25)
-    polar_ell = ell_params["annulus_inner"]["ell"]
-    host_ell = ell_params["host"]["ell"]
+    host_pa_imfit = pa_to_imfit(host["angle"].iloc[0])
+    polar_pa_imfit = pa_to_imfit(annulus_inner["angle"].iloc[0])
+    polar_ell = ell(annulus_inner["semi_major"].iloc[0],annulus_inner["semi_minor"].iloc[0])
+    host_ell = ell(host["semi_major"].iloc[0],host["semi_minor"].iloc[0])
 
     img = sci_fits.data
     try:
@@ -292,10 +296,10 @@ def generate_init_guess_main(fltr: str,
     host_Ie_pix = max(host_fit.amplitude.value, 0)
     host_n = np.clip(host_fit.n.value, 0, 15.0)
 
-    polar_A = _surface_brightness_to_nmgy_per_pixel(ell_params["annulus_inner"]["isophote"], zeropoint, pixel_scale)
-    polar_R = (ell_params["annulus_inner"]["rmaj"] + ell_params["annulus_outer"]["rmin"])/2
+    polar_A = _surface_brightness_to_nmgy_per_pixel(annulus_inner["IsophoteLevel"].iloc[0], zeropoint, pixel_scale)
+    polar_R = (annulus_inner["semi_major"].iloc[0] + annulus_outer["semi_minor"].iloc[0])/2
     # polar_sigma_r = 1/(np.sqrt(2*np.pi)*polar_A)
-    polar_sigma_r = 2*(ell_params["annulus_outer"]["rmaj"] - ell_params["annulus_inner"]["rmaj"])
+    polar_sigma_r = 2*(annulus_inner["semi_major"].iloc[0] - annulus_inner["semi_minor"].iloc[0])
 
     # prepare for extreme magic number disaster
     pa_tol = 5.0
@@ -356,11 +360,11 @@ def generate_init_guess(fltr: str,
                       phot_params,
                       plot_slits,
                       data_loc,
-                      **kwargs)
+                      **kwargs), [0,0] # state is good
     except Exception as e:
-        print(f"{e}")
+        print(f"{tb.format_exc()}")
         print("Error using regular init guess, using fallback")
-        return generate_init_guess_fallback(fltr,
+        model = generate_init_guess_fallback(fltr,
                       sci_fits,
                       mask_fits,
                       psf_fits,
@@ -374,3 +378,5 @@ def generate_init_guess(fltr: str,
                       plot_slits,
                       data_loc,
                       **kwargs)
+        state=[1, e]
+        return model,state

@@ -393,7 +393,7 @@ def generate_init_guess(fltr: str, sci_fits: np.array, mask_fits: np.array = Non
 
     # print(model)
 
-    return model
+    return model,[0,0]
 
 
 def main():

@@ -23,7 +23,7 @@ def _get_generator(fit_type: str):
 
 def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, galaxy_type: pd.DataFrame = None, phot_fit_type: str = "automatic", outfile_name: str | None = None, plot_slits: bool =False, fit_type: str = "2_sersic") -> pyimfit.ModelDescription:
     genparams = _get_generator(fit_type)
-    model = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type, plot_slits=plot_slits, phot_params=phot_fit_type, data_loc=outfile)
+    model,state = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type, plot_slits=plot_slits, phot_params=phot_fit_type, data_loc=outfile)
 
     model_str = model.getStringDescription()
     if outfile_name:
@@ -31,7 +31,7 @@ def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = No
         with open(save_path, "w") as f:
             f.write("".join(model_str))
 
-    return model
+    return model,state
 
 def main(args, fit_band = 'all'):
     if not(args.p == None):
