@@ -191,6 +191,7 @@ class MainWindow(QMainWindow):
         self.base_config_dict = None
         self.config_adjust = None
         self.dataset = None
+        self.current_ellipse_fit_type = None
 
         # Setting up the buttons
         self.ui.LMbutton.clicked.connect(lambda: self.set_solver("LM"))
@@ -657,8 +658,10 @@ class MainWindow(QMainWindow):
         galname = self.selected_galaxy_path.name
         if ellipse_fit_p != None:
             ellipse_params = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
+            ellipse_params, self.current_ellipse_fit_type = self._select_ellipse_params(ellipse_params)
         else:
             ellipse_params = pd.DataFrame()
+            self.current_ellipse_fit_type = None
         self.current_ellipse_params = ellipse_params
         self.toggle_1d.setEnabled(not ellipse_params.empty)
 
@@ -669,6 +672,28 @@ class MainWindow(QMainWindow):
         self.plot_residual()
         self.plot_config()
         self.plot_config_residual()
+
+    def _select_ellipse_params(self, ellipse_params):
+        """Select geometry matching the active model, with a Sersic fallback."""
+        if ellipse_params.empty or "EllipseFitType" not in ellipse_params.columns:
+            return ellipse_params, None
+
+        is_ring_model = "gauss" in self.fit_type.lower() and "ring" in self.fit_type.lower()
+        if is_ring_model:
+            ring_params = ellipse_params[
+                ellipse_params["EllipseFitType"].astype(str).str.lower() == "sg"
+            ]
+            required = {"Host", "Annulus_inner", "Annulus_outer"}
+            if required.issubset(set(ring_params["PolarOrHost"].dropna())):
+                return ring_params, "SG"
+
+        sersic_params = ellipse_params[
+            ellipse_params["EllipseFitType"].astype(str).str.lower() != "sg"
+        ]
+        if not sersic_params.empty:
+            selected_type = str(sersic_params["EllipseFitType"].iloc[0])
+            return sersic_params, selected_type
+        return ellipse_params, None
 
     def refresh_tabledata(self):
         galaxypath = self.selected_galaxy_path
@@ -803,12 +828,24 @@ class MainWindow(QMainWindow):
             return None
         host_e = self.current_ellipse_params[self.current_ellipse_params["PolarOrHost"] == "Host"]
         polar_e = self.current_ellipse_params[self.current_ellipse_params["PolarOrHost"] == "Polar"]
+        annulus_inner = self.current_ellipse_params[
+            self.current_ellipse_params["PolarOrHost"] == "Annulus_inner"
+        ]
+        annulus_outer = self.current_ellipse_params[
+            self.current_ellipse_params["PolarOrHost"] == "Annulus_outer"
+        ]
+        if self.current_ellipse_fit_type == "SG" and not annulus_inner.empty and not annulus_outer.empty:
+            polar_e = annulus_inner
+            polar_len = annulus_outer["semi_major"].iloc[0] * 2
+        else:
+            polar_len = None
         if host_e.empty or polar_e.empty:
             return None
         host_pa = host_e["angle"].iloc[0]
         polar_pa = polar_e["angle"].iloc[0]
         host_len = host_e["semi_major"].iloc[0] * 2 # Just a bit larger
-        polar_len = polar_e["semi_major"].iloc[0] * 2
+        if polar_len is None:
+            polar_len = polar_e["semi_major"].iloc[0] * 2
 
         zeropoint = 22.5
 

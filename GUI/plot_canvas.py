@@ -81,7 +81,10 @@ class PlotCanvas(FigureCanvas):
 
             if not ellipse_params.empty:
                 host = ellipse_params[ellipse_params["PolarOrHost"] == "Host"].iloc[0]
-                polar = ellipse_params[ellipse_params["PolarOrHost"] == "Polar"].iloc[0]
+                polar_rows = ellipse_params[ellipse_params["PolarOrHost"].isin(["Polar", "Annulus_inner"])]
+                if polar_rows.empty:
+                    polar_rows = ellipse_params[ellipse_params["PolarOrHost"] == "Annulus_outer"]
+                polar = polar_rows.iloc[0]
                 imshape = im.shape
                 ell_host = matplotlib.patches.Ellipse(
                     xy=(imshape[0]/2, imshape[1]/2),
@@ -107,6 +110,21 @@ class PlotCanvas(FigureCanvas):
                 )
                 self.ax.add_patch(ell_host)
                 self.ax.add_patch(ell_polar)
+                outer_rows = ellipse_params[ellipse_params["PolarOrHost"] == "Annulus_outer"]
+                if not outer_rows.empty:
+                    outer = outer_rows.iloc[0]
+                    ell_outer = matplotlib.patches.Ellipse(
+                        xy=(imshape[0]/2, imshape[1]/2),
+                        height=float(outer["semi_minor"]*2),
+                        width=float(outer["semi_major"]*2),
+                        angle=outer["angle"],
+                        label="Polar outer",
+                        ls=":",
+                        lw=2,
+                        color="blue",
+                        fill=False
+                    )
+                    self.ax.add_patch(ell_outer)
                 self.ax.legend()
         else:
             self.ax.text(0,0.5,"Cannot find FITs image!")
