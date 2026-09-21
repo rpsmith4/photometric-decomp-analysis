@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>IMFIT Tool</string>
+   <string>DECA+ Multicomponent Photometric Decomposition</string>
   </property>
   <property name="autoFillBackground">
    <bool>false</bool>
