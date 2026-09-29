@@ -142,14 +142,11 @@ class MainWindow(QMainWindow):
             
         # Read in the ellipse fit data 
         if ellipse_fit_p != None:
-            # ellipse_fit_data = pd.DataFrame(columns=["file", "PolarOrHost","IsoLevel", "x_center", "y_center", "semi_major", "semi_minor", "angle"])
-            ellipse_fit_data = pd.DataFrame(columns=["file","x_center","y_center","semi_major","semi_minor","angle","MorphType","PSType1","PolarOrHost","IsophoteLevel"])
             try:
-                dat = pd.read_csv(Path(ellipse_fit_p), sep = ",")
-                ellipse_fit_data = pd.concat([ellipse_fit_data, dat])
+                self.ellipse_fit_data = pd.read_csv(Path(ellipse_fit_p), sep = ",")
             except Exception as e:
                 print(e)
-            self.ellipse_fit_data = ellipse_fit_data
+                self.ellipse_fit_data = None
 
         # Read in the master table (I might change this later so we don't have to do this in the GUI code)
         if master_table_p != None:
