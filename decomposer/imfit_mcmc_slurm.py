@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 
 import submitit
+import os
 
 
 def find_galaxies(root: Path, fit_type: str, bands: list[str]) -> list[Path]:
@@ -76,7 +77,7 @@ def run_galaxy(
             failed_bands.append(band)
 
     if failed_bands:
-        raise RuntimeError(f"IMFIT-MCMC failed or refused existing chains for bands: {', '.join(failed_bands)}")
+        raise RuntimeError(f"IMFIT-MCMC failed or refused existing chains for galaxy {os.path.basename(galaxy_path)} for bands: {', '.join(failed_bands)}")
 
 
 def submit(args: argparse.Namespace) -> None:
