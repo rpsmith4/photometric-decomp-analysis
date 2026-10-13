@@ -1,0 +1,1 @@
+python3 decomposer/imfit_mcmc_slurm.py submit --root /path/to/my_galaxies --fit-type 2_sersic --bands g r i z --threads 4 --max-parallel 20
