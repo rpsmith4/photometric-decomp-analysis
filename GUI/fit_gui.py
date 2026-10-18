@@ -653,7 +653,7 @@ class MainWindow(QMainWindow):
 
 
         galname = self.selected_galaxy_path.name
-        if ellipse_fit_p != None:
+        if ellipse_fit_p != None and self.ellipse_fit_data != None:
             ellipse_params = self.ellipse_fit_data[self.ellipse_fit_data["file"] == galname]
             ellipse_params, self.current_ellipse_fit_type = self._select_ellipse_params(ellipse_params)
         else:
