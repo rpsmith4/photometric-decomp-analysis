@@ -99,7 +99,16 @@ class ConfigAdjustWidget(QWidget):
     def draw_params(self, initval, lowlim, hilim, fixed, paramkey, label, layout):
         func_idx, paramname = paramkey
         ndigits = 6
-        widget = ParamSliderWidget(paramname, initval, lowlim, hilim, fixed=fixed, ndigits=ndigits, d_A=self.dataset.d_A)
+        widget = ParamSliderWidget(
+            paramname,
+            initval,
+            lowlim,
+            hilim,
+            fixed=fixed,
+            ndigits=ndigits,
+            d_A=self.dataset.d_A,
+            zeropoint=self.dataset.ZP,
+        )
         widget.setMinimumWidth(100)
         layout.addWidget(widget)
         self.param_widgets[paramkey] = widget
@@ -127,7 +136,7 @@ class ConfigAdjustWidget(QWidget):
             self.config_callback(sorted(self.selected_indices))
 
 class ParamSliderWidget(QWidget):
-    def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None, d_A=None):
+    def __init__(self, paramname, initval, lowlim, hilim, fixed=False, ndigits=3, parent=None, d_A=None, zeropoint=22.5):
         super().__init__(parent)
         self.paramname = paramname
         self.ndigits = ndigits
@@ -136,6 +145,7 @@ class ParamSliderWidget(QWidget):
         self._slider_steps = 10000
         self.fixed = fixed
         self.d_A = d_A # Angular size distance (I should probably find a way to avoid just passing it to here but whatever)
+        self.zeropoint = zeropoint
         self._cached_bounds = (lowlim, hilim)
 
         parameter_adjust_layout = QHBoxLayout()
@@ -376,9 +386,9 @@ class ParamSliderWidget(QWidget):
                 self.converted_label.setText(f"Min: {minvalarcsec.value:.3f} Val: {valarcsec.value:.3f} Max: {maxvalarcsec.value:.3f} arcsec")
         elif self.paramname in ["I_e", "A"]:
             if val > 0 and minval > 0 and maxval > 0:
-                valmag = 22.5 - 2.5 * math.log10(val/0.262**2)
-                minvalmag = 22.5 - 2.5 * math.log10(minval/0.262**2)
-                maxvalmag = 22.5 - 2.5 * math.log10(maxval/0.262**2)
+                valmag = self.zeropoint - 2.5 * math.log10(val/0.262**2)
+                minvalmag = self.zeropoint - 2.5 * math.log10(minval/0.262**2)
+                maxvalmag = self.zeropoint - 2.5 * math.log10(maxval/0.262**2)
                 self.converted_label.setText(f"Min: {minvalmag:.3f} Val: {valmag:.3f} Max: {maxvalmag:.3f} mag/arcsec^2")
             else:
                 self.converted_label.setText("N/A")

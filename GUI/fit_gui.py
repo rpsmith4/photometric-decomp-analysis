@@ -729,6 +729,8 @@ class MainWindow(QMainWindow):
 
         if self.gui_config["data_type"] == "DESI":
             self.dataset = DESIDataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
+        elif self.gui_config["data_type"] == "Euclid":
+            self.dataset = EuclidDataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
         else:
             self.dataset = DataSet(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
         self.dataset.load_all()
@@ -844,17 +846,15 @@ class MainWindow(QMainWindow):
         if polar_len is None:
             polar_len = polar_e["semi_major"].iloc[0] * 2
 
-        zeropoint = 22.5
-
         mask = self.dataset.fits_mask
         sci_image = np.where(mask == 0, self.dataset.fits_image, 0)
         config_im = self.dataset.config_im
 
-        image_host = profile_from_image(sci_image, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True)
-        image_polar = profile_from_image(sci_image, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True)
+        image_host = profile_from_image(sci_image, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True, zeropoint=self.dataset.ZP)
+        image_polar = profile_from_image(sci_image, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True, zeropoint=self.dataset.ZP)
 
-        model_host = profile_from_image(config_im, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True)
-        model_polar = profile_from_image(config_im, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True)
+        model_host = profile_from_image(config_im, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True, zeropoint=self.dataset.ZP)
+        model_polar = profile_from_image(config_im, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True, zeropoint=self.dataset.ZP)
         
         try:
             if self.plotrelresid:
@@ -867,8 +867,8 @@ class MainWindow(QMainWindow):
             residual_host = residual_polar = None
 
         if config_im.size != 0:
-            config_host = profile_from_image(config_im, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True) 
-            config_polar = profile_from_image(config_im, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True)
+            config_host = profile_from_image(config_im, host_pa, host_len, self.dataset.pixel_scale, surf_bright=True, zeropoint=self.dataset.ZP)
+            config_polar = profile_from_image(config_im, polar_pa, polar_len, self.dataset.pixel_scale, surf_bright=True, zeropoint=self.dataset.ZP)
 
             if self.plotrelresid:
                 config_residual_data = np.where(sci_image !=0, (sci_image - config_im)/sci_image, 0)
@@ -1217,6 +1217,7 @@ class MainWindow(QMainWindow):
                         plot_slits=self.gui_config["show_phot_slits"],
                         outfile_name=outfile,
                         fit_type=self.fit_type,
+                        zeropoint=self.dataset.ZP,
                     )
                     if state[0]!=0:
                         QMessageBox.warning(
@@ -1241,6 +1242,7 @@ class MainWindow(QMainWindow):
                     plot_slits=self.gui_config["show_phot_slits"],
                     outfile_name=outfile,
                     fit_type=self.fit_type,
+                    zeropoint=self.dataset.ZP,
                 )
                 if state[0]!=0:
                     QMessageBox.warning(
@@ -1281,6 +1283,7 @@ class MainWindow(QMainWindow):
                 # print(self.pa)
                 subprocess.call([sys.executable, manual_decomp_path, "-p", str(self.selected_galaxy_path), "-b", self.band, "-c", self.component, 
                                  "-pa", str(self.pa), "-ell", str(self.ell), 
+                                 "-ZP", str(self.dataset.ZP),
                                  "-ellipse_path", ellipse_fit_p,
                                  "-m", mask_path,
                                  "-master_table", master_table_p])

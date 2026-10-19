@@ -58,6 +58,8 @@ class DataSet():
         self.z = z
         self.d_A = None
 
+        self.ZP = 22.5
+
     def load_jpg(self):
         self.jpg_image = np.asarray(Image.open(self.jpg_image_path))
         self.jpg_image = np.flipud(self.jpg_image)
@@ -179,6 +181,11 @@ class DESIDataSet(DataSet):
     def __init__(self, jpg_image_path = None, fits_image_path = None, fits_invvar_image_path = None, fits_psf_path = None, mask_path = None, config_path = None, fit_results_path = None, fits_composed_path = None):
         super().__init__(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
 
+class EuclidDataSet(DataSet):
+    def __init__(self, jpg_image_path = None, fits_image_path = None, fits_invvar_image_path = None, fits_psf_path = None, mask_path = None, config_path = None, fit_results_path = None, fits_composed_path = None):
+        super().__init__(jpg_image_path, fits_image_path, fits_invvar_image_path, fits_psf_path, mask_path, config_path, fit_results_path, fits_composed_path)
+        self.ZP = 23.9
+
 
 def read_function_labels(config_path):
     """
@@ -298,7 +305,7 @@ def parse_results(file):
     function_map = [func for idx, func in enumerate(functions)]
     return function_map, chi_sq, chi_sq_red, status, status_message
 
-def profile_from_image(image_data, pa, length, pixel_scale=None, surf_bright=False):
+def profile_from_image(image_data, pa, length, pixel_scale=None, surf_bright=False, zeropoint=22.5):
     try:
         pa = np.deg2rad(pa + 90) # Need to account for the offset that imfit gives lol
         # length = int(np.shape(image_data)[0]*np.cos(np.pi/4))
@@ -322,13 +329,13 @@ def profile_from_image(image_data, pa, length, pixel_scale=None, surf_bright=Fal
         prof_avg = (upper + lower)/2 
 
 
-        prof_avg = prof_avg * u.nmgy / pixel_scale**2 # nmgy /pix -> nmgy/arcsec**2
+        prof_avg = (prof_avg * u.nmgy / pixel_scale**2).value # nmgy /pix -> nmgy/arcsec**2
 
         if surf_bright:
-            zero_point_star_equiv = u.zero_point_flux(3631.1 * u.Jy)
-            prof_avg = u.Magnitude(prof_avg.to(u.AB, zero_point_star_equiv))
+            with np.errstate(divide="ignore", invalid="ignore"):
+                prof_avg = zeropoint - 2.5 * np.log10(prof_avg)
 
-        return {"r": r[prof_avg != np.nan]*pixel_scale, "mu": prof_avg[prof_avg != np.nan].value}
+        return {"r": r[prof_avg != np.nan]*pixel_scale, "mu": prof_avg[prof_avg != np.nan]}
     except:
         print(tb.format_exc())
         return None

@@ -21,9 +21,9 @@ def _get_generator(fit_type: str):
     return module.generate_init_guess
 
 
-def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, galaxy_type: pd.DataFrame = None, phot_fit_type: str = "automatic", outfile_name: str | None = None, plot_slits: bool =False, fit_type: str = "2_sersic") -> pyimfit.ModelDescription:
+def generate_config(outfile: Path, band: str, sci: np.array, mask: np.array = None, psf: np.array = None, invvar: np.array = None, type: str = "ring", ellipse_fit_data: pd.DataFrame = None, galaxy_type: pd.DataFrame = None, phot_fit_type: str = "automatic", outfile_name: str | None = None, plot_slits: bool =False, fit_type: str = "2_sersic", zeropoint: float | None = None) -> pyimfit.ModelDescription:
     genparams = _get_generator(fit_type)
-    model,state = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, galaxy_type=galaxy_type, plot_slits=plot_slits, phot_params=phot_fit_type, data_loc=outfile)
+    model,state = genparams(band, sci, mask, psf, invvar, type, ellipse_fit_data, zeropoint=zeropoint, galaxy_type=galaxy_type, plot_slits=plot_slits, phot_params=phot_fit_type, data_loc=outfile)
 
     model_str = model.getStringDescription()
     if outfile_name:
@@ -123,7 +123,7 @@ def main(args, fit_band = 'all'):
                 # print(outfile)
                 if args.fit_type in ["2_sersic", "1_sersic_1_gauss_ring"]:
                     try:
-                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, galaxy_type = master_table_data_gal, phot_fit_type=args.component, outfile_name=outfile_name, fit_type=args.fit_type)
+                        generate_config(outfile, band, img, mask, psf, invvar, args.fit_type, ellipse_fit_data_gal, galaxy_type = master_table_data_gal, phot_fit_type=args.component, outfile_name=outfile_name, fit_type=args.fit_type, zeropoint=getattr(args, "zeropoint", None))
                     except Exception as e:
                         print(e)
                         continue
@@ -144,6 +144,7 @@ if __name__ == "__main__":
    # parser.add_argument("--type", help="Type of polar structure", choices=["ring", "bulge", "halo"], default="ring") # Working to add in the code to pass in polar structure type based upon the results in the master table
     parser.add_argument("--dont_fit", help="Don't use DE imfitting to try and do another guess at initial parameters", action="store_true")
     parser.add_argument("--fit_type", help="Type of fit done", choices=["2_sersic", "1_sersic_1_gauss_ring", "3_sersic"], default="2_sersic")
+    parser.add_argument("--zeropoint", type=float, default=None, help="Photometric zeropoint for the science image")
     parser.add_argument("--ellipse_fit", help="Location of ellipse fit data", default=".")
     parser.add_argument("--master_table", help="Location of folder containing master table data", default=".") # Added to get PS types from the master table
     parser.add_argument("-r", help="Recursively go into subfolders (assumes that fits data is at the end of the filetree)", action="store_true")

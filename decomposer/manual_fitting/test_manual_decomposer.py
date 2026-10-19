@@ -85,7 +85,7 @@ def fold_cut_to_radial_profile_I(cut, min_frac_good=0.5):
     return np.asarray(Rb), np.asarray(Ib), np.asarray(Ieb), base_mask
 
 
-def main(galaxy_directory: str = "", band: str | None = None, pa: float | None = None, ell: float | None = None, component: str | None = None, mask: Path | None = None, ellipse_path: Path | None = None, master_table_path: Path | None = None) -> None:
+def main(galaxy_directory: str = "", band: str | None = None, pa: float | None = None, ell: float | None = None, component: str | None = None, mask: Path | None = None, ellipse_path: Path | None = None, master_table_path: Path | None = None, zeropoint: float = 22.5) -> None:
     """ A function that prepares the necessary information to pass along to the manual decomposition script, then generates the appropriate manual config files for IMFIT.
 
     
@@ -112,7 +112,7 @@ def main(galaxy_directory: str = "", band: str | None = None, pa: float | None =
     # Get psf profile as a slit along the same axis as what is being manually fit. Technically not exactly how it should be done, but I think it works well enough for our purposes to avoid doing a full 2-D deconvolution of the image when making the original slit. Saves the results into a text file for usage in the manual fitter.
     psf_array = psf_info[0].data
     psf_center = (psf_array.shape[0] // 2, psf_array.shape[1] // 2)
-    psf_cut = photometric_cut(psf_array, psf_center, pa, length_pix = 40, pixel_scale_arcsec=0.262) # 
+    psf_cut = photometric_cut(psf_array, psf_center, pa, length_pix = 40, pixel_scale_arcsec=0.262, zeropoint=zeropoint)
     R_psf, I_psf, Ierr_psf, radial_mask = fold_cut_to_radial_profile_I(psf_cut)
     data = np.column_stack((R_psf, I_psf, Ierr_psf))
     save_path = data_dir
@@ -134,7 +134,7 @@ def main(galaxy_directory: str = "", band: str | None = None, pa: float | None =
     mask_data = fits.getdata(mask)
 
     # Call the photometric cut function to get the galaxy data, and write in into the appropriate format for use with the manual fitter
-    gal_cut = photometric_cut(gal_array, gal_center, pa, mask_fits= mask_data, length_pix = 600, pixel_scale_arcsec=0.262) # Come back to the length_pix value perhaps. I haven't seen it cause issues ever but is currently hardcoded.
+    gal_cut = photometric_cut(gal_array, gal_center, pa, mask_fits= mask_data, length_pix = 600, pixel_scale_arcsec=0.262, zeropoint=zeropoint) # Come back to the length_pix value perhaps. I haven't seen it cause issues ever but is currently hardcoded.
     R_gal, mu_gal, muerr_gal, mask = fold_cut_to_radial_profile_I(gal_cut)
     data_gal = np.column_stack((R_gal, mu_gal, muerr_gal))
     np.savetxt(
@@ -150,7 +150,7 @@ def main(galaxy_directory: str = "", band: str | None = None, pa: float | None =
     # Arguments to pass into the manual fit script
     # Hard coded
     args = argparse.Namespace()
-    args.ZP = 22.5 # Magnitude zero point is not obtained from GUI script
+    args.ZP = zeropoint
     args.pix2sec = 0.262 # pixel scale is likewise not obtained from GUI script
     args.SBlim = 30.0 # this was the default for the base manual fitter script
     args.adderr = 0.000 # to my knowledge there is no flat error that we need to add to our data
@@ -182,6 +182,7 @@ def main(galaxy_directory: str = "", band: str | None = None, pa: float | None =
     else:
         gen_args.master_table = Path("./decomposer") # Same story as with ellipse_fit
     gen_args.fit_type = "2_sersic"
+    gen_args.zeropoint = zeropoint
     gen_args.r = False
     gen_args.dont_fit = True
     gen_args.new = True
@@ -220,8 +221,9 @@ if __name__ == '__main__':
     parser.add_argument("-ellipse_path", help="Path to the ellipse file for this galaxy", default = None)
     parser.add_argument("-m", help="Path to the mask file for this galaxy", default = None)
     parser.add_argument("-master_table", help="Path to the master_table file", default = None)
+    parser.add_argument("-ZP", type=float, default=22.5, help="Photometric zeropoint for the science image")
 
     args = parser.parse_args()
     p = Path(args.p)
 
-    main(p, band=args.b, pa = float(args.pa), ell = float(args.ell), component = args.c, mask = args.m, ellipse_path = args.ellipse_path, master_table_path = args.master_table)
+    main(p, band=args.b, pa = float(args.pa), ell = float(args.ell), component = args.c, mask = args.m, ellipse_path = args.ellipse_path, master_table_path = args.master_table, zeropoint=args.ZP)
