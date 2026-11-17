@@ -320,7 +320,7 @@ def _show_image(
         aspect="equal",
     )
     axis.set_xlabel('Relative x [arcsec]', fontsize=8)
-    axis.set_ylabel('Relative y [arcsec]', fontsize=8)
+    axis.set_ylabel('Relative y [arcsec]', fontsize=7)
     axis.xaxis.set_major_locator(MaxNLocator(4))
     axis.yaxis.set_major_locator(MaxNLocator(4))
     axis.tick_params(labelsize=7)
@@ -358,7 +358,7 @@ def _show_jpg(
     else:
         axis.set_title(title, fontsize=11, pad=30)
     axis.set_xlabel('Relative x [arcsec]', fontsize=8)
-    axis.set_ylabel('Relative y [arcsec]', fontsize=8)
+    axis.set_ylabel('Relative y [arcsec]', fontsize=7)
     axis.xaxis.set_major_locator(ticker.MaxNLocator(4))
     axis.yaxis.set_major_locator(ticker.MaxNLocator(4))
     axis.tick_params(labelsize=7)
@@ -380,16 +380,16 @@ def _add_kpc_axes(axis, kpc_per_arcsec: float | None) -> None:
     x_axis = axis.secondary_xaxis(
         "top", functions=(arcsec_to_kpc, kpc_to_arcsec)
     )
-    x_axis.set_xlabel("Relative x [kpc]", fontsize=6, labelpad=2)
+    x_axis.set_xlabel("x [kpc]", fontsize=6, labelpad=2)
     x_axis.xaxis.set_major_locator(MaxNLocator(4))
     x_axis.tick_params(labelsize=6, pad=1)
 
     y_axis = axis.secondary_yaxis(
         "right", functions=(arcsec_to_kpc, kpc_to_arcsec)
     )
-    y_axis.set_ylabel("Relative y [kpc]", fontsize=6, labelpad=2)
+    y_axis.set_ylabel("y [kpc]", fontsize=5, labelpad=2)
     y_axis.yaxis.set_major_locator(MaxNLocator(4))
-    y_axis.tick_params(labelsize=6, pad=1)
+    y_axis.tick_params(labelsize=5, pad=1)
 
 
 def _show_parameters(axis, band: str, components: list[str], unavailable: str | None):
@@ -425,8 +425,8 @@ def create_page(
     import pyimfit
     from astropy.io import fits
 
-    fig = plt.figure(figsize=(15.5, 9))
-    grid = fig.add_gridspec(2, 10, height_ratios=(1.35, 1), hspace=0.4, wspace=1.2)
+    fig = plt.figure(figsize=(17, 9))
+    grid = fig.add_gridspec(2, 10, height_ratios=(1.35, 1), hspace=0.4, wspace=1.8)
     axes = [fig.add_subplot(grid[0, 2 * i : 2 * i + 2]) for i in range(5)]
     parameter_axes = [
         fig.add_subplot(grid[1, 0:5]),
