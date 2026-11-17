@@ -12,6 +12,8 @@ FIT_TYPES = ("2_sersic", "1_sersic_1_gauss_ring", "3_sersic")
 PIXEL_SCALE_ARCSEC = 0.262
 DEFAULT_LOG_SCALE_FACTOR = 1000.0
 NANOMAGGIES_AB_ZEROPOINT = 22.5
+RADIUS_PARAMETERS = {"r_e", "r_ring", "sigma_r"}
+INTENSITY_PARAMETERS = {"i_0", "i_e"}
 UNCERTAINTY_RE = re.compile(
     r"\+/-\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|nan|inf)",
     re.IGNORECASE,
@@ -36,7 +38,60 @@ def find_galaxy_directories(root: Path, fit_type: str, recursive: bool) -> list[
     )
 
 
-def read_components(parameter_path: Path, model: object) -> list[str]:
+def read_scale_table(scale_table_path: Path) -> dict[str, float]:
+    import pandas as pd
+
+    scale_table = pd.read_csv(scale_table_path, encoding="utf-8-sig", dtype=str)
+    columns = {
+        str(column).strip().casefold(): column for column in scale_table.columns
+    }
+    if "name" not in columns or "scale" not in columns:
+        raise ValueError(
+            f"Scale table must contain NAME and SCALE columns: {scale_table_path}"
+        )
+
+    galaxy_scales = {}
+    for line_number, (name_value, scale_value) in enumerate(
+        scale_table[[columns["name"], columns["scale"]]].itertuples(
+            index=False, name=None
+        ),
+        start=2,
+    ):
+        if pd.isna(name_value) or not str(name_value).strip():
+            continue
+        if pd.isna(scale_value) or not str(scale_value).strip():
+            continue
+        galaxy_name = str(name_value).strip()
+        try:
+            scale = float(scale_value)
+        except ValueError as error:
+            raise ValueError(
+                f"Invalid SCALE value {scale_value!r} in {scale_table_path} "
+                f"at line {line_number}"
+            ) from error
+        if math.isnan(scale):
+            continue
+        if not math.isfinite(scale) or scale <= 0:
+            raise ValueError(
+                f"SCALE must be positive and finite in {scale_table_path} "
+                f"at line {line_number}"
+            )
+
+        key = galaxy_name.casefold()
+        if key in galaxy_scales:
+            raise ValueError(
+                f"Duplicate galaxy name {galaxy_name!r} in {scale_table_path}"
+            )
+        galaxy_scales[key] = scale
+
+    return galaxy_scales
+
+
+def read_components(
+    parameter_path: Path,
+    model: object,
+    kpc_per_arcsec: float | None = None,
+) -> list[str]:
     """Format the saved best-fit values and their reported uncertainties."""
     lines = parameter_path.read_text(encoding="utf-8").splitlines()
     function_lines = [
@@ -82,10 +137,87 @@ def read_components(parameter_path: Path, model: object) -> list[str]:
             value_text = f"{value:.6g}"
             if uncertainty is not None:
                 value_text += f" +/- {uncertainty}"
+            value_text = _format_fit_parameter(
+                parameter_name,
+                function_type,
+                value_text,
+                value,
+                uncertainty,
+                kpc_per_arcsec,
+            )
             component_lines.append(f"  {parameter_name:<16} {value_text}")
         components.append("\n".join(component_lines))
 
     return components
+
+
+def _format_fit_parameter(
+    parameter_name: str,
+    function_type: str,
+    value_text: str,
+    value: float,
+    uncertainty: str | None,
+    kpc_per_arcsec: float | None,
+) -> str:
+    parameter_key = parameter_name.casefold()
+    uncertainty_value = None
+    if uncertainty is not None:
+        try:
+            parsed_uncertainty = float(uncertainty)
+            if math.isfinite(parsed_uncertainty):
+                uncertainty_value = abs(parsed_uncertainty)
+        except ValueError:
+            pass
+
+    if parameter_key in RADIUS_PARAMETERS:
+        value_text += " pix"
+        radius_arcsec = value * PIXEL_SCALE_ARCSEC
+        physical_text = f"{radius_arcsec:.6g}"
+        if uncertainty_value is not None:
+            physical_text += (
+                f" +/- {uncertainty_value * PIXEL_SCALE_ARCSEC:.3g}"
+            )
+        physical_text += " arcsec"
+        if kpc_per_arcsec is not None:
+            radius_kpc = radius_arcsec * kpc_per_arcsec
+            kpc_text = f"{radius_kpc:.6g}"
+            if uncertainty_value is not None:
+                kpc_text += (
+                    f" +/- "
+                    f"{uncertainty_value * PIXEL_SCALE_ARCSEC * kpc_per_arcsec:.3g}"
+                )
+            physical_text += f"; {kpc_text} kpc"
+        return f"{value_text} ({physical_text})"
+
+    is_gaussian_ring_amplitude = (
+        function_type.casefold() == "gaussianring" and parameter_key == "a"
+    )
+    if parameter_key in INTENSITY_PARAMETERS or is_gaussian_ring_amplitude:
+        value_text += " nmgy/pix"
+        surface_brightness = _nanomaggies_per_pixel_to_mag_arcsec2(value)
+        if surface_brightness is None:
+            return f"{value_text} (mag/arcsec^2 undefined)"
+
+        physical_text = f"{surface_brightness:.3f}"
+        if uncertainty_value is not None and value > 0:
+            magnitude_uncertainty = (
+                2.5 / math.log(10) * uncertainty_value / value
+            )
+            physical_text += f" +/- {magnitude_uncertainty:.2g}"
+        return f"{value_text} ({physical_text} mag/arcsec^2)"
+
+    return value_text
+
+
+def _nanomaggies_per_pixel_to_mag_arcsec2(
+    nanomaggies_per_pixel: float,
+) -> float | None:
+    if not math.isfinite(nanomaggies_per_pixel) or nanomaggies_per_pixel <= 0:
+        return None
+    pixel_area = PIXEL_SCALE_ARCSEC**2
+    return NANOMAGGIES_AB_ZEROPOINT - 2.5 * math.log10(
+        nanomaggies_per_pixel / pixel_area
+    )
 
 
 def make_model_image(model: object, image_path: Path):
@@ -116,12 +248,11 @@ def make_model_image(model: object, image_path: Path):
 
 
 def _format_surface_brightness(nanomaggies_per_pixel: float, _position: float) -> str:
-    if nanomaggies_per_pixel <= 0:
-        return ""
-    pixel_area = PIXEL_SCALE_ARCSEC**2
-    mag_per_arcsec_squared = NANOMAGGIES_AB_ZEROPOINT - 2.5 * math.log10(
-        nanomaggies_per_pixel / pixel_area
+    mag_per_arcsec_squared = _nanomaggies_per_pixel_to_mag_arcsec2(
+        nanomaggies_per_pixel
     )
+    if mag_per_arcsec_squared is None:
+        return ""
     return f"{mag_per_arcsec_squared:.1f}"
 
 
@@ -130,13 +261,17 @@ def _show_image(
     image,
     title: str,
     log_scale_factor: float = DEFAULT_LOG_SCALE_FACTOR,
+    kpc_per_arcsec: float | None = None,
 ) -> None:
     import matplotlib.pyplot as plt
     from matplotlib.colors import LogNorm
     from matplotlib.ticker import FuncFormatter, MaxNLocator
     import numpy as np
 
-    axis.set_title(title, fontsize=11)
+    if kpc_per_arcsec is None:
+        axis.set_title(title, fontsize=11)
+    else:
+        axis.set_title(title, fontsize=11, pad=30)
     if image is None:
         axis.text(
             0.5,
@@ -189,6 +324,7 @@ def _show_image(
     axis.xaxis.set_major_locator(MaxNLocator(4))
     axis.yaxis.set_major_locator(MaxNLocator(4))
     axis.tick_params(labelsize=7)
+    _add_kpc_axes(axis, kpc_per_arcsec)
     colorbar = plt.colorbar(
         artist,
         ax=axis,
@@ -204,7 +340,9 @@ def _show_image(
     colorbar.set_label(r"AB mag arcsec$^{-2}$", fontsize=5, labelpad=1)
 
 
-def _show_jpg(axis, image, title: str) -> None:
+def _show_jpg(
+    axis, image, title: str, kpc_per_arcsec: float | None = None
+) -> None:
     import matplotlib.ticker as ticker
 
     height, width = image.shape[:2]
@@ -215,12 +353,43 @@ def _show_jpg(axis, image, title: str) -> None:
         height * PIXEL_SCALE_ARCSEC / 2,
     )
     axis.imshow(image, origin="lower", extent=extent, aspect="equal")
-    axis.set_title(title, fontsize=11)
+    if kpc_per_arcsec is None:
+        axis.set_title(title, fontsize=11)
+    else:
+        axis.set_title(title, fontsize=11, pad=30)
     axis.set_xlabel('Relative x [arcsec]', fontsize=8)
     axis.set_ylabel('Relative y [arcsec]', fontsize=8)
     axis.xaxis.set_major_locator(ticker.MaxNLocator(4))
     axis.yaxis.set_major_locator(ticker.MaxNLocator(4))
     axis.tick_params(labelsize=7)
+    _add_kpc_axes(axis, kpc_per_arcsec)
+
+
+def _add_kpc_axes(axis, kpc_per_arcsec: float | None) -> None:
+    from matplotlib.ticker import MaxNLocator
+
+    if kpc_per_arcsec is None:
+        return
+
+    def arcsec_to_kpc(arcsec):
+        return arcsec * kpc_per_arcsec
+
+    def kpc_to_arcsec(kpc):
+        return kpc / kpc_per_arcsec
+
+    x_axis = axis.secondary_xaxis(
+        "top", functions=(arcsec_to_kpc, kpc_to_arcsec)
+    )
+    x_axis.set_xlabel("Relative x [kpc]", fontsize=6, labelpad=2)
+    x_axis.xaxis.set_major_locator(MaxNLocator(4))
+    x_axis.tick_params(labelsize=6, pad=1)
+
+    y_axis = axis.secondary_yaxis(
+        "right", functions=(arcsec_to_kpc, kpc_to_arcsec)
+    )
+    y_axis.set_ylabel("Relative y [kpc]", fontsize=6, labelpad=2)
+    y_axis.yaxis.set_major_locator(MaxNLocator(4))
+    y_axis.tick_params(labelsize=6, pad=1)
 
 
 def _show_parameters(axis, band: str, components: list[str], unavailable: str | None):
@@ -246,7 +415,11 @@ def _show_parameters(axis, band: str, components: list[str], unavailable: str | 
 
 
 def create_page(
-    galaxy_directory: Path, fit_type: str, log_scale_factor: float, pdf
+    galaxy_directory: Path,
+    fit_type: str,
+    log_scale_factor: float,
+    kpc_per_arcsec: float | None,
+    pdf,
 ) -> None:
     import matplotlib.pyplot as plt
     import pyimfit
@@ -260,10 +433,15 @@ def create_page(
         fig.add_subplot(grid[1, 5:10]),
     ]
 
-    fig.suptitle(galaxy_directory.name, fontsize=16, y=0.98)
+    title = galaxy_directory.name
+    if kpc_per_arcsec is not None:
+        title += f" (scale: {kpc_per_arcsec:g} kpc/arcsec)"
+    fig.suptitle(title, fontsize=16, y=0.98)
     jpg_path = galaxy_directory / "image.jpg"
     if jpg_path.exists():
-        _show_jpg(axes[0], plt.imread(jpg_path), "Galaxy JPG")
+        _show_jpg(
+            axes[0], plt.imread(jpg_path), "Galaxy JPG", kpc_per_arcsec
+        )
     else:
         _show_image(axes[0], None, "Galaxy JPG")
         axes[0].texts[0].set_text("image.jpg not found")
@@ -283,12 +461,18 @@ def create_page(
             if band_image.ndim != 2:
                 raise ValueError(f"Expected a 2D science image: {image_path}")
         _show_image(
-            data_axis, band_image, f"{band.upper()}-band image", log_scale_factor
+            data_axis,
+            band_image,
+            f"{band.upper()}-band image",
+            log_scale_factor,
+            kpc_per_arcsec,
         )
 
         if parameter_path.exists():
             model = pyimfit.parse_config_file(str(parameter_path))
-            components = read_components(parameter_path, model)
+            components = read_components(
+                parameter_path, model, kpc_per_arcsec
+            )
             if band_image is not None:
                 model_image = make_model_image(model, image_path)
             else:
@@ -301,6 +485,7 @@ def create_page(
             model_image,
             f"{band.upper()}-band PyImfit model",
             log_scale_factor,
+            kpc_per_arcsec,
         )
         if band_image is None:
             data_axis.texts[0].set_text(f"{image_path.name} not found.")
@@ -318,6 +503,7 @@ def create_report(
     fit_type: str,
     recursive: bool,
     log_scale_factor: float = DEFAULT_LOG_SCALE_FACTOR,
+    scale_table_path: Path | None = None,
 ) -> int:
     import matplotlib
 
@@ -333,10 +519,20 @@ def create_report(
             f"No {fit_type} G/R-band fit parameter files found under {root}"
         )
 
+    galaxy_scales = (
+        read_scale_table(scale_table_path) if scale_table_path is not None else {}
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     with PdfPages(output) as pdf:
         for galaxy_directory in galaxy_directories:
-            create_page(galaxy_directory, fit_type, log_scale_factor, pdf)
+            kpc_per_arcsec = galaxy_scales.get(galaxy_directory.name.casefold())
+            create_page(
+                galaxy_directory,
+                fit_type,
+                log_scale_factor,
+                kpc_per_arcsec,
+                pdf,
+            )
     return len(galaxy_directories)
 
 
@@ -382,6 +578,11 @@ def main() -> None:
             "pixels (must be greater than 1)"
         ),
     )
+    parser.add_argument(
+        "--scale-table",
+        type=Path,
+        help="CSV with NAME and SCALE (kpc/arcsec) columns for physical size axes",
+    )
     args = parser.parse_args()
 
     if not math.isfinite(args.log_scale_factor) or args.log_scale_factor <= 1:
@@ -393,6 +594,7 @@ def main() -> None:
         args.fit_type,
         args.recursive,
         args.log_scale_factor,
+        args.scale_table.resolve() if args.scale_table is not None else None,
     )
     print(f"Created {args.output.resolve()} with {page_count} galaxy pages.")
 
