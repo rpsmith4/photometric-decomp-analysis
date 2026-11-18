@@ -146,8 +146,8 @@ def main() -> None:
     parser.add_argument("--partition", help="Optional Slurm partition")
 
     args = parser.parse_args()
-    if args.threads < 1 or args.max_parallel < 1 or args.timeout_min < 1 or args.mem_gb <= 0:
-        parser.error("threads, max-parallel, timeout-min, and mem-gb must be positive")
+    if args.threads < 1 or args.timeout_min < 1 or args.mem_gb <= 0:
+        parser.error("threads, timeout-min, and mem-gb must be positive")
     submit(args)
 
 
