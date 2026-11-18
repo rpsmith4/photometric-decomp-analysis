@@ -93,15 +93,25 @@ def submit(args: argparse.Namespace) -> None:
         )
 
     executor = submitit.AutoExecutor(folder=str(root / "slurm_logs" / "%j"))
-    executor.update_parameters(
-        name="imfit-mcmc",
-        timeout_min=args.timeout_min,
-        mem_gb=args.mem_gb,
-        cpus_per_task=args.threads,
-        slurm_partition=args.partition,
-        slurm_array_parallelism=args.max_parallel,
-        stderr_to_stdout=True,
-    )
+    if args.max_parallel == -1:
+        executor.update_parameters(
+            name="imfit-mcmc",
+            timeout_min=args.timeout_min,
+            mem_gb=args.mem_gb,
+            cpus_per_task=args.threads,
+            slurm_partition=args.partition,
+            stderr_to_stdout=True,
+        )
+    else:
+        executor.update_parameters(
+            name="imfit-mcmc",
+            timeout_min=args.timeout_min,
+            mem_gb=args.mem_gb,
+            cpus_per_task=args.threads,
+            slurm_partition=args.partition,
+            slurm_array_parallelism=args.max_parallel,
+            stderr_to_stdout=True,
+        )
     worker = partial(
         run_galaxy,
         fit_type=args.fit_type,
