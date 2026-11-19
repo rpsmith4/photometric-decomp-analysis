@@ -3,6 +3,7 @@
 
 import argparse
 from functools import partial
+import json
 from pathlib import Path
 import subprocess
 
@@ -18,6 +19,20 @@ def find_galaxies(root: Path, fit_type: str, bands: list[str]) -> list[Path]:
         if band in bands and (image.parent / f"{fit_type}_{band}.dat").is_file():
             galaxy_dirs.add(image.parent.resolve())
     return sorted(galaxy_dirs)
+
+
+def read_galaxy_marks(root: Path) -> dict[str, str]:
+    """Read the galaxy fit-status mapping for the root directory."""
+    marks_path = root / "galmarks.json"
+    with marks_path.open(encoding="utf-8") as marks_file:
+        marks = json.load(marks_file)
+    if not isinstance(marks, dict):
+        raise ValueError(f"Expected a galaxy-name mapping in {marks_path}")
+    return {
+        galaxy_name.casefold(): status.casefold()
+        for galaxy_name, status in marks.items()
+        if isinstance(galaxy_name, str) and isinstance(status, str)
+    }
 
 
 def run_galaxy(
@@ -89,6 +104,19 @@ def submit(args: argparse.Namespace) -> None:
     if not galaxies:
         raise RuntimeError(
             f"No folders under {root} contain both image_<band>.fits and "
+            f"{args.fit_type}_<band>.dat for bands {','.join(args.bands)}"
+        )
+
+    galaxy_marks = read_galaxy_marks(root)
+    galaxies = [
+        galaxy
+        for galaxy in galaxies
+        if galaxy_marks.get(galaxy.name.casefold()) == "fitted"
+    ]
+    if not galaxies:
+        raise RuntimeError(
+            f"No galaxies marked 'fitted' in {root / 'galmarks.json'} "
+            f"contain both image_<band>.fits and "
             f"{args.fit_type}_<band>.dat for bands {','.join(args.bands)}"
         )
 
